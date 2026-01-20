@@ -2,7 +2,8 @@
 # Global pipeline configuration
 # ==============================================================================
 
-message("\n === Global pipeline configuration === \n")
+pipeline_message(text = "Global pipeline configuration", 
+                 level = 0, progress = "start", process = "install")
 
 # ------------------------------------------------------------------------------
 # Execution context (TTY / batch detection)
@@ -54,9 +55,9 @@ AVATAR_API_TOKEN <- Sys.getenv("AVATAR_API_TOKEN",
 
 # Force re-download options
 FORCE_REJOIN_OSM_AND_COMMUNES <- FALSE
-FORCE_REDOWNLOAD_COUNT_POINTS <- TRUE
-FORCE_REDOWNLOAD_CHUNKS <- TRUE
-FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS <- TRUE
+FORCE_REDOWNLOAD_COUNT_POINTS <- FALSE
+FORCE_REDOWNLOAD_CHUNKS <- FALSE
+FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS <- FALSE
 
 # ------------------------------------------------------------------------------
 # Training configuration
@@ -183,6 +184,15 @@ avatar_aggregated_data_filename <- "avatar_aggregated_hourly_period.rds"
 AVATAR_AGGREGATED_FILEPATH <- file.path(AVATAR_DATA_DIR, "rds", 
                                         avatar_aggregated_data_filename)
 
+avatar_imputation_rules_filename <- "avatar_imputation_rules.rds"
+AVATAR_IMPUTATION_RULES_FILEPATH <- file.path(AVATAR_DATA_DIR, "rds", 
+                                              avatar_imputation_rules_filename)
+
+
+avatar_aggregated_clean_data_filename <- "avatar_aggregated_clean.rds"
+AVATAR_AGGREGATED_CLEAN_FILEPATH <- 
+  file.path(AVATAR_DATA_DIR, "rds", avatar_aggregated_clean_data_filename)
+
 avatar_ids_full_network_filename <- "avatar_ids_full_network_filename.gpkg"
 AVATAR_IDS_FULL_NETWORK_FILEPATH <- file.path(AVATAR_DATA_DIR, "gpkg", 
                                               avatar_ids_full_network_filename)
@@ -198,15 +208,11 @@ XGB_RATIO_FEATURE_INFO_FILEPATH <- file.path(TRAINING_DATA_DIR, "rds",
                                              "xgb_ratio_feature_info.rds")
 
 # Figures
-FIG_HOURLY_TRAFFIC_FILENAME <- file.path("figures", 
-                                         "hourly_traffic_patterns.pdf")
-SPEED_AND_TRUCK_PERCENTAGE <- file.path("figures", 
-                                        "speed_and_truck_percentage.pdf")
-TRAFFIC_PERIOD_COMPARISONS <- file.path("figures", 
-                                        "traffic_period_comparisons.pdf")
-TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY <- file.path(
-  "figures", 
-  "traffic_flow_distribution_and_data_quality.pdf")
+FIG_HOURLY_TRAFFIC_FILENAME <- "hourly_traffic_patterns.pdf"
+SPEED_AND_TRUCK_PERCENTAGE <- "speed_and_truck_percentage.pdf"
+TRAFFIC_PERIOD_COMPARISONS <- "traffic_period_comparisons.pdf"
+TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY <- 
+  "traffic_flow_distribution_and_data_quality.pdf"
 
 # ------------------------------------------------------------------------------
 # Global config
@@ -214,6 +220,7 @@ TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY <- file.path(
 CONFIG <<- list(
   # Running environment
   IS_TTY = IS_TTY,
+  RUN_CONTEXT = RUN_CONTEXT,
   # Directories
   INPUT_DATA_DIR = INPUT_DATA_DIR,
   OUTPUT_DATA_DIR = OUTPUT_DATA_DIR,
@@ -251,6 +258,8 @@ CONFIG <<- list(
   AVATAR_CSV_DATA_DIRPATH = AVATAR_CSV_DATA_DIRPATH,
   AVATAR_COUNT_POINTS_FILEPATH = AVATAR_COUNT_POINTS_FILEPATH,
   AVATAR_AGGREGATED_FILEPATH = AVATAR_AGGREGATED_FILEPATH,
+  AVATAR_IMPUTATION_RULES_FILEPATH = AVATAR_IMPUTATION_RULES_FILEPATH,
+  AVATAR_AGGREGATED_CLEAN_FILEPATH = AVATAR_AGGREGATED_CLEAN_FILEPATH,
   AVATAR_IDS_FULL_NETWORK_FILEPATH=AVATAR_IDS_FULL_NETWORK_FILEPATH,
   # Traffic data processing
   DEFAULT_NUMBER_OF_LANES = DEFAULT_NUMBER_OF_LANES,
@@ -267,4 +276,5 @@ CONFIG <<- list(
   XGB_MODELS_WITH_RATIOS_FILEPATH = XGB_MODELS_WITH_RATIOS_FILEPATH
 )
 
-message("\t ✓ Pipeline configured! \n")
+pipeline_message(text = "Pipeline configured!", 
+                 level = 0, progress = "end", process = "valid")

@@ -2,7 +2,8 @@
 # STAGE 1: SETUP
 # ==============================================================================
 
-message("\n === Setup configuration === \n")
+pipeline_message(text = "Setup configuration", 
+                 level = 0, progress = "start", process = "install")
 
 # ------------------------------------------------------------------------------
 # Required packages
@@ -11,7 +12,10 @@ pkgs_needed <- c(
   "dplyr", "tidyr", "sf", "httr", "jsonlite", "lubridate", "randomForest", 
   "data.table", "stringr", "sfnetworks", "igraph", "tidygraph", "progress", 
   "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix")
-message("\t 💻 Loading packages and installing missing packages \n")
+
+
+pipeline_message(text = "Loading packages and installing missing packages", 
+                 level = 1, progress = "start", process = "install")
 
 installed <- rownames(installed.packages())
 missing <- setdiff(pkgs_needed, installed)
@@ -27,11 +31,15 @@ for (p in pkgs_needed) {
   )
 }
 
-message("\t\t ✓ packages loaded successfully \n")
+pipeline_message(text = "Packages loaded successfully", 
+                 level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Directories
 # ------------------------------------------------------------------------------
+
+pipeline_message(text = "Creating required directories", 
+                 level = 1, progress = "start", process = "install")
 
 # -------------------- #
 # Input file directory #
@@ -79,20 +87,14 @@ dir.create(path = CONFIG$FIGS_DIR,
            showWarnings = FALSE, 
            recursive = TRUE)
 
-# ------------------------------------------------------------------------------
-# Load utility functions
-# ------------------------------------------------------------------------------
-utils_files <- list.files(path = "R", 
-                          pattern = "\\.R$", 
-                          full.names = TRUE)
-for (uf in utils_files) {
-  source(uf)
-}
+pipeline_message(text = "Required directories created!", 
+                 level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Options
 # ------------------------------------------------------------------------------
-op <- options(digits.secs = 1)
+op <- options(digits.secs = 1, 
+              digits = 2)
 
-
-message("\t ✓ Setup stage completed!\n")
+pipeline_message(text = "Setup stage completed!", 
+                 level = 0, progress = "end", process = "valid")

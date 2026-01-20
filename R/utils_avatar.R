@@ -265,7 +265,7 @@ download_avatar_count_points <- function(
 #' @export
 aggregate_avatar_hourly <- function(dt) {
   # Ensure POSIXct datetime
-  if (!inherits(dt$measure_datetime, "POSIXct")) {
+  if (!inherits(x = dt$measure_datetime, what = "POSIXct")) {
     dt[, measure_datetime := as.POSIXct(x = measure_datetime,
                                         format = "%Y-%m-%dT%H:%M:%S")]}
   # Create temporal features
@@ -447,4 +447,135 @@ aggregate_avatar_metrics <- function(dt, by_vars) {
                             yes = 100 * aggregate_flow_trucks / aggregate_flow, 
                             no = NA_real_)]
   return(res)
+}
+#' 
+#' @title Compute Avatar relative metrics using Day (D) baseline
+#' @description Computes relative traffic metrics (ratios and percentages) for 
+#'              each count point using period D as baseline.
+#' @param dt A data.table with aggregated Avatar metrics. Must contain columns:
+#'           \itemize{
+#'            \item count_point_id, 
+#'            \item period, 
+#'            \item aggregate_flow, 
+#'            \item aggregate_flow_trucks, 
+#'            \item aggregate_speed, 
+#'            \item aggregate_occupancy.
+#'           }
+#' @return A data.table with additional relative metrics:
+#'         \itemize{
+#'          \item flow_D, 
+#'          \item flow_trucks_D, 
+#'          \item speed_D, 
+#'          \item occupancy_D, 
+#'          \item truck_pct, 
+#'          \item truck_pct_D, 
+#'          \item ratio_flow, 
+#'          \item ratio_flow_trucks, 
+#'          \item ratio_speed, 
+#'          \item ratio_occupancy, 
+#'          \item ratio_truck_pct
+#' @export
+compute_avatar_relative_metrics <- function(dt) {
+  # Baseline D
+  baseline_D <- dt[period == "D" & !is.na(aggregate_flow),
+                   .(flow_D = aggregate_flow, 
+                     flow_trucks_D = aggregate_flow_trucks, 
+                     speed_D = aggregate_speed, 
+                     occupancy_D = aggregate_occupancy), 
+                   by = count_point_id]
+  # Join baseline
+  dt <- baseline_D[dt, on = "count_point_id"]
+  # Compute metrics
+  dt[, truck_pct := fifelse(test = aggregate_flow > 0, 
+                            yes = 100 * aggregate_flow_trucks / aggregate_flow, 
+                            no = NA_real_)]
+  dt[, truck_pct_D := fifelse(test = flow_D > 0, 
+                              yes = 100 * flow_trucks_D / flow_D, 
+                              no = NA_real_)]
+  dt[, ratio_flow := fifelse(test = !is.na(flow_D) & 
+                                    flow_D > 0, 
+                             yes = aggregate_flow / flow_D, 
+                             no = NA_real_)]
+  dt[, ratio_flow_trucks := fifelse(test = !is.na(flow_trucks_D) & 
+                                           flow_trucks_D > 0, 
+                                    yes = aggregate_flow_trucks / 
+                                      flow_trucks_D, 
+                                    no = NA_real_)]
+  
+  dt[, ratio_speed := fifelse(test = !is.na(speed_D) & 
+                                     speed_D > 0, 
+                              yes = aggregate_speed / speed_D, 
+                              no = NA_real_)]
+  
+  dt[, ratio_occupancy := fifelse(test = !is.na(occupancy_D) & 
+                                         occupancy_D > 0, 
+                                  yes = aggregate_occupancy / occupancy_D, 
+                                  no = NA_real_)]
+  
+  return(dt)
+}
+#' 
+#' @title Apply Avatar data quality and safeguard rules
+#' @description Applies post-processing rules to Avatar traffic measurements to 
+#'              ensurephysical consistency and robustness of derived indicators.
+#'              This function:
+#'              \itemize{
+#'                \item Recomputes truck percentages with upper bounds
+#'                \item Recomputes baseline (D) truck percentages
+#'                \item Caps ratio indicators to reasonable ranges
+#'                \item Avoids divisions by near-zero baseline values
+#'              }
+#' @param dt A data.table containing Avatar aggregated traffic measurements.
+#' @return The input data.table, modified by reference.
+#' @details Expected columns include:
+#'          \itemize{
+#'            \item aggregate_flow, aggregate_flow_trucks
+#'            \item flow_D, flow_trucks_D
+#'            \item ratio_flow_trucks.
+#'          }
+#'          The function modifies the following columns:
+#'          \itemize{
+#'            \item truck_pct
+#'            \item truck_pct_D
+#'            \item ratio_truck_pct
+#'            \item ratio_flow_trucks
+#' @export
+apply_avatar_quality_rules <- function(dt) {
+  if (!inherits(x = dt, what = "data.table")) {
+    stop("apply_avatar_quality_rules() expects a data.table")
+  }
+  # ----------------------------------------------------------------------------
+  # Recompute truck percentage (current period)
+  # ----------------------------------------------------------------------------
+  dt[, truck_pct := fifelse(test = !is.na(aggregate_flow) & 
+                                   !is.na(aggregate_flow_trucks) & 
+                                   aggregate_flow > 0, 
+                            yes = pmin(100, 
+                                       100 * aggregate_flow_trucks / 
+                                         aggregate_flow), 
+                            no = NA_real_)]
+  # ----------------------------------------------------------------------------
+  # Recompute truck percentage for baseline period D
+  # ----------------------------------------------------------------------------
+  dt[, truck_pct_D := fifelse(test = !is.na(flow_D) & 
+                                     !is.na(flow_trucks_D) & 
+                                     flow_D > 0, 
+                              yes = pmin(100, 100 * flow_trucks_D / flow_D), 
+                              no = NA_real_)]
+  # ----------------------------------------------------------------------------
+  # Recompute ratio of truck percentage (with safeguards)
+  # ----------------------------------------------------------------------------
+  dt[, ratio_truck_pct := fifelse(test = !is.na(truck_pct) & 
+                                         !is.na(truck_pct_D) & 
+                                         truck_pct_D > 0.1,                     # Avoid near-zero division
+                                  yes = pmin(5.0, truck_pct / truck_pct_D),     # Cap at 5x
+                                  no = NA_real_)]
+  # ----------------------------------------------------------------------------
+  # Cap ratio of truck flows
+  # ----------------------------------------------------------------------------
+  dt[, ratio_flow_trucks := fifelse(test = !is.na(ratio_flow_trucks), 
+                                    yes = pmin(5.0, 
+                                               pmax(0.0, ratio_flow_trucks)),   # Cap between 0 and 5
+                                    no = NA_real_)]
+  invisible(dt)
 }

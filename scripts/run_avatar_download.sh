@@ -18,6 +18,10 @@ export RUN_CONTEXT=local
 echo "⚠️  Running Avatar download on LOGIN NODE"
 echo "RUN_CONTEXT=${RUN_CONTEXT}"
 
+# Project root
+PROJECT_ROOT="/home2020/home/cerema/gguillau/NM_OSM"
+echo "PROJECT_ROOT=${PROJECT_ROOT}"
+
 # Run ONLY the required scripts
 R --vanilla << EOF
 source("bootstrap.R")

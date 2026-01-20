@@ -282,7 +282,7 @@ process_network_features <- function(data, rules) {
   n_missing_speed <- sum(missing_speed)
   if (n_missing_speed > 0) {
     cat(sprintf(
-      "\t\t ⚠️ IImputing %s missing speed values using highway-specific medians 
+      "\t\t ⚠️ Imputing %s missing speed values using highway-specific medians 
       \n", fmt(n_missing_speed)))
     speed_lookup <- setNames(object = rules$median_speed, 
                              rules$highway)

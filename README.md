@@ -1,3 +1,8 @@
+---
+title: "OpenDataNoiseMap"
+output: html_document
+---
+
 # Road Traffic & Environmental Modelling Pipeline
 
 This repository contains a modular R pipeline designed to build **road-level datasets from *OpenStreetMap* and *AVATAR* traffic measurements**, for noise modelling applications.
@@ -15,6 +20,77 @@ The pipeline is executed through a master script (```run_pipeline.R```) and is c
 5. Feature engineering
 6. Machine learning model training
 7. Prediction (mode-dependent)
+
+The project tree structure is as follows:
+```
+.
+├── 01_setup_minimal.R
+├── 02_osm_processing_minimal.R
+├── 03_avatar_download_minimal.R
+├── 04_data_integration_minimal.R
+├── 05_feature_engineering_minimal.R
+├── 06d_xgboost_training_with_ratios.R
+├── 07d_predict_nantes_southeast.R
+├── 07d_predict_sensors.R
+├── 07e_predict_paris_area.R
+├── bootstrap.R
+├── config_pipeline.R
+├── main.R
+├── R
+│   ├── utils_avatar.R
+│   ├── utils_io.R
+│   ├── utils_osm.R
+│   └── utils_sf.R
+├── README.md
+├── run_pipeline.R
+├── scripts
+│   ├── run_avatar_download.sh
+│   ├── run_local.sh
+│   ├── run_on_hpc_cerema.sh
+│   └── run_on_hpc_public.sh
+```
+
+The following data are required to run the scripts:
+```
+├── data
+│   ├── input
+│   │   ├── COMMUNE_TYPO_DENSITE.cpg
+│   │   ├── COMMUNE_TYPO_DENSITE.dbf
+│   │   ├── COMMUNE_TYPO_DENSITE.prj
+│   │   ├── COMMUNE_TYPO_DENSITE.qmd
+│   │   ├── COMMUNE_TYPO_DENSITE.shp
+│   │   ├── COMMUNE_TYPO_DENSITE.shx
+│   │   └── osm_roads_france.gpkg
+```
+
+<div style="padding: 15px; border: 1px solid transparent; 
+            border-color: transparent; margin-bottom: 15px; 
+            border-radius: 4px; color: #a94442; 
+            background-color: #f2dede; border-color: #ebccd1;
+            font-weight: bold;">
+⚠️  Explain how to get these files
+</div>
+
+After running the scripts, the following folders and contents are created:
+
+<div style="padding: 15px; border: 1px solid transparent; 
+            border-color: transparent; margin-bottom: 15px; 
+            border-radius: 4px; color: #a94442; 
+            background-color: #f2dede; border-color: #ebccd1;
+            font-weight: bold;">
+⚠️  To complete with description of output and renv directories !!
+</div>
+
+# HPC/local execution scripts
+
+These scripts launch the R pipeline from the project root.
+
+- run_local.sh
+- run_on_hpc_cerema.sh
+- run_on_hpc_public.sh
+
+The entry point is always `main.R`.
+
 
 ## 01_setup_minimal.R - Environment setup (local / HPC)
 
@@ -135,7 +211,7 @@ In summary, it:
 
 ➡️ This script ensures reproducibility, modularity and scalability across study areas and execution environments.
 
-## main.R
+## main.R
 
 This is the main script of the project and is designed to be launched as:
 ```bash

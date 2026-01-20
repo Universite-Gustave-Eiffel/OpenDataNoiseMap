@@ -207,8 +207,8 @@ for (model_name in names(all_configs)) {
   
   X_train <- sparse_data_matrix[train_idx, ]
   X_test <- sparse_data_matrix[test_idx, ]
-  y_train <- y_transformed[train_idx]
-  y_test <- y_transformed[test_idx]
+  y_train <- transformed_training_data_target[train_idx]
+  y_test <- transformed_training_data_target[test_idx]
   
   # Check for invalid values in labels
   invalid_train <- is.na(y_train) | is.infinite(y_train) | is.nan(y_train)
@@ -249,10 +249,12 @@ for (model_name in names(all_configs)) {
   message("\t 🚀 Training of the learning model \n")
   start_timer()
   
+  dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train) 
+  dtest <- xgboost::xgb.DMatrix(data = X_test, label = y_test)
+  
   # Choose parameters and training strategy based on model type
   if (grepl(pattern = "truck", x = config$target)) {
     params <- CONFIG$TRUCK_PARAMS
-    
     # For truck models with small samples, use CV for robust estimation
     if (length(x = y_train) < 200) {
       cv_result <- xgboost::xgb.cv(
@@ -271,11 +273,8 @@ for (model_name in names(all_configs)) {
     }
   } else {
     params <- CONFIG$TRAINING_PARAMS
-    best_rounds <- CONFIG$CONFIG$NROUNDS
+    best_rounds <- CONFIG$NROUNDS
   }
-  
-  dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train)
-  dtest <- xgboost::xgb.DMatrix(data = X_test, label = y_test)
   
   xgb_model <- xgboost::xgb.train(
     params = params,
@@ -487,9 +486,9 @@ for (model_name in names(models_list)) {
   
   # Apply transform
   if (!is.null(config$transform) && config$transform == "log10") {
-    y_transformed <- log10(pmax(y_clean, config$min_valid))
+    transformed_training_data_target <- log10(pmax(y_clean, config$min_valid))
   } else {
-    y_transformed <- y_clean
+    transformed_training_data_target <- y_clean
   }
   
   # Train/test split (same seed as training)
@@ -499,7 +498,7 @@ for (model_name in names(models_list)) {
   test_idx <- setdiff(seq_len(n_final), train_idx)
   
   X_test <- sparse_data_matrix[test_idx, ]
-  y_test <- y_transformed[test_idx]
+  y_test <- transformed_training_data_target[test_idx]
   
   # Remove invalid
   invalid_test <- is.na(y_test) | is.infinite(y_test) | is.nan(y_test)

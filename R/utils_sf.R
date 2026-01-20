@@ -46,13 +46,13 @@ standardize_columns <- function(data_list) {
 #' @param aggregated_measures_df A data frame containing aggregated traffic 
 #'                               measures with a `period` column and traffic 
 #'                               metrics.
-#' @return A data frame with one row per hour (0–23) and summary statistics
-#'   including mean, standard deviation, median, and quartiles of traffic flow,
-#'   as well as average speed and truck percentage.
-#' @export)
+#' @return A data frame with one row per hour (0–23) and summary statistics 
+#'         including mean, standard deviation, median, and quartiles of traffic 
+#'         flow, as well as average speed and truck percentage.
+#' @export
 compute_hourly_patterns <- function(aggregated_measures_df) {
   aggregated_measures_df %>%
-    dplyr::filter(filter = grepl(pattern = "^h\\d+$", x = period)) %>% 
+    dplyr::filter(grepl(pattern = "^h\\d+$", x = period)) %>% 
     dplyr::mutate(hour = as.integer(gsub(pattern = "h", 
                                          replacement = "", 
                                          x = period))) %>% 
@@ -110,7 +110,7 @@ compute_hourly_long_format <- function(hourly_patterns) {
 #' @export
 compute_period_statistics <- function(aggregated_measures_df) {
   aggregated_measures_df %>%
-    dplyr::filter(filter = period %in% c("D", "E", "N")) %>%
+    dplyr::filter(period %in% c("D", "E", "N")) %>%
     dplyr::group_by(period) %>%
     dplyr::summarise(
       avg_flow = mean(x = aggregate_flow, 
@@ -138,36 +138,13 @@ compute_period_statistics <- function(aggregated_measures_df) {
 #' @export
 compute_flow_distribution <- function(aggregated_measures_df) {
   aggregated_measures_df %>%
-    dplyr::filter(filter = !is.na(aggregate_flow)) %>%
+    dplyr::filter(!is.na(aggregate_flow)) %>%
     dplyr::mutate(
       flow_category = cut(x = aggregate_flow, 
                           breaks = c(0, 500, 1000, 2000, 5000, Inf),
                           labels = c("0-500", "501-1000", "1001-2000", 
                                      "2001-5000", ">5000"),
                           include.lowest = TRUE))
-  
-
-  
-  quality_data <- aggregated_measures_df %>%
-    select(perc_flow_predicted, 
-           perc_flow_trucks_predicted, 
-           perc_speed_predicted, 
-           perc_occupancy_predicted) %>%
-    tidyr::pivot_longer(cols = everything(), 
-                        names_to = "metric", 
-                        values_to = "pct_predicted") %>%
-    filter(filter = !is.na(pct_predicted)) %>%
-    mutate(metric_label = factor(x = metric,
-                                 levels = c("perc_flow_predicted", 
-                                            "perc_flow_trucks_predicted", 
-                                            "perc_speed_predicted", 
-                                            "perc_occupancy_predicted"),
-                                 labels = c("Flow", 
-                                            "Trucks", 
-                                            "Speed", 
-                                            "Occupancy")))
-  
-  
 }
 #' 
 #' @title Compute data quality metrics
@@ -215,8 +192,7 @@ compute_quality_metrics_long <- function(aggregated_measures_df) {
       names_to = "metric",
       values_to = "pct_predicted"
     ) %>%
-    dplyr::filter(
-      filter = !is.na(pct_predicted)) %>%
+    dplyr::filter(!is.na(pct_predicted)) %>%
     dplyr::mutate(
       metric_label = factor(
         x = metric,
