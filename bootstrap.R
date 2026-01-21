@@ -66,6 +66,11 @@ if (RUN_CONTEXT == "hpc") {
                                      sep = ":"))
   pipeline_message(text = "LD_LIBRARY_PATH updated for units", 
                    level = 1, progress = "end", process = "install")
+  # Disabling automatic opening of a graphics device
+  grDevices::pdf(NULL)
+  pipeline_message(
+    text = "Automatic opening of a graphics device disabled!", 
+    level = 4, process = "info")
 }
 
 # ------------------------------------------------------------------------------

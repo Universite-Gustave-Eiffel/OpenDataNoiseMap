@@ -2,7 +2,8 @@
 # STAGE 6D: XGBOOST TRAINING LEARNING MODEL
 # ==============================================================================
 
-message("\n === Learning model training === \n")
+pipeline_message(text = "Training the learning model", 
+                 level = 0, progress = "start", process = "learn")
 
 # ==============================================================================
 # Architecture:
@@ -29,15 +30,19 @@ message("\n === Learning model training === \n")
 
 if (!exists(x= 'training_data', inherits = FALSE)){
   
-  message("\t 📥 Loading the pre-trained learning model data \n")
+  pipeline_message(
+    text = paste0("Loading the pre-trained learning model data from ", 
+                  rel_path(CONFIG$TRAINING_RDS_DATA_FILEPATH)), 
+    level = 1, progress = "start", process = "load")
   
   training_data <- readRDS(CONFIG$TRAINING_RDS_DATA_FILEPATH)
-    
-  message("\t\t ✓ Pre-trained model data loaded from ", 
-          CONFIG$TRAINING_RDS_DATA_FILEPATH, "\n")
+  
+  pipeline_message(text = "Pre-trained model data successfully loaded", 
+                   level = 1, progress = "end", process = "valid")  
 }
   
-message("\t 🔁 Configuring training model \n")
+pipeline_message(text = "Configuring training model", 
+                 level = 1, progress = "start", process = "configure")
 
 # Check available network features
 available_road_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
@@ -69,7 +74,7 @@ base_configs <- list(
     period = "D",
     target = "truck_pct",
     baseline = "truck_pct_D",
-    transform = NULL,  # Already percentage 0-100
+    transform = NULL,     # Already percentage 0-100
     min_valid = 0),
   speed_D = list(
     name = "Speed (Day)",
@@ -113,7 +118,8 @@ for (p in ratio_periods) {
 
 all_configs <- c(base_configs, ratio_configs)
 
-message("\t\t ✓ Training model configured \n")
+pipeline_message(text = "Training model successfully configured", 
+                 level = 1, progress = "end", process = "start")
 
 # ------------------------------------------------------------------------------
 # Train models
@@ -127,9 +133,10 @@ for (model_name in names(all_configs)) {
   # Current configuration
   config <- all_configs[[model_name]]
   
-  cat(sprintf("\t\t\t [%d/%d]\n", 
-              which(names(all_configs) == model_name), 
-              length(x = all_configs)))
+  pipeline_message(
+    text = sprintf("[%d/%d]", which(names(all_configs) == model_name), 
+                   length(x = all_configs)), 
+    level = 4, process = "info")
   
   # Filter data for this period
   training_data_over_period <- training_data %>% 
@@ -186,12 +193,14 @@ for (model_name in names(all_configs)) {
   }
   
   # Verify dimensions are now synchronized
-  cat(sprintf("\t\t 📎 Final data: %d rows 
-              (sparse data matrix: %d x %d, y: %d) \n", 
-              nrow(x = clean_training_data_over_period), 
-              nrow(x = sparse_data_matrix), 
-              ncol(x = sparse_data_matrix), 
-              length(x = transformed_training_data_target)))
+  pipeline_message(
+    text = sprintf("Final data: %d rows (sparse data matrix: %d x %d, y: %d)", 
+                   nrow(x = clean_training_data_over_period), 
+                   nrow(x = sparse_data_matrix), 
+                   ncol(x = sparse_data_matrix), 
+                   length(x = transformed_training_data_target)), 
+    level = 4, process = "info")
+  
   if (nrow(x = sparse_data_matrix) 
       != length(x = transformed_training_data_target)) {
     next
@@ -215,10 +224,11 @@ for (model_name in names(all_configs)) {
   invalid_test <- is.na(y_test) | is.infinite(y_test) | is.nan(y_test)
   
   if (any(invalid_train) || any(invalid_test)) {
-    cat(sprintf("\t\t ⚠️ Found %d invalid train labels and %d invalid test 
-                labels \n", 
-                sum(invalid_train), 
-                sum(invalid_test)))
+    pipeline_message(
+      text = sprintf("Found %d invalid train labels and %d invalid test labels", 
+                     sum(invalid_train), 
+                     sum(invalid_test)), 
+      level = 4, process = "warning")
     
     # Remove invalid observations
     if (any(invalid_train)) {
@@ -237,17 +247,29 @@ for (model_name in names(all_configs)) {
   if (length(x = y_train) < 10 || length(x = y_test) < 5) {
     next
   }
-  cat(sprintf("\t\t 📎 Training: %s observations (80%%)\n", 
-              fmt(length(x = y_train))))
-  cat(sprintf("\t\t 📎 Test: %s observations (20%%)\n", 
-              fmt(length(x = y_test))))
-  cat(sprintf("\t\t 📎 Y range: [%.3f, %.3f]\n\n", 
-              min(y_train, na.rm=TRUE), 
-              max(y_train, na.rm=TRUE)))
+  pipeline_message(text = sprintf("Training: %s observations (80%%)", 
+                                  fmt(length(x = y_train))), 
+                   level = 4, process = "clip")
+  pipeline_message(text = sprintf("Test: %s observations (20%%)", 
+                                  fmt(length(x = y_test))), 
+                   level = 4, process = "clip")
+  pipeline_message(text = sprintf("Y range: [%.3f, %.3f]\n\n", 
+                                  min(y_train, na.rm=TRUE), 
+                                  max(y_train, na.rm=TRUE)), 
+                   level = 4, process = "clip")
   
   # Train model
   message("\t 🚀 Training of the learning model \n")
   start_timer()
+  
+  # Adaptive training strategy for small samples
+    use_watchlist <- TRUE
+  if (length(y_train) < 100 || length(y_test) < 30) {
+    message("\t\t ⚠️ Small sample detected (train = ", 
+            length(y_train), ", test = ", length(y_test), 
+            ") — disabling early stopping and watchlist")
+    use_watchlist <- FALSE
+  }
   
   dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train) 
   dtest <- xgboost::xgb.DMatrix(data = X_test, label = y_test)
@@ -266,8 +288,9 @@ for (model_name in names(all_configs)) {
         verbose = 0,
         showsd = FALSE)
       best_rounds <- cv_result$best_iteration
-      cat(sprintf("\t\t 📈 CV selected %d rounds (from max %d) \n", 
-                  best_rounds, CONFIG$NROUNDS))
+      pipeline_message(text = sprintf("CV selected %d rounds (from max %d) \n", 
+                                      best_rounds, CONFIG$NROUNDS), 
+                       level = 4, process = "clip")
     } else {
       best_rounds <- CONFIG$NROUNDS
     }
@@ -276,15 +299,36 @@ for (model_name in names(all_configs)) {
     best_rounds <- CONFIG$NROUNDS
   }
   
+  # Acceptable limits for training
+  min_train_xgb <- 150
+  min_test_xgb  <- 50
+  if (length(y_train) < min_train_xgb || length(y_test) < min_test_xgb) {
+    message(
+      "\t\t ⛔ Sample too small for XGBoost (train = ",
+      length(y_train), ", test = ", length(y_test),
+      ") — model skipped"
+    )
+    next
+  }
+  
+  # Training
   xgb_model <- xgboost::xgb.train(
     params = params,
     data = dtrain,
     nrounds = best_rounds,
-    watchlist = list(train = dtrain, test = dtest),
-    early_stopping_rounds = 50,  # Stop if no improvement after 50 rounds
-    maximize = FALSE,            # Minimize RMSE
-    verbose = 0
-  )
+    watchlist = if (use_watchlist) list(train = dtrain, test = dtest) else NULL,
+    early_stopping_rounds = if (use_watchlist) 50 else NULL,
+    maximize = FALSE,
+    verbose = 0)
+  # xgb_model <- xgboost::xgb.train(
+  #   params = params,
+  #   data = dtrain,
+  #   nrounds = best_rounds,
+  #   watchlist = list(train = dtrain, test = dtest),
+  #   early_stopping_rounds = 50,  # Stop if no improvement after 50 rounds
+  #   maximize = FALSE,            # Minimize RMSE
+  #   verbose = 0
+  # )
   elapsed <- stop_timer() / 60000  # Elapsed time in minutes
   
   # Evaluate
@@ -310,16 +354,19 @@ for (model_name in names(all_configs)) {
   mape <- median(x = mape_values[is.finite(mape_values)], 
                  na.rm = TRUE)
   
-  cat(sprintf("\t\t ✓ Done in %.2f min | R²=%.3f | MAPE=%.1f%% \n", 
-              elapsed, r2, mape))
+  pipeline_message(text = sprintf("Done in %.2f min | R²=%.3f | MAPE=%.1f%%", 
+                                  elapsed, r2, mape), 
+                   level = 4, process = "valid")
   
   # Feature importance analysis
   importance <- xgboost::xgb.importance(model = xgb_model)
   top_features <- head(x = importance, 5)  # Top 5 most important features
   
   for (i in 1:nrow(x = top_features)) {
-    cat(sprintf("\t\t %d. %-15s (%.1f%%) \n", 
-               i, top_features$Feature[i], top_features$Gain[i] * 100))
+    pipeline_message(text = sprintf("%d. %-15s (%.1f%%)", i, 
+                                    top_features$Feature[i], 
+                                    top_features$Gain[i] * 100), 
+                     level = 4, process = "valid")
   }
   
   # Store model
@@ -354,10 +401,10 @@ for (model_name in names(all_configs)) {
 
 # Save list of models and road feature formula
 saveRDS(object = models_list, 
-        file = config$XGB_MODELS_WITH_RATIOS_FILEPATH)
+        file = CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
 saveRDS(object =  list(road_feature_formula = road_feature_formula, 
                        all_periods = all_periods), 
-        file = config$XGB_RATIO_FEATURE_INFO_FILEPATH)
+        file = CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 # ------------------------------------------------------------------------------
 # Final summary
@@ -396,13 +443,13 @@ if (nrow(x = all_importance) > 0) {
     head(10)
   
   for (i in 1:nrow(x = global_importance)) {
-    cat(sprintf("\t\t %2d. %-20s | 
-                      Avg Gain: %5.1f%% | 
-                      Used in %2d/%2d models \n", 
-                i, global_importance$Feature[i], 
-                global_importance$AvgGain[i] * 100, 
-                global_importance$TimesUsed[i], 
-                length(x = models_list)))
+    pipeline_message(text = sprintf("%2d. %-20s | Avg Gain: %5.1f%% | Used in 
+                                    %2d/%2d models", i, 
+                                    global_importance$Feature[i], 
+                                    global_importance$AvgGain[i] * 100, 
+                                    global_importance$TimesUsed[i], 
+                                    length(x = models_list)), 
+                     level = 4, process = "info")
   }
   
   # Base models vs Ratio models feature comparison
@@ -423,15 +470,17 @@ if (nrow(x = all_importance) > 0) {
     head(5)
   
   for (i in 1:nrow(x = base_importance)) {
-    cat(sprintf("\t\t %d. %-20s (%.1f%%) \n", 
-                i, base_importance$Feature[i], 
-                base_importance$AvgGain[i] * 100))
+    pipeline_message(text = sprintf("%d. %-20s (%.1f%%)", i, 
+                                    base_importance$Feature[i], 
+                                    base_importance$AvgGain[i] * 100), 
+                     level = 4, process = "info")
   }
   
   for (i in 1:nrow(x = ratio_importance)) {
-    cat(sprintf("\t\t %d. %-20s (%.1f%%) \n", 
-                i, ratio_importance$Feature[i], 
-                ratio_importance$AvgGain[i] * 100))
+    pipeline_message(text = sprintf("%d. %-20s (%.1f%%)", i, 
+                                    ratio_importance$Feature[i], 
+                                    ratio_importance$AvgGain[i] * 100), 
+                     level = 4, process = "info")
   }
 }
 
@@ -441,15 +490,18 @@ base_results <- results_summary[grepl(pattern = "_D$",
 ratio_results <- results_summary[grepl(pattern = "^ratio_", 
                                        x = results_summary$Model), ]
 
-cat(sprintf("\t\t 🔎 R²: %.3f \n",
-            mean(x = base_results$R2, na.rm = TRUE)))
-cat(sprintf("\t\t 🔎 MAPE: %.1f%% \n\n", 
-            mean(x = base_results$MAPE, na.rm = TRUE)))
-
-cat(sprintf("\t\t 🔎 R²: %.3f \n", 
-            mean(x = ratio_results$R2, na.rm = TRUE)))
-cat(sprintf("\t\t 🔎 MAPE: %.1f%% \n\n", 
-            mean(x = ratio_results$MAPE, na.rm = TRUE)))
+pipeline_message(text = sprintf("R²: %.3f", 
+                                mean(x = base_results$R2, na.rm = TRUE)), 
+                 level = 4, process = "search")
+pipeline_message(text = sprintf("MAPE: %.1f%%", 
+                                mean(x = base_results$MAPE, na.rm = TRUE)), 
+                 level = 4, process = "search")
+pipeline_message(text = sprintf("R²: %.3f", 
+                                mean(x = ratio_results$R2, na.rm = TRUE)), 
+                 level = 4, process = "search")
+pipeline_message(text = sprintf("MAPE: %.1f%%", 
+                                mean(x = ratio_results$MAPE, na.rm = TRUE)), 
+                 level = 4, process = "search")
 
 # ------------------------------------------------------------------------------
 # Error analysis in percentage
@@ -538,11 +590,22 @@ for (model_name in names(models_list)) {
   q75 <- quantile(pct_errors, 0.75, na.rm = TRUE)
   
   # Print results
-  cat(sprintf("%-30s | Period: %-2s | N=%4d\n", config$name, config$period, length(x = pct_errors)))
-  cat(sprintf("   Mean Error:   %+6.1f%%  (bias)\n", mean_pct_error))
-  cat(sprintf("   Median Error: %+6.1f%%\n", median_pct_error))
-  cat(sprintf("   MAE:          %6.1f%%  (average absolute error)\n", mae_pct))
-  cat(sprintf("   Q25-Q75:      [%+6.1f%%, %+6.1f%%]\n\n", q25, q75))
+  pipeline_message(text = sprintf("%-30s | Period: %-2s | N=%4d", config$name, 
+                                  config$period, length(x = pct_errors)), 
+                   level = 4, process = "search")
+  pipeline_message(text = sprintf("Mean Error: %+6.1f%% (bias)", 
+                                  mean_pct_error), 
+                   level = 4, process = "search")
+  pipeline_message(text = sprintf("Median Error: %+6.1f%%", median_pct_error), 
+                   level = 4, process = "search")
+  pipeline_message(text = sprintf("MAE: %6.1f%% (average absolute error)", 
+                                  mae_pct), 
+                   level = 4, process = "search")
+  pipeline_message(text = sprintf("Q25-Q75: [%+6.1f%%, %+6.1f%%]", q25, q75), 
+                   level = 4, process = "search")
 }
 
 assign("xgb_models_with_ratios", models_list, envir = .GlobalEnv)
+
+pipeline_message(text = "Successfully trained learning model", 
+                 level = 0, progress = "end", process = "valid")

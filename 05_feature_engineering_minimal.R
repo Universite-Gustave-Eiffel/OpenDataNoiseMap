@@ -129,7 +129,7 @@ pipeline_message(
 # ************************************************************** #
 
 pipeline_message(
-  text = "Imputing default road traffic rules to the road network", 
+  text = "Assigning default road traffic rules to the road network", 
   level = 2, progress = "start", process = "join")
 
 # Apply to filtered network
@@ -147,9 +147,9 @@ available_network_cols <- intersect(x= network_cols,
 # Clean road network data
 network_clean <- network_processed[, available_network_cols]
 
-cat(sprintf("\t\t ✓ Network data cleaned: %s roads, %s attributes\n\n", 
-            fmt(nrow(x = network_clean)), 
-            ncol(network_clean)))
+pipeline_message(text = sprintf("Network data cleaned: %s roads, %s attributes", 
+                 fmt(nrow(x = network_clean)), ncol(network_clean)), 
+  level = 4, process = "info")
 
 # Save processed network
 saveRDS(object = network_clean, 
@@ -369,8 +369,6 @@ training_data_sf <- merge(x = training_data_export,
                           y = osm_full_network,  
                           by = "osm_id")
 
-message("\t\t ✓ Avatar data merged with OSM road network data successfully \n ")
-
 # Convert to sf object
 training_data_sf <- sf::st_as_sf(x = training_data_sf)
 
@@ -379,10 +377,9 @@ sf::st_write(obj = training_data_sf,
              dsn = CONFIG$TRAINING_GPKG_DATA_FILEPATH, 
              delete_dsn = TRUE)
 
-message("\t\t ✓ Merged Avatar data with OSM road network saved into file ", 
-        CONFIG$TRAINING_GPKG_DATA_FILEPATH, "\n")
-
-pipeline_message(text = "Avatar data successfully merged with OSM road network", 
+pipeline_message(text = paste0("Avatar data successfully merged with OSM road 
+                                network and saved into file ", 
+                               CONFIG$TRAINING_GPKG_DATA_FILEPATH), 
                  level = 1, progress = "end", process = "valid")
 
 pipeline_message(text = "Road feature engineering successfully processed", 

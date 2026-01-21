@@ -144,8 +144,8 @@ describe_df <- function(df) {
 #' @param level Integer. Hierarchy level (0 = main title, 1 = sub-block).
 #' @param progress Character. Either "start" or "end".
 #' @param process Character. Type of process (among "install", "load", "save", 
-#'                "download", "search", calc", join", "build", "plot", "info", 
-#'                "valid", "warning", "stop").
+#'                "download", "configure", "search", calc", join", "learn", 
+#'                "build", "plot", "info", "clip", "valid", "warning", "stop").
 #' @return Invisibly returns NULL.
 #'
 #' @export
@@ -158,20 +158,24 @@ pipeline_message <- function(text,
   # Icon mapping by process type
   # ----------------------------------------------------------------------------
   icons <- list(
-    install  = "💻",
-    load     = "📥",
-    save     = "💾",
-    download = "⬇️",
-    search   = "🔍",
-    calc     = "⚙️",
-    join     = "🔗",
-    build    = "🚧",
-    plot     = "📊",
-    info     = "ℹ️",
-    valid    = "✓",
-    warning  = "⚠️",
-    stop     = "⛔"
-  )
+    install   = "💻",
+    load      = "📥",
+    save      = "💾",
+    pack      = "📦",
+    download  = "⬇️ ",
+    wait      = "⏳",
+    configure = "📌",
+    search    = "🔍",
+    calc      = "⚙️ ",
+    join      = "🔗",
+    learn     = "🎓",
+    build     = "🚧",
+    plot      = "📊",
+    info      = "ℹ️",
+    clip      = "📎",
+    valid     = "✓",
+    warning   = "⚠️",
+    stop      = "⛔")
   icon <- if (!is.null(process) && length(process) == 1 
               && process %in% names(icons)) {
     icons[[process]]

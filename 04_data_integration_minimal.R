@@ -18,8 +18,7 @@ if (!exists(x= 'avatar_data', inherits = FALSE)){
   avatar_data <- readRDS(file = CONFIG$AVATAR_DATA_FILEPATH)
   
   pipeline_message(
-    text = paste0("Avatar data successfully loaded", 
-                  rel_path(CONFIG$AVATAR_DATA_FILEPATH)), 
+    text = "Avatar data successfully loaded", 
     level = 1, progress = "end", process = "valid")
 }
 
@@ -99,8 +98,8 @@ saveRDS(object = avatar_aggregated,
         file = CONFIG$AVATAR_AGGREGATED_FILEPATH)
 
 pipeline_message(
-  text = sprintf("Traffic flow relative metrics sucessfully calculated and saved 
-                 into file ", rel_path(CONFIG$AVATAR_AGGREGATED_FILEPATH)), 
+  text = paste0("Traffic flow relative metrics sucessfully calculated and saved 
+                into file ", rel_path(CONFIG$AVATAR_AGGREGATED_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 # Memory cleanup
@@ -129,10 +128,10 @@ p1 <- plot_hourly_traffic_profile(traffic_hourly_patterns = hourly_patterns,
                                   fig_name = CONFIG$FIG_HOURLY_TRAFFIC_FILENAME) 
 
 pipeline_message(
-  text = sprintf("Hourly aggregated data successfully plotted and saved into 
-                 file ", paste(rel_path(CONFIG$FIGS_DIR), 
-                               CONFIG$FIG_HOURLY_TRAFFIC_FILENAME, 
-                                      sep = .Platform$file.sep)), 
+  text = paste0("Hourly aggregated data successfully plotted and saved into 
+                file ", paste(rel_path(CONFIG$FIGS_DIR), 
+                              CONFIG$FIG_HOURLY_TRAFFIC_FILENAME, 
+                              sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # ********************************** #
@@ -149,10 +148,10 @@ p2 <- plot_speed_and_truck_percentage(
   fig_name = CONFIG$SPEED_AND_TRUCK_PERCENTAGE)
 
 pipeline_message(
-  text = sprintf("Hourly speed and truck percentage successfully plotted and saved 
-                 into file ", paste(rel_path(CONFIG$FIGS_DIR), 
-                                    CONFIG$SPEED_AND_TRUCK_PERCENTAGE, 
-                                    sep = .Platform$file.sep)), 
+  text = paste0("Hourly speed and truck percentage successfully plotted and 
+                saved into file ", paste(rel_path(CONFIG$FIGS_DIR), 
+                                         CONFIG$SPEED_AND_TRUCK_PERCENTAGE, 
+                                         sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # ******************************************** #
@@ -167,10 +166,10 @@ p3 <- plot_period_comparison(aggregated_traffic_data = avatar_aggregated,
                            fig_name = CONFIG$TRAFFIC_PERIOD_COMPARISONS)
 
 pipeline_message(
-  text = sprintf("Period comparison (D/E/N) successfully plotted and saved into 
-                 file ", paste(rel_path(CONFIG$FIGS_DIR), 
-                               CONFIG$TRAFFIC_PERIOD_COMPARISONS, 
-                               sep = .Platform$file.sep)), 
+  text = paste0("Period comparison (D/E/N) successfully plotted and saved into 
+                file ", paste(rel_path(CONFIG$FIGS_DIR), 
+                              CONFIG$TRAFFIC_PERIOD_COMPARISONS, 
+                              sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # ****************************************** #
@@ -186,15 +185,15 @@ p4 <- plot_flow_distribution_and_quality(
   fig_name = CONFIG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY)
 
 pipeline_message(
-  text = sprintf("Traffic flow distribution and data quality successfully 
-                  plotted and saved into file ", 
-                 paste(rel_path(CONFIG$FIGS_DIR), 
-                       CONFIG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY, 
+  text = paste0("Traffic flow distribution and data quality successfully 
+                plotted and saved into file ", 
+                paste(rel_path(CONFIG$FIGS_DIR), 
+                      CONFIG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY, 
                        sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # Display plots if local run
-if (isFALSE(CONFIG$IS_TTY)) {
+if (isTRUE(CONFIG$IS_TTY)) {
   p1
   p2
   p3$flow

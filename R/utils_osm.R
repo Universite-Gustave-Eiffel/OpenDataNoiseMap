@@ -1,3 +1,246 @@
+#' @title Download an OpenStreetMap PBF file from Geofabrik
+#' @description This function downloads a `.osm.pbf` file from the Geofabrik 
+#'              download server for France or one of its regions. Before 
+#'              downloading, it attempts to retrieve and display the file size 
+#'              using an HTTP HEAD request.
+#'              The function:
+#'              \itemize{
+#'                \item Validates the requested region, 
+#'                \item Stops execution if data are unavailable, 
+#'                \item Automatically converts region names into valid Geofabrik 
+#'                    URLs.
+#'              }
+#' @param region Character string. Either `"France"` or the name of a French 
+#'               region (e.g. `"Provence-Alpes-Côte d'Azur"`, `"Rhône-Alpes"`). 
+#'               Default is `FALSE`.
+#' @param dest_dir Character string. Directory where the file will be 
+#'                 downloaded. Default is the current working directory.
+#' @param overwrite Logical. Whether to overwrite an existing file. Default is 
+#'                  `FALSE`.
+#' @return The full path to the downloaded `.osm.pbf` file (invisibly).
+#' @examples
+#' \dontrun{
+#' download_geofabrik_pbf("France")
+#' download_geofabrik_pbf(dest_dir = "data/osm", region = "Bretagne")
+#' }
+#' @export
+download_geofabrik_pbf <- function(region = "France", 
+                                   dest_dir = ".", 
+                                   overwrite = FALSE) {
+  # ----------------------------------------------------------------------------
+  # Supported regions
+  # ----------------------------------------------------------------------------
+  available_regions <- c(
+    "France",
+    "Alsace", "Aquitaine", "Auvergne", "Basse-Normandie", "Bourgogne",
+    "Bretagne", "Centre", "Champagne-Ardenne", "Corse", "Franche-Comté",
+    "Guadeloupe", "Guyane", "Haute-Normandie", "Île-de-France",
+    "Languedoc-Roussillon", "Limousin", "Lorraine", "Midi-Pyrénées",
+    "Nord-Pas-de-Calais", "Pays de la Loire", "Picardie",
+    "Poitou-Charentes", "Provence-Alpes-Côte d'Azur", "Rhône-Alpes"
+  )
+  unavailable_regions <- c(
+    "Martinique", "Mayotte", "Réunion"
+  )
+  
+  pipeline_message(
+    text = "Verification of the zone name entered", 
+    level = 2, progress = "start", process = "search")
+  
+  # ---------------------------------------------------------------------------
+  # Validation
+  # ---------------------------------------------------------------------------
+  if (region %in% unavailable_regions) {
+    pipeline_message(
+      text = sprintf("OSM data for region '%s' are not available on Geofabrik", 
+                    region), 
+      level = 4, process = "stop")
+    stop(call. = FALSE)
+  }
+  
+  if (!region %in% c(available_regions, unavailable_regions)) {
+    pipeline_message(
+      text = sprintf("Unknown region '%s'. Please provide a valid French region 
+                     name.", region), 
+      level = 4, process = "stop")
+    stop(call. = FALSE)
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Build URL
+  # ---------------------------------------------------------------------------
+  base_url <- "https://download.geofabrik.de/europe/"
+  # Format region name for the URL
+  region_slug <- function(x) {
+    x |>
+      tolower() |>
+      iconv(from = "UTF-8", to = "ASCII//TRANSLIT") |>
+      gsub(pattern = "[[:space:]']", replacement = "-", x = _) |>
+      gsub(pattern = "-+", replacement = "-", x = _) |>
+      gsub(pattern = "^-|-$", replacement = "", x = _)
+  }
+  if (region == "France") {
+    pbf_name <- "france-latest.osm.pbf"
+    url <- paste0(base_url, pbf_name)
+  } else {
+    slug <- region_slug(region)
+    pbf_name <- paste0(slug, "-latest.osm.pbf")
+    url <- paste0(base_url, "france/", pbf_name)
+  }
+  
+  pipeline_message(
+    text = paste0("URL: ", url), level = 4, process = "valid")
+  pipeline_message(
+    text = paste0("PBF file name: ", pbf_name), level = 4, process = "valid")
+  
+  # Destination file name
+  dest_file <- file.path(dest_dir, pbf_name)
+  
+  if (file.exists(dest_file) && !overwrite) {
+    pipeline_message(
+      text = paste0("File already exists: ", dest_file), 
+      level = 4, process = "valid")
+    return(invisible(dest_file))
+  }
+  
+  dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
+  
+  # ---------------------------------------------------------------------------
+  # Retrieve file size (HEAD request)
+  # ---------------------------------------------------------------------------
+  
+  file_size_mb <- NA_real_
+  head_cmd <- sprintf("curl -sI %s", shQuote(url))
+  headers <- try(system(head_cmd, intern = TRUE), silent = TRUE)
+  
+  if (!inherits(headers, "try-error")) {
+    size_line <- headers[grepl("Content-Length", headers)]
+    if (length(size_line) == 1) {
+      size_bytes <- as.numeric(gsub(".*: ", "", size_line))
+      file_size_mb <- size_bytes / 1024^2
+      pipeline_message(
+        text = sprintf("File size: %.1f MB", file_size_mb), 
+        level = 4, process = "pack")
+    }
+  }
+  
+  if (is.na(file_size_mb)) {
+    pipeline_message(
+      text = "File size: unavailable (server did not provide Content-Length)", 
+      level = 4, process = "pack")
+  }
+  
+  pipeline_message(
+    text = sprintf("Zone name ok, destination URL ready and directory %s 
+                   successfully created", rel_path(dest_file)), 
+    level = 2, progress = "end", process = "valid")
+  
+  # ---------------------------------------------------------------------------
+  # Download
+  # ---------------------------------------------------------------------------
+  pipeline_message(
+    text = "Downloading file", 
+    level = 2, progress = "start", process = "download")
+  
+  # ---------------------------------------------------------------------------
+  # Download using curl (robust for large files)
+  # ---------------------------------------------------------------------------
+  
+  cmd <- sprintf(
+    "curl -L --fail --retry 5 --retry-delay 10 --continue-at - -o %s %s",
+    shQuote(dest_file),
+    shQuote(url)
+  )
+  
+  status <- system(cmd)
+  
+  if (status != 0) {
+    pipeline_message(
+      text = "Download failed (curl returned a non-zero status)", 
+      level = 4, process = "stop")
+    stop(call. = FALSE)
+  }
+  
+  pipeline_message(
+    text = sprintf("Download successfully completed. File saved as ", 
+                   rel_path(dest_file)), 
+    level = 2, progress = "end", process = "valid")
+  
+  invisible(dest_file)
+}
+#' 
+#' @title Convert an OSM PBF file to GeoPackage format
+#' @description This function converts an OpenStreetMap `.osm.pbf` file into a 
+#'              `.gpkg` file using the GDAL command-line tool `ogr2ogr`. 
+#'              GDAL must be available in the system environment.
+#' @param pbf_file Character string. Path to the input `.osm.pbf` file.
+#' @param gpkg_file Character string. Path to the output `.gpkg` file.
+#' @param overwrite Logical. Whether to overwrite an existing GeoPackage. 
+#'                  Default is `FALSE`.
+#' @return The path to the generated `.gpkg` file (invisibly).
+#' @examples
+#' \dontrun{
+#' convert_pbf_to_gpkg("data/osm/france-latest.osm.pbf", 
+#'                     "data/osm/france.osm.gpkg")
+#' }
+#' @export
+convert_pbf_to_gpkg <- function(pbf_file,
+                                gpkg_file,
+                                overwrite = FALSE) {
+  pipeline_message(
+    text = "Conversion of the OSM PBF file to GeoPackage format",  
+    level = 2, progress = "start", process = "calc")
+  
+  if (!file.exists(pbf_file)) {
+    pipeline_message(
+      text = paste0("Input PBF file does not exist: ", pbf_file), 
+      level = 4, process = "stop")
+    stop(call. = FALSE)
+  }
+  
+  if (file.exists(gpkg_file)) {
+    if (!overwrite) {
+      pipeline_message(
+        text = paste0("Output GPKG file already exists: ", gpkg_file), 
+        level = 4, process = "stop")
+      stop(call. = FALSE)
+    } else {
+      file.remove(gpkg_file)
+    }
+  }
+  
+  # Check GDAL availability
+  if (system("ogr2ogr --version", intern = TRUE, ignore.stderr = TRUE) |> length() == 0) {
+    pipeline_message(
+      text = "GDAL (ogr2ogr) is not available in the system environment", 
+      level = 4, process = "stop")
+    stop(call. = FALSE)
+  }
+  
+  message("🔄 Converting PBF to GeoPackage...")
+  message("   Input : ", pbf_file)
+  message("   Output: ", gpkg_file)
+  
+  cmd <- sprintf(
+    'ogr2ogr -f GPKG %s %s',
+    shQuote(gpkg_file),
+    shQuote(pbf_file)
+  )
+  
+  status <- system(cmd)
+  
+  if (status != 0) {
+    stop("ogr2ogr conversion failed.", call. = FALSE)
+  }
+  
+  pipeline_message(
+    text =sprintf("Conversion of the file %s to %s successfully completed", 
+                  pbf_file, gpkg_file), 
+    level = 2, progress = "end", process = "valid")
+  
+  invisible(gpkg_file)
+}
+#' 
 #' @title Extract structured OSM attributes from the `other_tags` field
 #' @description This function parses the OpenStreetMap `other_tags` field and 
 #'              extracts a predefined set of key–value pairs into a structured 
@@ -6,10 +249,12 @@
 #'              OSM datasets. 
 #'              The function supports progress reporting adapted to the 
 #'              execution environment:
-#'              - in an interactive TTY (local execution), a dynamic progress 
-#'                bar is shown,
-#'              - in non-interactive environments (e.g. HPC batch jobs), 
-#'                periodic textual progress messages are printed instead.
+#'              \itemize{
+#'                \item in an interactive TTY (local execution), a dynamic 
+#'                      progress bar is shown, 
+#'                \item in non-interactive environments (e.g. HPC batch jobs), 
+#'                      periodic textual progress messages are printed instead.
+#'              }
 #' @param other_tags_vector A character vector containing the raw OSM 
 #'                          `other_tags` field (as stored in OSM GeoPackages). 
 #'                          Missing values are handled automatically.
@@ -19,8 +264,8 @@
 #'                      printed during extraction.
 #' @param IS_TTY Logical. Indicates whether the output is connected to a TTY. 
 #'               Defaults to automatic detection using `interactive()` and 
-#'               `isatty(stdout())`.
-#'               This controls how progress information is displayed.
+#'               `isatty(stdout())`. This controls how progress information is 
+#'               displayed.
 #' @return A data.frame with one column per requested OSM key and one row per 
 #'        input element. Missing tags are returned as `NA`.
 #' @details The extraction relies on the standard OSM `other_tags` serialization
@@ -44,9 +289,7 @@ extract_osm_other_tags <- function(other_tags_vector,
   n_rows <- length(x = other_tags_vector)
   n_cols <- length(x = keys)
   # Pre-allocate result matrix
-  result <- matrix(data = NA_character_, 
-                   nrow = n_rows, 
-                   ncol = n_cols)
+  result <- matrix(data = NA_character_, nrow = n_rows, ncol = n_cols)
   colnames(result) <- keys
   # Replace NA with empty strings for pattern matching
   other_tags_vector[is.na(other_tags_vector)] <- ""
@@ -54,13 +297,14 @@ extract_osm_other_tags <- function(other_tags_vector,
   if (show_progress) {
     pb_width <- 90
     last_printed <- 0
-    
     if (IS_TTY) {
-      cat("\t 🔗  Extracting OSM tags \n")
+      pipeline_message(text = "Extracting OSM tags", 
+                       level = 4, process = "info")
     } else {
-      cat(sprintf(
-        "\t\t 🔗  Extracting %d OSM tags (%d columns)... \n",
-        length(x = keys), n_cols))
+      pipeline_message(
+        text = sprintf("Extracting %d OSM tags (%d columns)", 
+                       length(x = keys), n_cols), 
+        level = 4, process = "info")
     }
   }
   # Extract all keys at once
@@ -99,16 +343,18 @@ extract_osm_other_tags <- function(other_tags_vector,
         bar_len <- floor(x = pb_width * pct)
         bar <- paste0(strrep("=", bar_len), 
                       strrep(" ", pb_width - bar_len))
-        cat(sprintf(
-          "\r\t\t ⏳  [%s] %3.0f%% (%d/%d)", bar, 100 * pct, i, n_cols))
+        pipeline_message(
+          text = sprintf("[%s] %3.0f%% (%d/%d)", bar, 100 * pct, i, n_cols), 
+          level = 4, process = "wait")
         if (i == n_cols) {
-          cat("\n")
         }
       } else if (i %% 5 == 0 || i == n_cols) {
         if (i > last_printed) {
           last_printed <- i
-          cat(sprintf(
-            "\t\t ✓ OSM tag %d/%d (%3.0f%%) processed\n",i, n_cols, 100 * pct))
+          pipeline_message(
+            text = sprintf("OSM tag %d/%d (%3.0f%%) processed", 
+                           i, n_cols, 100 * pct), 
+            level = 4, process = "valid")
         }
       }
     }
@@ -178,7 +424,7 @@ process_network_features <- function(data, rules) {
     cat(sprintf(
       "\t\t ⚠️ Imputing %s missing DEGRE values → ", 
       CONFIG$DEFAULT_DEGRE, 
-      " (urban default)\n",
+      " (urban default)",
       fmt(x = n_missing_degre)))
     # Set default value when missing DEGRE
     data[is.na(DEGRE), DEGRE := CONFIG$DEFAULT_DEGRE]
@@ -221,7 +467,7 @@ process_network_features <- function(data, rules) {
   if (length(x = rare_words) > 0) {
     n_rare <- sum(data$first_word %in% rare_words)
     cat(sprintf(
-      "\t\t ⚠️ Setting %s rare first_words (<100 occurrences) to 'missing' \n", 
+      "\t\t ⚠️ Setting %s rare first_words (<100 occurrences) to 'missing'", 
       fmt(n_rare)))
     data[first_word %in% rare_words, first_word := "missing"]
   }
@@ -260,8 +506,7 @@ process_network_features <- function(data, rules) {
   n_missing_lanes <- sum(missing_lanes)
   if (n_missing_lanes > 0) {
     cat(sprintf(
-      "\t\t ⚠️ Imputing %s missing lane values using highway-specific medians 
-      \n", fmt(n_missing_lanes)))
+      "\t\t ⚠️ Imputing %s missing lane values using highway-specific medians", fmt(n_missing_lanes)))
     lanes_lookup <- setNames(object = rules$median_lanes, 
                              rules$highway)
     data[missing_lanes, lanes_osm :=
@@ -282,8 +527,7 @@ process_network_features <- function(data, rules) {
   n_missing_speed <- sum(missing_speed)
   if (n_missing_speed > 0) {
     cat(sprintf(
-      "\t\t ⚠️ Imputing %s missing speed values using highway-specific medians 
-      \n", fmt(n_missing_speed)))
+      "\t\t ⚠️ Imputing %s missing speed values using highway-specific medians", fmt(n_missing_speed)))
     speed_lookup <- setNames(object = rules$median_speed, 
                              rules$highway)
     data[missing_speed, speed :=

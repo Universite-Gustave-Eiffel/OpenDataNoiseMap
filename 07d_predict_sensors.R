@@ -5,18 +5,12 @@
 # Output: Long format with 'period' column (D, E, N, h0-h23)
 # =============================================================================
 
-library(xgboost)
-library(dplyr)
-library(Matrix)
-library(sf)
-library(data.table)
-
-if (!file.exists("rdsFiles/xgb_models_with_ratios.rds")) {
+if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
   stop("❌ Models not found! Please run R/06d_xgboost_training_with_ratios.R first")
 }
 
-models_list <- readRDS("rdsFiles/xgb_models_with_ratios.rds")
-feature_info <- readRDS("rdsFiles/xgb_ratio_feature_info.rds")
+models_list <- readRDS(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+feature_info <- readRDS(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 feature_formula <- feature_info$feature_formula
 all_periods <- feature_info$all_periods
@@ -91,8 +85,8 @@ all_sensors <- sensors_acoucite_simple  # Skip BRUITPARIF and CHILD
 
 # Total sensors loaded: BRUITPARIF (31) + ACOUCITE (17) + CHILD (11 sources)
 
-# Create 1300m buffer around each sensor
-buffer_radius <- 1300  # meters
+# Create 800m buffer around each sensor
+buffer_radius <- 800  # meters
 sensors_buffer <- st_buffer(all_sensors, dist = buffer_radius)
 
 # Create union of all buffers (to avoid duplicates)

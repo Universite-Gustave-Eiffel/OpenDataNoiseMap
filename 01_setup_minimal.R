@@ -13,7 +13,6 @@ pkgs_needed <- c(
   "data.table", "stringr", "sfnetworks", "igraph", "tidygraph", "progress", 
   "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix")
 
-
 pipeline_message(text = "Loading packages and installing missing packages", 
                  level = 1, progress = "start", process = "install")
 
