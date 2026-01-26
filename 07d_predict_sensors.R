@@ -6,7 +6,11 @@
 # =============================================================================
 
 if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
-  stop("❌ Models not found! Please run R/06d_xgboost_training_with_ratios.R first")
+  pipeline_message(
+    text = sprintf("Models not found! File %s not found. Please run 
+                   R/06d_xgboost_training_with_ratios.R first", 
+                   CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH), 
+    process = "stop")
 }
 
 models_list <- readRDS(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
@@ -311,8 +315,7 @@ if (nrow(pred_matrix) != nrow(sensor_roads_dt)) {
 }
 
 # Data and matrix aligned
-
-saveRDS(sensor_roads_dt, "data/sensor_roads_dt.rds")
+saveRDS(sensor_roads_dt, CONFIG$SENSOR_FORECAST_FILEPATH)
 
 # Initialize results list for long format
 all_results <- list()

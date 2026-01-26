@@ -5,18 +5,16 @@
 # Output: Long format with 'period' column (D, E, N, h0-h23)
 # =============================================================================
 
-library(xgboost)
-library(dplyr)
-library(Matrix)
-library(sf)
-library(data.table)
-
-if (!file.exists("rdsFiles/xgb_models_with_ratios.rds")) {
-  stop("❌ Models not found! Please run R/06d_xgboost_training_with_ratios.R first")
+if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
+  pipeline_message(
+    text = sprintf("Models not found! File %s not found. Please run 
+                   R/06d_xgboost_training_with_ratios.R first", 
+                   CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH), 
+    process = "stop")
 }
 
-models_list <- readRDS("rdsFiles/xgb_models_with_ratios.rds")
-feature_info <- readRDS("rdsFiles/xgb_ratio_feature_info.rds")
+models_list <- readRDS(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+feature_info <- readRDS(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 feature_formula <- feature_info$feature_formula
 all_periods <- feature_info$all_periods
@@ -27,7 +25,7 @@ all_periods <- feature_info$all_periods
 # LOAD AND FILTER PARIS AREA DATA
 # =============================================================================
 
-full_network <- st_read("data/routes_france_osm_complete_including_connectivity_and_communes_for_R.gpkg")
+full_network <- st_read(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)
 full_network_2154 <- st_transform(full_network, 2154)
 full_network <- full_network_2154
 
@@ -68,17 +66,19 @@ cat(sprintf("  ✓ Extracted %s roads from Paris Metropolitan Area\n", format(nr
 
 paris_dt <- data.table(st_drop_geometry(paris_area))
 
-if (file.exists("rdsFiles/imputation_rules.rds")) {
-  imputation_rules <- readRDS("rdsFiles/imputation_rules.rds")
+if (file.exists(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)) {
+  imputation_rules <- readRDS(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)
 } else {
   imputation_rules <- paris_dt[!is.na(highway), .(
-    median_lanes = median(as.numeric(lanes), na.rm = TRUE),
-    median_speed = median(as.numeric(maxspeed), na.rm = TRUE),
+    median_lanes = median(as.numeric(lanes_osm), na.rm = TRUE),
+    median_speed = median(as.numeric(maxspeed_osm), na.rm = TRUE),
     n_roads = .N
   ), by = highway]
   imputation_rules[is.na(median_lanes), median_lanes := 2]
   imputation_rules[is.na(median_speed), median_speed := 50]
 }
+
+pipeline_message(text = describe_df(imputation_rules), process = "info")
 
 highway_levels <- c("residential", "tertiary", "secondary", "primary", "trunk", "motorway",
                    "tertiary_link", "secondary_link", "primary_link", "trunk_link", 
@@ -230,8 +230,7 @@ if (nrow(pred_matrix) != nrow(paris_dt)) {
 }
 
 # Data and matrix aligned
-
-saveRDS(paris_dt, "data/paris_dt.rds")
+saveRDS(paris_dt, CONFIG$PARIS_FORECAST_FILEPATH)
 
 all_results <- list()
 

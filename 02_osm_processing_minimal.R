@@ -9,13 +9,15 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
     isFALSE(CONFIG$FORCE_REJOIN_OSM_AND_COMMUNES)){
   
   pipeline_message(
-    text = paste0("Loading already merged OSM road and commune data from ", 
-                  rel_path(CONFIG$OSM_DEGRE_FILEPATH)), 
+    text = sprintf("Loading already merged OSM road and commune data from %s", 
+                   rel_path(CONFIG$OSM_DEGRE_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   degre_lookup <- readRDS(file = CONFIG$OSM_DEGRE_FILEPATH)
   
-  pipeline_message(text = "Merged data successfully loaded!", 
+  pipeline_message(text = describe_df(degre_lookup), process = "info")
+  
+  pipeline_message(text = "Merged data successfully loaded", 
                    level = 1, progress = "end", process = "valid")
   
 } else if (!file.exists(CONFIG$OSM_DEGRE_FILEPATH) || 
@@ -26,8 +28,8 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   # ----------------------------------------------------------------------------
   
   pipeline_message(
-    text = paste0("Loading OSM road data from ", 
-                  rel_path(CONFIG$OSM_ROADS_FILEPATH)), 
+    text = sprintf("Loading OSM road data from %s", 
+                   rel_path(CONFIG$OSM_ROADS_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   # This dataset contains all OSM roads for France with geometry and attributes
@@ -47,13 +49,14 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   # Subset roads to keep only selected highway types
   osm_roads <- osm_roads[osm_roads$highway %in% high_traffic_types, ]
   
+  pipeline_message(text = describe_df(osm_roads), process = "info")
+  
   # Explicitly store in global environment (pipeline-style workflow)
   assign(x = "osm_roads", 
          value = osm_roads, 
          envir = .GlobalEnv)
   
-  pipeline_message(text = paste0("OSM road data successfully loaded!", 
-                                 rel_path(CONFIG$OSM_ROADS_FILEPATH)),  
+  pipeline_message(text = "OSM road data successfully loaded", 
                    level = 1, progress = "end", process = "valid")
   
   # ----------------------------------------------------------------------------
@@ -75,8 +78,8 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   # ----------------------------------------------------------------------------
   
   pipeline_message(
-    text = paste0("Loading commune data from ", 
-                  rel_path(CONFIG$OSM_TYPOLOGIES_FILEPATH)), 
+    text = sprintf("Loading commune data from %s", 
+                   rel_path(CONFIG$OSM_TYPOLOGIES_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   commune_data <- st_read(
@@ -88,9 +91,10 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   # Safe simplification (topological)
   commune_data <- st_make_valid(x = commune_data)
   
+  pipeline_message(text = describe_df(commune_data), process = "info")
+  
   pipeline_message(
-    text = paste0("Commune data successfully loaded!", 
-                  rel_path(CONFIG$OSM_TYPOLOGIES_FILEPATH)), 
+    text = "Commune data successfully loaded", 
     level = 1, progress = "end", process = "valid")
   
   # ----------------------------------------------------------------------------
@@ -127,9 +131,9 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   if (n_missing > 0) {
     
     pipeline_message(
-    text = sprintf("%s roads not intersecting any commune, assigning nearest 
-                   commune", fmt(x = n_missing)), 
-    level = 4, process = "warning")
+      text = sprintf("%s roads not intersecting any commune, assigning nearest 
+                     commune", fmt(x = n_missing)), 
+      process = "warning")
     
     # Compute nearest commune polygon for all missing roads in one call
     nearest_idx <- st_nearest_feature(
@@ -139,19 +143,20 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
     # Assign DEGREE of the nearest commune
     degre_lookup$DEGRE[idx_missing] <- commune_data$DEGRE[nearest_idx]
     
-    pipeline_message(
-      text = sprintf("Nearest communes assigned for %s roads", 
-                     fmt(x = n_missing)), 
-      level = 4, process = "valid")
+    pipeline_message(text = sprintf("Nearest communes assigned for %s roads", 
+                                    fmt(x = n_missing)), 
+                     process = "info")
   }
   
   # Save DEGREE lookup to disk
   saveRDS(object = degre_lookup, 
           file = CONFIG$OSM_DEGRE_FILEPATH)
   
+  pipeline_message(text = describe_df(degre_lookup), process = "info")
+  
   pipeline_message(
-    text = paste0("OSM road and commune data successfully joined and saved into 
-                  file ", rel_path(CONFIG$OSM_DEGRE_FILEPATH)), 
+    text = sprintf("OSM road and commune data successfully joined and saved into 
+                  file %s", rel_path(CONFIG$OSM_DEGRE_FILEPATH)), 
     level = 1, progress = "end", process = "valid")
 }
 
@@ -244,10 +249,9 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   n_nodes <- igraph::vcount(graph = g)
   n_edges <- igraph::ecount(graph = g)
   
-  pipeline_message(
-    text = sprintf("Network built: %s nodes, %s edges", 
-                   fmt(x = n_nodes), fmt(x = n_edges)), 
-    level = 4, process = "info")
+  pipeline_message(text = sprintf("Network built: %s nodes, %s edges", 
+                                  fmt(x = n_nodes), fmt(x = n_edges)), 
+                   process = "info")
   
   # ----------------------------------------------------------------------------
   # Centrality scores
@@ -257,38 +261,26 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
                    level = 2, progress = "start", process = "calc")
   
   # Node connectivity
-  pipeline_message(text = "Computing node connectivity", 
-                   level = 3, progress = "start", process = "calc")
+  pipeline_message(text = "Computing node connectivity", process = "info")
   node_connectivity <- igraph::degree(graph = g)
-  pipeline_message(text = "Node connectivity computed", 
-                   level = 3, progress = "end", process = "valid")
   
   # PageRank scores
-  pipeline_message(text = "Computing node pagerank", 
-                   level = 3, progress = "start", process = "calc")
+  pipeline_message(text = "Computing node pagerank", process = "info")
   node_pagerank <- igraph::page_rank(graph = g, 
                                      directed = FALSE)$vector
-  pipeline_message(text = "Node pagerank computed", 
-                   level = 3, progress = "end", process = "valid")
   
   # Betweenness centralities of positions on undirected geodesics
-  pipeline_message(text = "Computing node betweenness", 
-                   level = 3, progress = "start", process = "calc")
+  pipeline_message(text = "Computing node betweenness", process = "info")
   node_betweenness <- igraph::betweenness(graph = g,  
                                   cutoff = CONFIG$CUTOFF_BETWEENNESS, 
                                   directed = FALSE)
-  pipeline_message(text = "Node betweenness computed", 
-                   level = 3, progress = "end", process = "valid")
   
   # Closeness centrality measures (how many steps is required to access every 
   # other vertex from a given one)
-  pipeline_message(text = "Computing node closeness", 
-                   level = 3, progress = "start", process = "calc")
+  pipeline_message(text = "Computing node closeness", process = "info")
   node_closeness <- igraph::closeness(graph = g, 
                                       cutoff = CONFIG$CUTOFF_CLOSENESS, 
                                       mode = "all")
-  pipeline_message(text = "Node closeness computed", 
-                   level = 3, progress = "end", process = "valid")
   
   pipeline_message(text = "Centrality scores computed", 
                    level = 2, progress = "start", process = "valid")
@@ -378,11 +370,9 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Extract tags from osm_roads
   if ("other_tags" %in% names(osm_roads)) {
-    start_timer()
     extracted_tags <- extract_osm_other_tags(
       other_tags_vector = osm_roads$other_tags, 
       keys = osm_tags)
-    elapsed <- stop_timer()
     
     # Add extracted tags to osm_roads
     for (tag in osm_tags) {
@@ -455,7 +445,7 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     quiet = TRUE)
   
   pipeline_message(
-    text = paste0("Final road network saved in file ", 
+    text = sprintf("Final road network saved in file %s", 
                   rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 2, progress = "end", process = "valid")
 }

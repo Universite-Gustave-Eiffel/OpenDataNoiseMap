@@ -421,11 +421,10 @@ process_network_features <- function(data, rules) {
   data[, DEGRE := as.numeric(x = DEGRE)]
   n_missing_degre <- sum(is.na(data$DEGRE))
   if (n_missing_degre > 0) {
-    cat(sprintf(
-      "\t\t ⚠️ Imputing %s missing DEGRE values → ", 
-      CONFIG$DEFAULT_DEGRE, 
-      " (urban default)",
-      fmt(x = n_missing_degre)))
+    pipeline_message(
+      text = sprintf("Imputing %s missing DEGRE values → %d (urban default) %s", 
+                     CONFIG$DEFAULT_DEGRE, fmt(x = n_missing_degre)), 
+      process = "warning")
     # Set default value when missing DEGRE
     data[is.na(DEGRE), DEGRE := CONFIG$DEFAULT_DEGRE]
   }
@@ -466,9 +465,11 @@ process_network_features <- function(data, rules) {
   rare_words <- first_word_counts[N < 100, first_word]
   if (length(x = rare_words) > 0) {
     n_rare <- sum(data$first_word %in% rare_words)
-    cat(sprintf(
-      "\t\t ⚠️ Setting %s rare first_words (<100 occurrences) to 'missing'", 
-      fmt(n_rare)))
+    pipeline_message(
+      text = sprintf("Setting %s rare first_words (<100 occurrences) to 'missing'", 
+                     fmt(n_rare)), 
+      process = "warning")
+    
     data[first_word %in% rare_words, first_word := "missing"]
   }
   data[, first_word := factor(x = first_word)]
@@ -505,8 +506,10 @@ process_network_features <- function(data, rules) {
   missing_lanes <- is.na(data$lanes_osm) | data$lanes_osm <= 0
   n_missing_lanes <- sum(missing_lanes)
   if (n_missing_lanes > 0) {
-    cat(sprintf(
-      "\t\t ⚠️ Imputing %s missing lane values using highway-specific medians", fmt(n_missing_lanes)))
+    pipeline_message(
+      text = sprintf("Imputing %s missing lane values using highway-specific medians", 
+                     fmt(n_missing_lanes)), 
+      process = "warning")
     lanes_lookup <- setNames(object = rules$median_lanes, 
                              rules$highway)
     data[missing_lanes, lanes_osm :=
@@ -526,8 +529,10 @@ process_network_features <- function(data, rules) {
   missing_speed <- is.na(data$speed) | data$speed <= 0
   n_missing_speed <- sum(missing_speed)
   if (n_missing_speed > 0) {
-    cat(sprintf(
-      "\t\t ⚠️ Imputing %s missing speed values using highway-specific medians", fmt(n_missing_speed)))
+    pipeline_message(
+      text = sprintf("Imputing %s missing speed values using highway-specific medians", 
+                     fmt(n_missing_speed)), 
+      process = "warning")
     speed_lookup <- setNames(object = rules$median_speed, 
                              rules$highway)
     data[missing_speed, speed :=

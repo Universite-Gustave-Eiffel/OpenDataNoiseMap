@@ -18,55 +18,58 @@ pipeline_message(text = "Download OpenStreetMap data from Geofabrik and convert
 # Region to download: "France" or a valid French region name
 OSM_REGION <- "France"
 
-# Output directories
-OSM_PBF_DIR  <- file.path("data", "input", "osm", "pbf")
-OSM_GPKG_DIR <- file.path("data", "input", "osm", "gpkg")
-
 # Overwrite existing files
-OVERWRITE <- TRUE
+OVERWRITE <- FALSE
 
 # ------------------------------------------------------------------------------
 # Safety checks
 # ------------------------------------------------------------------------------
 
-
-pipeline_message(text = "Loading packages and installing missing packages", 
+pipeline_message(text = "Creating output directories", 
                  level = 1, progress = "start", process = "install")
 
+dir.create(CONFIG$OSM_PBF_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(CONFIG$OSM_GPKG_DIR, recursive = TRUE, showWarnings = FALSE)
 
-dir.create(OSM_PBF_DIR, recursive = TRUE, showWarnings = FALSE)
-dir.create(OSM_GPKG_DIR, recursive = TRUE, showWarnings = FALSE)
-
-if (!dir.exists(OSM_PBF_DIR)) {
+if (!dir.exists(CONFIG$OSM_PBF_DIR)) {
   pipeline_message(
     text = "PBF output directory does not exist and could not be created.", 
-    level = 4, process = "stop")
+    process = "stop")
+}
+if (!dir.exists(CONFIG$OSM_GPKG_DIR)) {
+  pipeline_message(
+    text = "GPKG output directory does not exist and could not be created.", 
+    process = "stop")
 }
 
-if (!dir.exists(OSM_GPKG_DIR)) {
-  stop("GPKG output directory does not exist and could not be created.")
-}
+pipeline_message(text = "Output directories successfully created", 
+                 level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Step 1 — Download OSM PBF data
 # ------------------------------------------------------------------------------
 
-message("🌍 Step 1: Downloading OpenStreetMap data")
+pipeline_message(text = "Downloading OpenStreetMap data", 
+                 level = 1, progress = "start", process = "download")
 
 pbf_file <- download_geofabrik_pbf(
   region    = OSM_REGION,
-  dest_dir = OSM_PBF_DIR,
+  dest_dir = CONFIG$OSM_PBF_DIR,
   overwrite = OVERWRITE
 )
+
+pipeline_message(text = "OSM data successfully downloaded", 
+                 level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Step 2 — Convert PBF to GeoPackage
 # ------------------------------------------------------------------------------
 
-message("🔄 Step 2: Converting PBF to GeoPackage")
+pipeline_message(text = "Converting PBF to GeoPackage", 
+                 level = 1, progress = "start", process = "calc")
 
 gpkg_filename <- sub("\\.osm\\.pbf$", ".gpkg", basename(pbf_file))
-gpkg_file <- file.path(OSM_GPKG_DIR, gpkg_filename)
+gpkg_file <- file.path(CONFIG$OSM_GPKG_DIR, gpkg_filename)
 
 convert_pbf_to_gpkg(
   pbf_file  = pbf_file,
@@ -74,16 +77,24 @@ convert_pbf_to_gpkg(
   overwrite = OVERWRITE
 )
 
+pipeline_message(text = "PBF successfully converted to GeoPackage", 
+                 level = 1, progress = "end", process = "valid")
+
+
+pipeline_message(text = sprintf("OpenStreetMap data successfully downloaded from 
+                                Geofabrik, converted into a GeoPackage, and 
+                                saved into file %s", rel_path()), 
+                 level = 0, progress = "start", process = "download")
+
 # ------------------------------------------------------------------------------
 # Completion
 # ------------------------------------------------------------------------------
 
-message("✅ OSM download and conversion completed successfully")
+message("✅ )
 message("   Region : ", OSM_REGION)
 message("   PBF    : ", pbf_file)
 message("   GPKG   : ", gpkg_file)
 
 
-pipeline_message(text = "OpenStreetMap data successfully downloaded from 
-                        Geofabrik and converted into a GeoPackage", 
+pipeline_message(text = "", 
                  level = 0, progress = "end", process = "valid")

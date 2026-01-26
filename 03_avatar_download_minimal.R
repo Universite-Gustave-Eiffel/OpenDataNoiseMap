@@ -14,8 +14,8 @@ pipeline_message(
 if (!exists(x = 'osm_full_network', inherits = FALSE)){
   
   pipeline_message(
-    text = paste0("Loading road network data from ", 
-                  rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
+    text = sprintf("Loading road network data from %s", 
+                   rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   osm_full_network <- sf::st_read(
@@ -27,12 +27,12 @@ if (!exists(x = 'osm_full_network', inherits = FALSE)){
       st_transform(crs = CONFIG$TARGET_CRS)
   }
   
+  pipeline_message(text = describe_df(osm_full_network), process = "info")
+  
   pipeline_message(
-    text = "OSM full road network loaded in successfully loaded!", 
+    text = "OSM full road network loaded in successfully loaded", 
     level = 1, progress = "end", process = "valid")
   
-  pipeline_message(text = describe_df(osm_full_network), 
-                   level = 1, progress = "end")
 }
 
 # ------------------------------------------------------------------------------
@@ -44,8 +44,8 @@ if ((file.exists(CONFIG$AVATAR_COUNT_POINTS_FILEPATH) &&
     isFALSE(CONFIG$IS_TTY)){
   
   pipeline_message(
-    text = paste0("Loading previously downloaded count points data from ", 
-                  rel_path(CONFIG$AVATAR_COUNT_POINTS_FILEPATH)), 
+    text = sprintf("Loading previously downloaded count points data from %s", 
+                   rel_path(CONFIG$AVATAR_COUNT_POINTS_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   # Read counting data to JSON file
@@ -64,11 +64,9 @@ if ((file.exists(CONFIG$AVATAR_COUNT_POINTS_FILEPATH) &&
                    level = 1, progress = "start", process = "download")
   
   # Download Avatar data via API
-  start_timer()
   download_status <- download_avatar_count_points(
     target = CONFIG$AVATAR_COUNT_POINTS_FILEPATH, 
     api_token = CONFIG$AVATAR_API_TOKEN)
-  elapsed <- stop_timer()
   
   # Ensure count points data is loaded in memory
   if (!exists("count_points_data")) {
@@ -81,9 +79,9 @@ if ((file.exists(CONFIG$AVATAR_COUNT_POINTS_FILEPATH) &&
   
   if (isTRUE(download_status)){
     pipeline_message(
-      text = paste0("Count point data successfully downloaded thanks to Avatar 
-                    API and saved into file ", 
-                    rel_path(CONFIG$AVATAR_COUNT_POINTS_FILEPATH)), 
+      text = sprintf("Count point data successfully downloaded thanks to Avatar 
+                     API and saved into file %s", 
+                     rel_path(CONFIG$AVATAR_COUNT_POINTS_FILEPATH)), 
       level = 1, progress = "end", process = "valid")
   }
 }
@@ -108,6 +106,8 @@ count_points <- count_points %>%
          lane_number, 
          punctual_position, 
          everything())
+
+pipeline_message(text = describe_df(count_points), process = "info")
 
 pipeline_message(text = "Avatar data successfully formatted",  
                  level = 1, progress = "end", process = "valid")
@@ -169,10 +169,10 @@ rm(count_points_buffered)
 count_points <- get(x = "count_points", 
                     envir = .GlobalEnv)
 
+pipeline_message(text = describe_df(pointsId_with_roads), process = "info")
+
 pipeline_message(text = "Closest OSM roads to buffered count points evaluated", 
                  level = 2, progress = "end", process = "valid")
-pipeline_message(text = describe_df(pointsId_with_roads), 
-                 level = 1, progress = "end")
 
 # ------------------------------------------------------------------------------
 ## Restrict OSM network to Avatar-measured roads only
@@ -212,8 +212,7 @@ sf::st_write(
   quiet = TRUE)
 
 pipeline_message(
-  text = sprintf("OSM road network successfully merged with count point data and 
-                 saved into file ", 
+  text = sprintf("OSM road network successfully merged with count point data and saved into file %s", 
                  rel_path(CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH)), 
   level = 2, progress = "end", process = "valid")
 
@@ -232,7 +231,7 @@ if (nchar(CONFIG$AVATAR_API_TOKEN) == 0) {
                    "\t\t Then restart R session.\n", 
                    "\t\t Continuing without authentication ", 
                    "(5 requests/min limit)..."), 
-    level = 4, process = "warning")
+    process = "warning")
 }
 
 # Delete old chunks if forcing re-download
@@ -278,14 +277,14 @@ if (length(chunks_to_redownload) > 0) {
     pipeline_message(
       text = sprintf("Found %d chunks to re-download (empty/corrupted/missing)", 
                      length(chunks_to_redownload)), 
-      level = 4, process = "warning")
+      process = "warning")
   } else {
     pipeline_message(
       text = sprintf("Found %d chunks to re-download (empty/corrupted/missing), 
                       but the computing environment does not allow it. Please 
                       run the shell script run_avatar_download.sh to re-download 
                      these chunks", length(chunks_to_redownload)), 
-                     level = 4, process = "warning")
+      process = "warning")
   }
 }
 
@@ -309,8 +308,7 @@ if (CONFIG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
   }
   # Process chunks to re-download
   if (length(chunks_to_process) == 0) {
-    pipeline_message(text = "No chunk to download", 
-                     level = 4, process = "valid")
+    pipeline_message(text = "No chunk to download", process = "info")
     return(invisible(NULL))
   }
   chunks_downloaded <- 0
@@ -333,7 +331,7 @@ if (CONFIG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
     pipeline_message(
       text = sprintf("[%3d/%3d] Downloading chunk %03d (points %d-%d)", 
                      chunk_id, total_chunks, chunk_id, start_idx, end_idx), 
-      level = 4, process = "download")
+      process = "download")
     
     tryCatch({
       # Download the file with automatic retry logic
@@ -348,13 +346,14 @@ if (CONFIG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
       if (validation$valid) {
         chunks_downloaded <- chunks_downloaded + 1
       } else {
-        pipeline_message(text = sprintf("Chunk invalid: ", validation$reason), 
-                         level = 4, process = "warning")
+        pipeline_message(text = sprintf("Chunk invalid: %s", validation$reason), 
+                         process = "warning")
       }
     }, error = function(e) {
       pipeline_message(
-        text = sprintf("Failed to download chunk ", chunk_id, ": ", e$message), 
-        level = 4, process = "stop")
+        text = sprintf("Failed to download chunk %d: %s", 
+                       chunk_id, e$message), 
+        process = "stop")
     })
   }
   
@@ -362,8 +361,8 @@ if (CONFIG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
                    level = 2, progress = "end", process = "valid")
   pipeline_message(
     text = sprintf("%d chunks processed\n\t\t %d chunks successfully 
-                   downloaded\n", length(chunks_to_process), chunks_downloaded), 
-    level = 4, process = "info")
+                   downloaded", length(chunks_to_process), chunks_downloaded), 
+    process = "info")
 }
 
 # List of files for all chunks
@@ -398,13 +397,10 @@ if (length(files) > 0) {
                      rel_path(CONFIG$AVATAR_CSV_DATA_DIRPATH)), 
       level = 2, progress = "end", process = "save")
   } else {
-    pipeline_message(text = "No valid Avatar data files", 
-                     level = 2, progress = "end", process = "stop")
-    stop()
+    pipeline_message(text = "No valid Avatar data files", process = "stop")
   }
 } else {
-  pipeline_message(text = "No Avatar data files found", 
-                   level = 2, progress = "end", process = "stop")
+  pipeline_message(text = "No Avatar data files found", process = "stop")
 }
 
 rm(standardized_data, count_points_data, count_points, valid_data)

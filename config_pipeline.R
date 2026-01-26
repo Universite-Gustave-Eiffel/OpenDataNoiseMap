@@ -123,6 +123,10 @@ assign(x = "TRAINING_DATA_DIR",
        value = TRAINING_DATA_DIR, 
        envir = .GlobalEnv)
 
+# Output forecasting data directory
+FORECAST_DATA_DIR <- normalizePath(path = file.path(OUTPUT_DATA_DIR, "forecast"), 
+                                   mustWork = FALSE)
+
 # Figures directory
 FIGS_DIR <- normalizePath(path = "figures", 
                           mustWork = FALSE)
@@ -134,13 +138,20 @@ assign(x = "FIGS_DIR",
 # Input data paths (depend on INPUT_DATA_DIR defined in setup)
 # ------------------------------------------------------------------------------
 
+# Output directory path to OSM data
+OSM_DATA_DIR <-file.path("data", "osm")
+
+# OSM PBG download path
+OSM_PBF_DIR <- file.path(OSM_DATA_DIR, "pbf")
+OSM_GPKG_DIR <- file.path(OSM_DATA_DIR, "gpkg")
+
 # OSM road data
 osm_roads_filename <- "osm_roads_france.gpkg"
-OSM_ROADS_FILEPATH <- file.path(INPUT_DATA_DIR, osm_roads_filename)
+OSM_ROADS_FILEPATH <- file.path(OSM_DATA_DIR, osm_roads_filename)
 
 # OSM data for communes
 osm_typologies_filename <- "COMMUNE_TYPO_DENSITE.shp"
-OSM_TYPOLOGIES_FILEPATH <- file.path(INPUT_DATA_DIR, 
+OSM_TYPOLOGIES_FILEPATH <- file.path(OSM_DATA_DIR, 
                                      osm_typologies_filename)
 
 # ------------------------------------------------------------------------------
@@ -207,6 +218,14 @@ XGB_MODELS_WITH_RATIOS_FILEPATH <- file.path(TRAINING_DATA_DIR, "rds",
 XGB_RATIO_FEATURE_INFO_FILEPATH <- file.path(TRAINING_DATA_DIR, "rds", 
                                              "xgb_ratio_feature_info.rds")
 
+# Forecasting
+SENSOR_FORECAST_FILEPATH <- file.path(FORECAST_DATA_DIR, 
+                                      "sensor_roads_dt.rds")
+PARIS_FORECAST_FILEPATH <- file.path(FORECAST_DATA_DIR, 
+                                     "paris_roads_dt.rds")
+NANTES_FORECAST_FILEPATH <- file.path(FORECAST_DATA_DIR, 
+                                      "nantes_roads_dt.rds")
+
 # Figures
 FIG_HOURLY_TRAFFIC_FILENAME <- "hourly_traffic_patterns.pdf"
 SPEED_AND_TRUCK_PERCENTAGE <- "speed_and_truck_percentage.pdf"
@@ -240,6 +259,8 @@ CONFIG <<- list(
   CUTOFF_BETWEENNESS = CUTOFF_BETWEENNESS,
   CUTOFF_CLOSENESS = CUTOFF_CLOSENESS,
   JOIN_ROADS_AND_TOWNS_IN_ONE_SHOT = JOIN_ROADS_AND_TOWNS_IN_ONE_SHOT,
+  OSM_PBF_DIR = OSM_PBF_DIR,
+  OSM_GPKG_DIR = OSM_GPKG_DIR,
   OSM_ROADS_FILEPATH = OSM_ROADS_FILEPATH,
   OSM_TYPOLOGIES_FILEPATH = OSM_TYPOLOGIES_FILEPATH,
   OSM_DEGRE_FILEPATH = OSM_DEGRE_FILEPATH,
@@ -274,8 +295,12 @@ CONFIG <<- list(
   TRAINING_RDS_DATA_FILEPATH = TRAINING_RDS_DATA_FILEPATH,
   TRAINING_GPKG_DATA_FILEPATH = TRAINING_GPKG_DATA_FILEPATH,
   XGB_MODELS_WITH_RATIOS_FILEPATH = XGB_MODELS_WITH_RATIOS_FILEPATH,
-  XGB_RATIO_FEATURE_INFO_FILEPATH = XGB_RATIO_FEATURE_INFO_FILEPATH
+  XGB_RATIO_FEATURE_INFO_FILEPATH = XGB_RATIO_FEATURE_INFO_FILEPATH,
+  # Forecasting
+  SENSOR_FORECAST_FILEPATH = SENSOR_FORECAST_FILEPATH,
+  PARIS_FORECAST_FILEPATH = PARIS_FORECAST_FILEPATH,
+  NANTES_FORECAST_FILEPATH = NANTES_FORECAST_FILEPATH
 )
 
-pipeline_message(text = "Pipeline configured!", 
+pipeline_message(text = "Pipeline configured", 
                  level = 0, progress = "end", process = "valid")

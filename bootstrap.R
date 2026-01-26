@@ -42,10 +42,10 @@ if (RUN_CONTEXT == "local") {
   if (file.exists("renv/activate.R")) {
     source("renv/activate.R")
     pipeline_message(text = "Virtual environment activated", 
-                     level = 1, progress = "end", process = "install")
+                     level = 1, progress = "end", process = "valid")
   } else {
-    pipeline_message(text = "Virtual environment activated", 
-                     level = 1, progress = "end", process = "stop")
+    pipeline_message(text = "Non-existent virtual environment", 
+                     process = "stop")
   }
 }
 
@@ -68,9 +68,8 @@ if (RUN_CONTEXT == "hpc") {
                    level = 1, progress = "end", process = "install")
   # Disabling automatic opening of a graphics device
   grDevices::pdf(NULL)
-  pipeline_message(
-    text = "Automatic opening of a graphics device disabled!", 
-    level = 4, process = "info")
+  pipeline_message(text = "Automatic opening of a graphics device disabled!", 
+                   process = "info")
 }
 
 # ------------------------------------------------------------------------------
@@ -79,5 +78,5 @@ if (RUN_CONTEXT == "hpc") {
 PROJECT_ROOT <- normalizePath(getwd())
 assign("PROJECT_ROOT", PROJECT_ROOT, envir = .GlobalEnv)
 
-pipeline_message(text = "Bootstrap completed!", 
+pipeline_message(text = "Bootstrap completed", 
                  level = 0, progress = "end", process = "valid")

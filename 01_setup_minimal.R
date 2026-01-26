@@ -78,6 +78,10 @@ dir.create(path = file.path(CONFIG$TRAINING_DATA_DIR, "rds"),
 dir.create(path = file.path(CONFIG$TRAINING_DATA_DIR, "gpkg"), 
            showWarnings = FALSE, 
            recursive = TRUE)
+# FORECASTING data directories
+dir.create(path = FORECAST_DATA_DIR, 
+           showWarnings = FALSE, 
+           recursive = TRUE)
 
 # ------- #
 # Figures #
@@ -86,7 +90,7 @@ dir.create(path = CONFIG$FIGS_DIR,
            showWarnings = FALSE, 
            recursive = TRUE)
 
-pipeline_message(text = "Required directories created!", 
+pipeline_message(text = "Required directories created", 
                  level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
@@ -95,5 +99,5 @@ pipeline_message(text = "Required directories created!",
 op <- options(digits.secs = 1, 
               digits = 2)
 
-pipeline_message(text = "Setup stage completed!", 
+pipeline_message(text = "Setup stage completed", 
                  level = 0, progress = "end", process = "valid")

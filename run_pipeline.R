@@ -15,21 +15,10 @@ pipeline_message(text = "Calculation mode recovery",
 # Parsing arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (isTRUE(IS_TTY)){
-  if (length(args) != 1 || !args %in% c("nantes", "paris", "sensors")) {
-    pipeline_message(
-      text = "Usage: Rscript run_pipeline.R <nantes|paris|sensors>", 
-      level = 4, process = "stop")
-    stop()
-  }
-} else {
-  if (length(args) != 1 || !args %in% c("nantes", "paris", "sensors")) {
-    pipeline_message(
-      text = "Running pipeline in local without chosen mode. Setting mode to 
-            `sensors`", 
-      level = 4, process = "stop")
-    args[1] = "sensors"
-  }
+if (length(args) != 1 || !args %in% c("nantes", "paris", "sensors")) {
+  pipeline_message(
+    text = "Usage: Rscript run_pipeline.R <nantes|paris|sensors>", 
+    process = "stop")
 }
 
 # Mode selection
@@ -62,5 +51,5 @@ if (MODE == "nantes") {
   source("07e_predict_paris_area.R")
 }
 
-pipeline_message(text = "Pipeline ready!", 
+pipeline_message(text = "Pipeline ready", 
                  level = 0, progress = "end", process = "valid")

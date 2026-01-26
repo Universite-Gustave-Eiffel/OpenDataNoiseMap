@@ -105,130 +105,209 @@ stop_timer <- function() {
   return(as.numeric(elapsed))
 }
 #'
-#' @title Describe a data frame or data.table structure
-#' @description Prints a compact textual description of a data frame or 
-#'              data.table, including number of rows, columns, column names, and 
-#'              index/key information when available. Intended to be embedded 
-#'              into pipeline log messages.
+#' @title Describe a data.frame or data.table structure
+#' @description Returns a compact textual description of a data.frame or 
+#'              data.table, including:
+#'              \itemize{
+#'                \item object type (data.frame or data.table), 
+#'                \item object name as passed to the function, 
+#'                \item number of rows and columns, 
+#'                \item column names (truncated if needed), 
+#'                \item data.table key information when available.
+#'              }
+#'              Intended to be embedded into pipeline log messages.
 #' @param df A data.frame or data.table.
 #' @return A character string describing the object.
 #' @examples
-#' describe_df(df)
+#' describe_df(osm_full_network)
 #' @export
 describe_df <- function(df) {
-  if (!inherits(df, c("data.frame", "data.table"))) {
-    stop("describe_df() expects a data.frame or data.table")
+  if (!inherits(x = df, what = c("data.frame", "data.table"))) {
+    pipeline_message(
+      text = "Function describe_df() expects a data.frame or data.table", 
+      process = "stop")
   }
-  n_rows <- nrow(x = df)
-  n_cols <- ncol(x = df)
-  col_names <- paste(colnames(df), collapse = ", ")
-  # Detect data.table keys if present
-  keys <- NULL
+  # Object name as passed by the caller
+  obj_name <- deparse(expr = substitute(df))
+  # Object type
+  obj_type <- if (inherits(x = df, what = "data.table")) {
+    "Data.table"
+  } else {
+    "Data.frame"
+  }
+  # Dimensions
+  n_rows <- nrow(df)
+  n_cols <- ncol(df)
+  # Column names (truncate if too many)
+  max_cols_display <- 6
+  col_names <- colnames(x = df)
+  col_display <- if (length(col_names) > max_cols_display) {
+    paste0(paste(col_names[1:max_cols_display], collapse = ", "), ", ...")
+  } else {
+    paste(col_names, collapse = ", ")
+  }
+  # data.table keys if present
+  key_info <- ""
   if (inherits(df, "data.table")) {
     keys <- data.table::key(df)
+    if (!is.null(keys) && length(keys) > 0) {
+      key_info <- paste0(" | keys: ", paste(keys, collapse = ", "))
+    }
   }
-  key_info <- if (!is.null(keys) && length(keys) > 0) {
-    paste0(" | keys: ", paste(keys, collapse = ", "))
-  } else {
-    ""
-  }
-  paste0("[rows: ", n_rows, ", cols: ", n_cols, "] ", 
-         col_names, key_info)
+  # Final message
+  paste0(obj_type, " '", obj_name, "' ", 
+         "[nrows: ", n_rows, " | ncols: ", n_cols, "] ", 
+         "contains '", col_display, "'", key_info)
 }
 #'
-#' @title Display a structured pipeline progress message
-#' @description Displays standardized progress messages for pipeline execution, 
-#'              including hierarchical indentation, icons, and automatic timing 
-#'              of computation blocks. 
-#' @param text Character string to display (without tabs, newlines or icons).
-#' @param level Integer. Hierarchy level (0 = main title, 1 = sub-block).
-#' @param progress Character. Either "start" or "end".
-#' @param process Character. Type of process (among "install", "load", "save", 
-#'                "download", "configure", "search", calc", join", "learn", 
-#'                "build", "plot", "info", "clip", "valid", "warning", "stop").
-#' @return Invisibly returns NULL.
-#'
+#' @title Display structured pipeline progress messages
+#' @description Displays standardized progress messages for pipeline execution 
+#'              with:
+#'              \itemize{
+#'                \item hierarchical indentation based on processing level, 
+#'                \item semantic icons depending on process type, 
+#'                \item optional timing of computation blocks, 
+#'                \item proper handling of informational messages, warnings, and 
+#'                      fatal errors.
+#'              }
+#'              Two independent timers are supported:
+#'              \itemize{
+#'                \item level 1 timers for main processing steps, 
+#'                \item level 2 timers for internal computations.
+#'              }
+#'              Informational messages, warnings, and fatal errors are handled 
+#'              independently of the processing levels and do not use timers.
+#' @details This function is designed for structured, readable logging in batch, 
+#'          HPC, or long-running R pipelines. It avoids interactive prompts and 
+#'          produces clean, linear output suitable for log files. 
+#'          Processing levels control only structural messages and timers:
+#'          \itemize{
+#'            \item \code{level = 0}: Main pipeline section titles (no timer), 
+#'            \item \code{level = 1}: Timed processing steps 
+#'                                    (\code{"start"} / \code{"end"}), 
+#'            \item \code{level = 2}: Timed internal computations 
+#'                                    (\code{"start"} / \code{"end"}).
+#'          }
+#'          Severity and message routing are controlled exclusively by the 
+#'          \code{process} argument:
+#'          \itemize{
+#'            \item \code{process = "info"} routes the message to 
+#'                  \code{message()}, 
+#'            \item \code{process = "warning"} routes the message to 
+#'                  \code{warning()}, 
+#'            \item \code{process = "stop"} routes the message to \code{stop()} 
+#'                  and aborts execution.
+#'          }
+#' @param text Character string to display (should not include tabs, newlines, 
+#'             or icons).
+#' @param level Integer indicating the structural hierarchy of the message. 
+#'              Ignored when \code{process} is \code{"info"}, \code{"warning"}, 
+#'              or \code{"stop"}.
+#' @param progress Character string indicating the step state. 
+#'                 Must be either \code{"start"} or \code{"end"}. 
+#'                 Used only for \code{level = 1} and \code{level = 2}.
+#' @param process Optional character string indicating the semantic type of the 
+#'                message and selecting an associated icon. 
+#'                Supported values include: \code{"install"}, \code{"load"}, 
+#'                \code{"save"}, \code{"pack"}, \code{"download"}, 
+#'                \code{"wait"}, \code{"configure"}, \code{"search"}, 
+#'                \code{"calc"}, \code{"join"}, \code{"learn"}, \code{"build"}, 
+#'                \code{"plot"}, \code{"info"}, \code{"valid"}, 
+#'                \code{"warning"}, \code{"stop"}.
+#' @return Invisibly returns \code{NULL}. The function is used for its side 
+#'         effects (console output, warnings, or errors).
 #' @export
-pipeline_message <- function(text, 
-                             level = 1, 
-                             progress = c("start", "end"), 
+pipeline_message <- function(text,
+                             level = 1,
+                             progress = c("start", "end"),
                              process = NULL) {
-  progress <- match.arg(progress)
   # ----------------------------------------------------------------------------
-  # Icon mapping by process type
+  # List of icons associated with specific processes
   # ----------------------------------------------------------------------------
   icons <- list(
     install   = "💻",
     load      = "📥",
     save      = "💾",
     pack      = "📦",
-    download  = "⬇️ ",
+    download  = "⬇️",
     wait      = "⏳",
     configure = "📌",
     search    = "🔍",
-    calc      = "⚙️ ",
+    calc      = "⚙️",
     join      = "🔗",
     learn     = "🎓",
     build     = "🚧",
     plot      = "📊",
     info      = "ℹ️",
-    clip      = "📎",
     valid     = "✓",
     warning   = "⚠️",
-    stop      = "⛔")
-  icon <- if (!is.null(process) && length(process) == 1 
-              && process %in% names(icons)) {
+    stop      = "⛔"
+  )
+  icon <- if (!is.null(process) && process %in% names(icons)) {
     icons[[process]]
   } else {
     ""
   }
   
+  # Secure process
+  process <- if (is.null(process)) {NA_character_} else {process}
+  
   # ----------------------------------------------------------------------------
-  # LEVEL 0 — Main titles
+  # INFO / WARNING / STOP — no level, no timer
+  # ----------------------------------------------------------------------------
+  if (process == "info") {
+    message("\t\t ", icon, " ", text)
+    return(invisible(NULL))
+  }
+  if (process == "warning") {
+    warning(paste(icon, text), call. = FALSE)
+    return(invisible(NULL))
+  }
+  if (process == "stop") {
+    stop(paste(icon, text), call. = FALSE)
+  }
+  # From here: structural messages only
+  progress <- match.arg(progress)
+  # ----------------------------------------------------------------------------
+  # LEVEL 0 — Main pipeline sections
   # ----------------------------------------------------------------------------
   if (level == 0) {
     if (progress == "start") {
       message("\n=== ", text, " ===\n")
-      return(invisible(NULL))
+    } else {
+      message("\t 🏁 ", text, "\n")
     }
-    if (progress == "end") {
-      message("\t ✓ ", text, "\n")
-      return(invisible(NULL))
-    }
+    return(invisible(NULL))
   }
   # ----------------------------------------------------------------------------
-  # LEVEL 1 — Sub-blocks with timer
+  # LEVEL 1 — Timed processing steps
   # ----------------------------------------------------------------------------
   if (level == 1) {
     if (progress == "start") {
-      start_timer()
-      message("\t ", icon, " ", text, "\n")
+      pipeline_timer_start(level = 1)
+      message("\t ", icon, " ", text)
       return(invisible(NULL))
     }
     if (progress == "end") {
-      # Special cases: warning / stop (no timer)
-      if (!is.null(process) && process %in% c("warning", "stop")) {
-        message("\t\t ", icon, " ", text, "\n")
-        return(invisible(NULL))
-      }
-      elapsed <- tryCatch(
-        stop_timer(),
-        error = function(e) NA_real_
-      )
-      if (is.na(elapsed)) {
-        message("\t\t ✓ ", text, "\n")
-      } else {
-        message("\t\t ✓ ", text, sprintf(" in %.1f s", elapsed), "\n")
-      }
+      elapsed <- pipeline_timer_stop(level = 1)
+      message("\t\t ✓ ", text, sprintf(" in %.1f s", elapsed))
       return(invisible(NULL))
     }
   }
   # ----------------------------------------------------------------------------
-  # LEVEL 2 — Informational / warning messages (no timer)
+  # LEVEL 2 — Timed internal computations
   # ----------------------------------------------------------------------------
   if (level == 2) {
-    message("\t\t\t ", icon, " ", text, "\n")
-    return(invisible(NULL))
+    if (progress == "start") {
+      pipeline_timer_start(level = 2)
+      message("\t\t ", icon, " ", text)
+      return(invisible(NULL))
+    }
+    if (progress == "end") {
+      elapsed <- pipeline_timer_stop(level = 2)
+      message("\t\t\t ✓ ", text, sprintf(" in %.1f s", elapsed))
+      return(invisible(NULL))
+    }
   }
   invisible(NULL)
 }
