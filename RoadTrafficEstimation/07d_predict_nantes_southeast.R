@@ -5,18 +5,16 @@
 # Output: Long format with 'period' column (D, E, N, h0-h23)
 # =============================================================================
 
-library(xgboost)
-library(dplyr)
-library(Matrix)
-library(sf)
-library(data.table)
-
-if (!file.exists("rdsFiles/xgb_models_with_ratios.rds")) {
-  stop("❌ Models not found! Please run R/06d_xgboost_training_with_ratios.R first")
+if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
+  pipeline_message(
+    text = sprintf("Models not found! File %s not found. Please run 
+                   R/06d_xgboost_training_with_ratios.R first", 
+                   CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH), 
+    process = "stop")
 }
 
-models_list <- readRDS("rdsFiles/xgb_models_with_ratios.rds")
-feature_info <- readRDS("rdsFiles/xgb_ratio_feature_info.rds")
+models_list <- readRDS(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+feature_info <- readRDS(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 feature_formula <- feature_info$feature_formula
 all_periods <- feature_info$all_periods
@@ -29,7 +27,7 @@ cat(sprintf("  ✓ Periods: %s\n\n", paste(all_periods, collapse=", ")))
 # LOAD AND FILTER NANTES SOUTHEAST DATA
 # =============================================================================
 
-full_network <- st_read( "data/routes_france_osm_complete_including_connectivity_and_communes_for_R.gpkg")
+full_network <- st_read(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)
 full_network_2154 <- st_transform(full_network, 2154)
 full_network <- full_network_2154
 
@@ -75,8 +73,8 @@ cat(sprintf("  ✓ Extracted %s roads from Nantes Métropole\n", format(nrow(nan
 nantes_dt <- data.table(st_drop_geometry(nantes_metropole))
 
 # Load imputation rules from training
-if (file.exists("rdsFiles/imputation_rules.rds")) {
-  imputation_rules <- readRDS("rdsFiles/imputation_rules.rds")
+if (file.exists(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)) {
+  imputation_rules <- readRDS(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)
 } else {
   # Basic imputation rules
   imputation_rules <- nantes_dt[!is.na(highway), .(
@@ -178,20 +176,20 @@ if (!is.na(oneway_col)) {
 }
 nantes_dt[, oneway_osm := factor(oneway_osm, levels = c("yes", "no", "missing"))]
 
-# STEP 6: lanes_osm (imputed by highway type)
-lanes_col <- NA
-for (col in c("lanes", "lanes_osm")) {
-  if (col %in% names(nantes_dt)) {
-    lanes_col <- col
-    break
-  }
-}
-
-if (!is.na(lanes_col)) {
-  nantes_dt[, lanes_osm := as.numeric(get(lanes_col))]
-} else {
-  nantes_dt[, lanes_osm := NA_real_]
-}
+# # STEP 6: lanes_osm (imputed by highway type)
+# lanes_col <- NA
+# for (col in c("lanes", "lanes_osm")) {
+#   if (col %in% names(nantes_dt)) {
+#     lanes_col <- col
+#     break
+#   }
+# }
+# 
+# if (!is.na(lanes_col)) {
+#   nantes_dt[, lanes_osm := as.numeric(get(lanes_col))]
+# } else {
+#   nantes_dt[, lanes_osm := NA_real_]
+# }
 
 # Impute missing lanes by highway type
 nantes_dt <- merge(nantes_dt, imputation_rules[, .(highway, median_lanes)], 
@@ -305,7 +303,7 @@ if (nrow(pred_matrix) != nrow(nantes_dt)) {
 
 cat(sprintf("  ✅ Data aligned: %d roads\n", nrow(nantes_dt)))
 
-saveRDS(nantes_dt, "data/nantes_dt.rds")
+saveRDS(nantes_dt, CONFIG$NANTES_FORECAST_FILEPATH)
 
 # Initialize results list for long format
 all_results <- list()
