@@ -20,7 +20,7 @@ The analysis is conducted at two spatial levels aimed at capturing different asp
 The project relies on the following datasets:
 
 *   **Agent Registry**: FID codes and planar coordinates (Lambert 93, EPSG:2154).
-*   **Geospatial Data**: **OpenStreetMap (OSM)** for buildings, land use, and digital elevation model (DEM).
+*   **Geospatial Data**: **OpenStreetMap (OSM)** for buildings, land use.
 *   **Aircraft Noise**: [DGAC Airborne Noise Exposure Plans](https://geoservices.ign.fr/services-web-experts-transports#2314).
 *   **Railway Noise**: Strategic Noise Maps (CBS) from the PLAMADE project.
 *   **Road Traffic Estimates**: Modeled using the `RoadTrafficEstimation` module in this repository.
