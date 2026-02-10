@@ -232,6 +232,7 @@ pipeline_message <- function(text,
     download  = "⬇️",
     wait      = "⏳",
     configure = "📌",
+    config    = "📌",
     search    = "🔍",
     calc      = "⚙️",
     join      = "🔗",
@@ -240,7 +241,9 @@ pipeline_message <- function(text,
     plot      = "📊",
     info      = "ℹ️",
     valid     = "✓",
+    warn      = "⚠️",
     warning   = "⚠️",
+    error     = "❌",
     stop      = "⛔"
   )
   icon <- if (!is.null(process) && process %in% names(icons)) {
@@ -259,11 +262,11 @@ pipeline_message <- function(text,
     message("\t\t ", icon, " ", text)
     return(invisible(NULL))
   }
-  if (process == "warning") {
+  if (process %in% c("warning", "warn")) {
     warning(paste(icon, text), call. = FALSE)
     return(invisible(NULL))
   }
-  if (process == "stop") {
+  if (process %in% c("error", "stop")) {
     stop(paste(icon, text), call. = FALSE)
   }
   # From here: structural messages only

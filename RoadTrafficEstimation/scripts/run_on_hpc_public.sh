@@ -21,9 +21,11 @@ export RUN_CONTEXT=hpc
 # Project root
 PROJECT_ROOT="/home2020/home/cerema/gguillau/NM_OSM"
 
-# Choose execution mode: nantes | paris | sensors
-MODE="paris"
+# Execution parameters (adapt as needed)
+PHASE="all"        # preparation | training | prediction | all
+MODE="paris"       # nantes | paris | sensors | all
+TEST_FLAG=""       # add "--test" to enable tests
 
-# Single R session
-Rscript --vanilla "${PROJECT_ROOT}/main.R" "${MODE}"
-#R --vanilla -f "${PROJECT_ROOT}/main.R" --args "${MODE}"
+# Single R session with new parameter structure
+Rscript --vanilla "${PROJECT_ROOT}/main.R" --phase "$PHASE" --mode "$MODE" $TEST_FLAG
+#R --vanilla -f "${PROJECT_ROOT}/main.R" --args --phase "$PHASE" --mode "$MODE" $TEST_FLAG

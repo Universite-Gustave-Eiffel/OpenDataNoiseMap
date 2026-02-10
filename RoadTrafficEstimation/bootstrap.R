@@ -35,17 +35,17 @@ pipeline_message(text = paste("Running environment: ", RUN_CONTEXT),
 if (RUN_CONTEXT == "local") {
   pipeline_message(text = "Running locally", 
                    level = 1, progress = "start", process = "install")
-  if (!requireNamespace("renv", quietly = TRUE)) {
-    install.packages("renv")
-  }
-  # Activate local renv environment
+  # Activate local renv environment if available
   if (file.exists("renv/activate.R")) {
+    if (!requireNamespace("renv", quietly = TRUE)) {
+      install.packages("renv", repos = "https://cloud.r-project.org")
+    }
     source("renv/activate.R")
     pipeline_message(text = "Virtual environment activated", 
                      level = 1, progress = "end", process = "valid")
   } else {
-    pipeline_message(text = "Non-existent virtual environment", 
-                     process = "stop")
+    pipeline_message(text = "No renv environment found, using system libraries", 
+                     level = 1, progress = "end", process = "info")
   }
 }
 

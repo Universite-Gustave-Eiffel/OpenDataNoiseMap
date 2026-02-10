@@ -107,7 +107,12 @@ download_with_retry <- function(
              "\n\t\t ⚠️ If necessary, make sure required token is set in 
              ~/.Renviron or ~/.env \n")
       }
-      Sys.sleep(5)
+      # Backoff longer on rate limiting
+      if (grepl("HTTP 429|Too Many Requests", e$message)) {
+        Sys.sleep(30 * i)
+      } else {
+        Sys.sleep(5)
+      }
     })
   }
 }

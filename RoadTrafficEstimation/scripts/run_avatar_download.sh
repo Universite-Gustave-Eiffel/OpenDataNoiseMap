@@ -22,11 +22,12 @@ echo "RUN_CONTEXT=${RUN_CONTEXT}"
 PROJECT_ROOT="/home2020/home/cerema/gguillau/NM_OSM"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
 
-# Run ONLY the required scripts
+# Run ONLY the Avatar download phase (Phase 1, step 2)
+# This uses the new phase-based directory structure
 R --vanilla << EOF
 source("bootstrap.R")
 source("config_pipeline.R")
-source("01_setup_minimal.R")
-source("03_avatar_download_minimal.R")
+source("R/data_preparation/01_setup_environment.R")
+source("R/data_preparation/04_avatar_download.R")
 EOF
 

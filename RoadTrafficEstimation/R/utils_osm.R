@@ -162,7 +162,7 @@ download_geofabrik_pbf <- function(region = "France",
   }
   
   pipeline_message(
-    text = sprintf("Download successfully completed. File saved as ", 
+    text = sprintf("Download successfully completed. File saved as %s", 
                    rel_path(dest_file)), 
     level = 2, progress = "end", process = "valid")
   
@@ -422,8 +422,8 @@ process_network_features <- function(data, rules) {
   n_missing_degre <- sum(is.na(data$DEGRE))
   if (n_missing_degre > 0) {
     pipeline_message(
-      text = sprintf("Imputing %s missing DEGRE values → %d (urban default) %s", 
-                     CONFIG$DEFAULT_DEGRE, fmt(x = n_missing_degre)), 
+      text = sprintf("Imputing %s missing DEGRE values → %d (urban default)", 
+                     fmt(x = n_missing_degre), CONFIG$DEFAULT_DEGRE), 
       process = "warning")
     # Set default value when missing DEGRE
     data[is.na(DEGRE), DEGRE := CONFIG$DEFAULT_DEGRE]
