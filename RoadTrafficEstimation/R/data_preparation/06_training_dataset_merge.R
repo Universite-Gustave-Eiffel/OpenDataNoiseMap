@@ -236,7 +236,7 @@ assign(x = "avatar_clean",
 pipeline_message(text = describe_df(avatar_clean), process = "info")
 
 pipeline_message(
-  text = sprintf("Avatar data successfully cleaned up and saved into file ", 
+  text = sprintf("Avatar data successfully cleaned up and saved into file %s", 
                 rel_path(CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 

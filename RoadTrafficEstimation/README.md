@@ -21,7 +21,7 @@ Phase 1: Data Preparation (Orange)
                                    ↓
 
 Phase 2: Model Training (Blue)
-└─ train_xgboost_models.R          (Train 81 XGBoost models: 3 base + 78 ratios)
+└─ train_xgboost_models.R          (Train up to 81 XGBoost models: 3 base + 78 ratios)
                                    Output: 06_xgboost_trained_models.rds
 
                                    ↓
@@ -67,7 +67,7 @@ RoadTrafficEstimation/
 │   │   └── 06_training_dataset_merge.R      # Merge Avatar + pre-engineered France
 │   │
 │   ├── model_training/                      # Phase 2: Model Training Scripts
-│   │   └── train_xgboost_models.R           # Train 81 XGBoost models
+│   │   └── train_xgboost_models.R           # Train up to 81 XGBoost models
 │   │
 │   ├── prediction/                          # Phase 3: Prediction Scripts
 │   │   ├── predict_nantes.R                 # Predict for Nantes bbox
@@ -153,6 +153,14 @@ Rscript run_pipeline.R --phase training
 ./scripts/run_local.sh --phase prediction --mode nantes
 Rscript run_pipeline.R --phase prediction --mode nantes
 ```
+
+Note: when running `--phase prediction` with a specific `--mode`, the pipeline will
+automatically include the preparation and training phases.
+
+### Test Mode (Small Region)
+
+Use `TEST_CONFIG.R` to run a smaller region (Nantes bbox) and write outputs to
+`data/output/TEST_OUTPUTS`.
 
 ### Mode-Based Execution (Prediction Only)
 

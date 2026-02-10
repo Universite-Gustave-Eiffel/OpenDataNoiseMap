@@ -109,6 +109,10 @@ phases_to_run <- if (PHASE_ARG == "all") {
   PHASE_ARG
 }
 
+if (PHASE_ARG == "prediction" && MODE_ARG != "all") {
+  phases_to_run <- unique(c("preparation", "training", phases_to_run))
+}
+
 # Helper pour %notin%
 `%notin%` <- Negate(`%in%`)
 

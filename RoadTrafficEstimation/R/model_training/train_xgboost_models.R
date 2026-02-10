@@ -367,7 +367,11 @@ for (model_name in names(all_configs)) {
   # Acceptable limits for training
   min_train_xgb <- 150
   min_test_xgb  <- 50
-  if (config$period == "D" && config$target %in% c("truck_pct", "aggregate_speed")) {
+  if (config$period == "D" && config$target == "aggregate_speed") {
+    min_train_xgb <- 10
+    min_test_xgb  <- 5
+  }
+  if (grepl(pattern = "truck", x = config$target)) {
     min_train_xgb <- 10
     min_test_xgb  <- 5
   }
@@ -510,7 +514,7 @@ pipeline_message(
 # ------------------------------------------------------------------------------
 
 pipeline_message(
-  text = sprintf("Results summary: \n", 
+  text = sprintf("Results summary: \n%s", 
                  paste0(capture.output(results_summary), collapse = "\n\t\t")), 
   level = 1, progress = "start", process = "plot")
 

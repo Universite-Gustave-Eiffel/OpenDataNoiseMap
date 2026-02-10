@@ -72,8 +72,10 @@ compute_hourly_patterns <- function(aggregated_measures_df) {
                           na.rm = TRUE),
       avg_speed = mean(x = aggregate_speed, 
                        na.rm = TRUE),
-      pct_trucks = mean(x = 100 * aggregate_flow_trucks / aggregate_flow, 
-                        na.rm = TRUE),
+      pct_trucks = mean(x = ifelse(aggregate_flow > 0, 
+                   100 * aggregate_flow_trucks / aggregate_flow, 
+                   NA_real_), 
+            na.rm = TRUE),
       n_observations = dplyr::n(),
       .groups = "drop") %>%
     dplyr::arrange(hour)
@@ -117,8 +119,10 @@ compute_period_statistics <- function(aggregated_measures_df) {
                       na.rm = TRUE),
       avg_speed = mean(x = aggregate_speed, 
                        na.rm = TRUE),
-      pct_trucks = mean(x = 100 * aggregate_flow_trucks / aggregate_flow, 
-                        na.rm = TRUE),
+      pct_trucks = mean(x = ifelse(aggregate_flow > 0, 
+                   100 * aggregate_flow_trucks / aggregate_flow, 
+                   NA_real_), 
+            na.rm = TRUE),
       n_observations = dplyr::n(),
       .groups = "drop") %>%
     dplyr::mutate(

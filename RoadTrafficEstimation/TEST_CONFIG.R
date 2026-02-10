@@ -80,6 +80,9 @@ CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH <-
 CONFIG$AVATAR_AGGREGATED_FILEPATH <- 
   file.path(TEST_OUTPUT_DIR, "04_avatar_aggregated_with_ratios_TEST.rds")
 
+CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH <- 
+  file.path(TEST_OUTPUT_DIR, "04_avatar_aggregated_clean_TEST.rds")
+
 CONFIG$TRAINING_RDS_DATA_FILEPATH <- 
   file.path(TEST_OUTPUT_DIR, "05_training_dataset_TEST.rds")
 

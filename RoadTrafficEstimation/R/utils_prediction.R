@@ -59,6 +59,10 @@ load_network_for_prediction <- function(bbox, config) {
                      fmt(nrow(osm_network))),
       process = "info")
   }
+
+  if (nrow(osm_network) == 0) {
+    stop("No roads found for prediction after cropping. Check bbox/CRS.")
+  }
   
   pipeline_message(
     text = sprintf("Network loaded: %s roads", fmt(nrow(osm_network))),
@@ -225,6 +229,20 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
       results[[paste0("truck_pct_", period)]] <- truck_pct_D * ratio_truck_pct
       results[[paste0("speed_", period)]] <- speed_D * ratio_speed
     }
+  }
+
+  # Clamp predictions to sensible ranges
+  flow_cols <- grep("^flow_", names(results), value = TRUE)
+  if (length(flow_cols) > 0) {
+    results[flow_cols] <- lapply(results[flow_cols], function(x) pmax(0, x))
+  }
+  truck_cols <- grep("^truck_pct_", names(results), value = TRUE)
+  if (length(truck_cols) > 0) {
+    results[truck_cols] <- lapply(results[truck_cols], function(x) pmin(100, pmax(0, x)))
+  }
+  speed_cols <- grep("^speed_", names(results), value = TRUE)
+  if (length(speed_cols) > 0) {
+    results[speed_cols] <- lapply(results[speed_cols], function(x) pmax(0, x))
   }
   
   pipeline_message(
