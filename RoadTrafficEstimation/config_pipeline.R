@@ -25,10 +25,10 @@ JOIN_ROADS_AND_TOWNS_IN_ONE_SHOT <- FALSE
 BUFFER_RADIUS <- 50
 
 # Maximum path length to consider when calculating the betweenness
-CUTOFF_BETWEENNESS <- 100
+CUTOFF_BETWEENNESS <- 10
 
 # Maximum path length to consider when calculating the closeness
-CUTOFF_CLOSENESS <- 20
+CUTOFF_CLOSENESS <- 10
 
 # ------------------------------------------------------------------------------
 # Traffic data processing configuration
@@ -57,7 +57,7 @@ AVATAR_API_TOKEN <- Sys.getenv("AVATAR_API_TOKEN",
 FORCE_REJOIN_OSM_AND_COMMUNES <- FALSE
 FORCE_REDOWNLOAD_COUNT_POINTS <- FALSE
 FORCE_REDOWNLOAD_CHUNKS <- FALSE
-FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS <- FALSE
+FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS <- TRUE
 
 # ------------------------------------------------------------------------------
 # Training configuration
@@ -232,6 +232,8 @@ PARIS_PREDICTION_FILEPATH <- file.path(FORECAST_DATA_DIR,
                                        "07_predictions_paris.gpkg")
 SENSORS_ALL_PREDICTION_FILEPATH <- file.path(FORECAST_DATA_DIR, 
                                               "07_predictions_sensors_all.gpkg")
+PEMB_PREDICTION_FILEPATH <- file.path(FORECAST_DATA_DIR, 
+                                      "07_predictions_pemb.gpkg")
 
 # Figures (avec préfixe de phase)
 FIG_HOURLY_TRAFFIC_FILENAME <- "04_hourly_traffic_patterns.pdf"
@@ -308,7 +310,8 @@ CONFIG <<- list(
   FORECAST_DATA_DIR = FORECAST_DATA_DIR,
   NANTES_PREDICTION_FILEPATH = NANTES_PREDICTION_FILEPATH,
   PARIS_PREDICTION_FILEPATH = PARIS_PREDICTION_FILEPATH,
-  SENSORS_ALL_PREDICTION_FILEPATH = SENSORS_ALL_PREDICTION_FILEPATH
+  SENSORS_ALL_PREDICTION_FILEPATH = SENSORS_ALL_PREDICTION_FILEPATH,
+  PEMB_PREDICTION_FILEPATH = PEMB_PREDICTION_FILEPATH
 )
 
 pipeline_message(text = "Pipeline configured", 

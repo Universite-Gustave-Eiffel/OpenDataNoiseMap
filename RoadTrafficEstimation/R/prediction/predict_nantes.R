@@ -117,7 +117,7 @@ predictions_long <- predictions_wide %>%
   pivot_longer(
     cols = matches("^(flow|truck_pct|speed)_"),
     names_to = c(".value", "period"),
-    names_pattern = "(.+)_(.+)"
+    names_pattern = "^(flow|truck_pct|speed)_(.+)$"
   )
 
 # Calculate derived metrics

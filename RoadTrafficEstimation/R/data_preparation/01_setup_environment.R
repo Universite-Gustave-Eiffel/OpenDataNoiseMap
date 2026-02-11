@@ -9,9 +9,9 @@ pipeline_message(text = "Setup configuration",
 # Required packages
 # ------------------------------------------------------------------------------
 pkgs_needed <- c(
-  "dplyr", "tidyr", "sf", "httr", "jsonlite", "lubridate", "randomForest", 
+  "dplyr", "tidyr", "sf", "httr", "jsonlite", "lubridate", "fs",
   "data.table", "stringr", "sfnetworks", "igraph", "tidygraph", "progress", 
-  "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix")
+  "ggplot2", "gridExtra", "xgboost", "Matrix")
 
 pipeline_message(text = "Loading packages and installing missing packages", 
                  level = 1, progress = "start", process = "install")

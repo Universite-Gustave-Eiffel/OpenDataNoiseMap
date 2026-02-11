@@ -32,6 +32,9 @@ pipeline_message(
 # Coerce Avatar data frame to data.table
 setDT(avatar_data)
 
+# Sanitize column names (CSV via fread keeps special chars like flow[veh/h])
+setnames(avatar_data, make.names(names(avatar_data), unique = TRUE))
+
 # Create periods and hours
 if (!inherits(avatar_data$measure_datetime, "POSIXct")) {
   avatar_data[, measure_datetime := as.POSIXct(measure_datetime, 
@@ -58,7 +61,7 @@ hourly_aggregated <- aggregate_avatar_hourly(dt = avatar_data)
 pipeline_message(text = "Hourly aggregation successfully done", 
                  level = 1, progress = "end", process = "valid")
 
-# Aggregate by period (D/E/N)
+# Aggregate by period (D/E/N) — across all day types
 pipeline_message(text = "Aggregating Avatar data by period", 
                  level = 1, progress = "start", process = "calc")
 
@@ -70,13 +73,12 @@ aggregated_measures_period <- aggregate_avatar_metrics(
 pipeline_message(text = "Aggregation by period successfully done", 
                  level = 1, progress = "end", process = "valid")
 
-# Aggregate by hour (h0-h23) - create separate rows with period = "h0", "h1", 
-# etc.
+# Aggregate by hour (h0-h23) — all days combined
 pipeline_message(
   text = "Calculating traffic flow metrics from hourly aggregated Avatar data", 
   level = 1, progress = "start", process = "calc")
 
-# Hourly data aggregation
+# Hourly data aggregation (all days)
 aggregated_measures_hourly <- aggregate_avatar_metrics(
   dt = hourly_aggregated, 
   by_vars = c("count_point_id", "hour"))
@@ -85,14 +87,49 @@ aggregated_measures_hourly <- aggregate_avatar_metrics(
 aggregated_measures_hourly[, period := paste0("h", hour)]
 aggregated_measures_hourly[, hour := NULL]
 
-
 pipeline_message(text = "Traffic flow metrics successfully calculated", 
                  level = 1, progress = "end", process = "valid")
 
-# Union of aggregated data by period and by hour
+# --------------------------------------------------------------------------
+# Aggregate by hour × day_type (h0_wd-h23_wd and h0_we-h23_we)
+# --------------------------------------------------------------------------
+
+pipeline_message(
+  text = "Calculating weekday/weekend hourly traffic flow metrics", 
+  level = 1, progress = "start", process = "calc")
+
+# Weekday hourly aggregation
+hourly_wd <- hourly_aggregated[day_type == "wd"]
+aggregated_measures_hourly_wd <- aggregate_avatar_metrics(
+  dt = hourly_wd, 
+  by_vars = c("count_point_id", "hour"))
+aggregated_measures_hourly_wd[, period := paste0("h", hour, "_wd")]
+aggregated_measures_hourly_wd[, hour := NULL]
+
+# Weekend hourly aggregation
+hourly_we <- hourly_aggregated[day_type == "we"]
+aggregated_measures_hourly_we <- aggregate_avatar_metrics(
+  dt = hourly_we, 
+  by_vars = c("count_point_id", "hour"))
+aggregated_measures_hourly_we[, period := paste0("h", hour, "_we")]
+aggregated_measures_hourly_we[, hour := NULL]
+
+pipeline_message(
+  text = sprintf("Weekday/weekend hourly metrics: %s wd rows, %s we rows", 
+                 fmt(nrow(aggregated_measures_hourly_wd)), 
+                 fmt(nrow(aggregated_measures_hourly_we))), 
+  level = 1, progress = "end", process = "valid")
+
+# Union of all aggregated data
 aggregated_measures <- rbind(aggregated_measures_period, 
                              aggregated_measures_hourly, 
+                             aggregated_measures_hourly_wd,
+                             aggregated_measures_hourly_we,
                              fill = TRUE)
+
+# Memory cleanup
+rm(hourly_wd, hourly_we, aggregated_measures_hourly_wd, 
+   aggregated_measures_hourly_we)
 
 # ------------------------------------------------------------------------------
 # Create relative values (% of period D for each count_point)

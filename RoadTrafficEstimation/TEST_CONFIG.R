@@ -105,6 +105,9 @@ CONFIG$PARIS_PREDICTION_FILEPATH <-
 CONFIG$SENSORS_ALL_PREDICTION_FILEPATH <- 
   file.path(TEST_OUTPUT_DIR, "07_predictions_sensors_TEST.gpkg")
 
+CONFIG$PEMB_PREDICTION_FILEPATH <- 
+  file.path(TEST_OUTPUT_DIR, "07_predictions_pemb_TEST.gpkg")
+
 CONFIG$FORECAST_DATA_DIR <- TEST_OUTPUT_DIR
 
 # ==============================================================================

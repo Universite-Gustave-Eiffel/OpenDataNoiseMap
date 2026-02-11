@@ -281,6 +281,11 @@ aggregate_avatar_hourly <- function(dt) {
                                        test = hour >= 18 & hour < 22, 
                                        yes = "E", 
                                        no = "N"))]
+  # Day type: weekday (Mon-Fri) vs weekend (Sat-Sun)
+  # lubridate::wday(): 1=Sun, 2=Mon, ..., 6=Fri, 7=Sat
+  dt[, day_type := data.table::fifelse(
+    test = lubridate::wday(measure_datetime) %in% c(1, 7),
+    yes = "we", no = "wd")]
   dt[, .(
     hourly_flow =
       ifelse(test = sum(!is.na(flow.veh.h.)) > 0,
@@ -327,7 +332,7 @@ aggregate_avatar_hourly <- function(dt) {
                                         na.rm = TRUE)),
     last_timestamp  = as.double(x = max(x = measure_datetime, 
                                         na.rm = TRUE))
-  ), by = .(count_point_id, period, hour)]
+  ), by = .(count_point_id, period, hour, day_type)]
 }
 #' 
 #' @title Aggregate Avatar hourly metrics over arbitrary grouping variables

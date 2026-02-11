@@ -1,18 +1,22 @@
 # ==============================================================================
-# PREDICTION: PARIS METROPOLITAN AREA
+# PREDICTION: PEMB (PARIS EST MARNE & BOIS)
 # ==============================================================================
-# Prédit le trafic pour la région métropolitaine de Paris en utilisant la couche
+# Prédit le trafic pour la zone Paris Est Marne & Bois en utilisant la couche
 # France engineered pré-calculée.
+#
+# Zone couverte: Est parisien — Vincennes, Nogent-sur-Marne, Champigny,
+#   Fontenay-sous-Bois, Créteil, Maisons-Alfort, Joinville, Saint-Mandé,
+#   Bois de Vincennes, vallée de la Marne.
 #
 # Entrées:
 #   - 02_osm_network_france_engineered.gpkg (couche France avec features)
 #   - 06_xgboost_trained_models.rds (modèles XGBoost)
 #   - 06_xgboost_feature_info.rds (formule et périodes)
 # Sorties:
-#   - 07_predictions_paris.gpkg (prédictions format long)
+#   - 07_predictions_pemb.gpkg (prédictions format long)
 # ==============================================================================
 
-pipeline_message(text = "Paris Metropolitan Area traffic prediction", 
+pipeline_message(text = "PEMB (Paris Est Marne & Bois) traffic prediction", 
                  level = 0, progress = "start", process = "calc")
 
 # Source utilities
@@ -44,40 +48,39 @@ pipeline_message(
   level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
-# Define Paris Metropolitan Area bounding box
+# Define PEMB bounding box
 # ------------------------------------------------------------------------------
 
 pipeline_message(
-  text = "Defining Paris Metropolitan Area",
+  text = "Defining PEMB (Paris Est Marne & Bois) area",
   level = 1, progress = "start", process = "calc")
 
-# Paris Metropolitan (Île-de-France) bounds in Lambert93 (EPSG:2154)
-# Center: ~655000, 6862000
-# Extend ~30km radius for greater Paris
-paris_bbox <- c(
-  xmin = 625000,  # West
-  ymin = 6832000, # South
-  xmax = 685000,  # East
-  ymax = 6892000  # North
+# PEMB bounds in Lambert93 (EPSG:2154)
+# Converted from WGS84: (48.8609, 2.3862) → (48.7733, 2.6048)
+pemb_bbox <- c(
+  xmin = 654892,  # West
+  ymin = 6852748, # South
+  xmax = 671006,  # East
+  ymax = 6862393  # North
 )
 
 pipeline_message(
   text = sprintf("Bbox defined: [%s, %s, %s, %s]", 
-                 paris_bbox[1], paris_bbox[2], 
-                 paris_bbox[3], paris_bbox[4]),
+                 pemb_bbox[1], pemb_bbox[2], 
+                 pemb_bbox[3], pemb_bbox[4]),
   level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Load and crop France engineered network
 # ------------------------------------------------------------------------------
 
-osm_paris <- load_network_for_prediction(
-  bbox = paris_bbox, 
+osm_pemb <- load_network_for_prediction(
+  bbox = pemb_bbox, 
   config = CONFIG)
 
 pipeline_message(
-  text = sprintf("Network loaded: %s roads in Paris Metropolitan Area", 
-                 fmt(nrow(osm_paris))),
+  text = sprintf("Network loaded: %s roads in PEMB area", 
+                 fmt(nrow(osm_pemb))),
   process = "info")
 
 # ------------------------------------------------------------------------------
@@ -85,15 +88,15 @@ pipeline_message(
 # ------------------------------------------------------------------------------
 
 pipeline_message(
-  text = "Applying XGBoost models to Paris network",
+  text = "Applying XGBoost models to PEMB network",
   level = 1, progress = "start", process = "calc")
 
 # Convert to data.frame for model application
-osm_paris_dt <- as.data.frame(sf::st_drop_geometry(osm_paris))
+osm_pemb_dt <- as.data.frame(sf::st_drop_geometry(osm_pemb))
 
 # Apply predictions (returns wide format with all periods)
 predictions_wide <- apply_xgboost_predictions(
-  network_data = osm_paris_dt,
+  network_data = osm_pemb_dt,
   models_list = models_list,
   feature_info = feature_info)
 
@@ -168,7 +171,7 @@ pipeline_message(
 # Join geometry from original network
 predictions_sf <- merge(
   predictions_long,
-  osm_paris[, c("osm_id", "name", "geom")],
+  osm_pemb[, c("osm_id", "name", "geom")],
   by = "osm_id",
   all.x = TRUE)
 
@@ -183,13 +186,13 @@ if (sf::st_crs(predictions_sf) != CONFIG$TARGET_CRS) {
 # Export to GeoPackage
 sf::st_write(
   obj = predictions_sf,
-  dsn = CONFIG$PARIS_PREDICTION_FILEPATH,
+  dsn = CONFIG$PEMB_PREDICTION_FILEPATH,
   delete_dsn = TRUE,
   quiet = FALSE)
 
 pipeline_message(
   text = sprintf("Predictions exported to %s", 
-                 rel_path(CONFIG$PARIS_PREDICTION_FILEPATH)),
+                 rel_path(CONFIG$PEMB_PREDICTION_FILEPATH)),
   level = 1, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
@@ -197,7 +200,7 @@ pipeline_message(
 # ------------------------------------------------------------------------------
 
 pipeline_message(
-  text = "Prediction summary for Paris Metropolitan Area:",
+  text = "Prediction summary for PEMB (Paris Est Marne & Bois):",
   level = 1, process = "info")
 
 pipeline_message(
@@ -232,5 +235,5 @@ for (p in c("D", "E", "N", "h7", "h12", "h18")) {
   }
 }
 
-pipeline_message(text = "Paris Metropolitan Area prediction completed", 
+pipeline_message(text = "PEMB (Paris Est Marne & Bois) prediction completed", 
                  level = 0, progress = "end", process = "valid")

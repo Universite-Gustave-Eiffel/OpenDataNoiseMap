@@ -20,6 +20,19 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   pipeline_message(text = "Merged data successfully loaded", 
                    level = 1, progress = "end", process = "valid")
   
+  # Build unique_roads from degre_lookup (needed by graph construction below)
+  if (!exists("unique_roads")) {
+    unique_roads <- degre_lookup %>% select(osm_id, geom)
+    if (sf::st_crs(unique_roads) != sf::st_crs(CONFIG$TARGET_CRS)) {
+      unique_roads <- sf::st_transform(unique_roads, crs = CONFIG$TARGET_CRS)
+    }
+  }
+  
+  # Drop geometry from degre_lookup now — it's only needed for DEGRE column
+  # in the final merge. Geometry will come from osm_roads later.
+  degre_lookup <- degre_lookup %>% sf::st_drop_geometry()
+  gc(verbose = FALSE)
+  
 } else if (!file.exists(CONFIG$OSM_DEGRE_FILEPATH) || 
     isTRUE(CONFIG$FORCE_REJOIN_OSM_AND_COMMUNES)) {
   
@@ -331,10 +344,12 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     closeness = edge_closeness,
     pagerank = edge_pagerank)
   
-  # Memory cleanup
+  # Memory cleanup — free graph objects AND large spatial objects no longer needed
   rm(g, edge_df, node_connectivity, node_betweenness, 
      node_closeness, node_pagerank, edge_connectivity, edge_betweenness,
-     edge_closeness, edge_pagerank)
+     edge_closeness, edge_pagerank,
+     roads_for_network, unique_roads, edge_ends, from_indices, to_indices,
+     coords_dt, start_pts, end_pts)
   gc(verbose = FALSE)
   
   pipeline_message(text = "Feature tables assembled", 
@@ -349,6 +364,31 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   pipeline_message(text = "Extracting structured OSM attributes from other_tags", 
                    level = 1, progress = "start", process = "calc")
+  
+  # Reload osm_roads if not in memory (happens when degre_lookup was cached)
+  if (!exists("osm_roads")) {
+    # Force garbage collection to reclaim memory before loading 1.6 Go GPKG
+    gc(verbose = FALSE)
+    
+    pipeline_message(
+      text = sprintf("Reloading OSM road data from %s", 
+                     rel_path(CONFIG$OSM_ROADS_FILEPATH)),
+      level = 2, progress = "start", process = "load")
+    
+    osm_roads <- st_read(dsn = CONFIG$OSM_ROADS_FILEPATH, quiet = TRUE)
+    
+    high_traffic_types <- c(
+      "motorway", "trunk", "primary", "secondary", "tertiary", 
+      "unclassified", "residential", "motorway_link", "trunk_link", 
+      "primary_link", "secondary_link", "tertiary_link")
+    osm_roads <- osm_roads[osm_roads$highway %in% high_traffic_types, ]
+    
+    assign(x = "osm_roads", value = osm_roads, envir = .GlobalEnv)
+    
+    pipeline_message(
+      text = "OSM road data reloaded for attribute extraction",
+      level = 2, progress = "end", process = "valid")
+  }
   
   # Select relevant OSM tags to extract for traffic noise modelling
   osm_tags <- c(
@@ -407,14 +447,25 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     text = "Merging OSM road network with commune urban density class data", 
     level = 2, progress = "start", process = "calc")
   
-  # Drop geometries in degre_lookup and network_features
-  degre_lookup <-  degre_lookup %>% st_drop_geometry()
-  network_features <- network_features %>% st_drop_geometry()
+  # Drop geometries in degre_lookup and network_features to save RAM
+  # (geometry is already carried by osm_roads)
+  if (inherits(degre_lookup, "sf")) {
+    degre_lookup <- degre_lookup %>% st_drop_geometry()
+  }
+  if (inherits(network_features, "sf")) {
+    network_features <- network_features %>% st_drop_geometry()
+  }
+  gc(verbose = FALSE)
   
   # Merge osm_roads and degre_lookup
   osm_full_network <- merge(x = osm_roads, 
                             y = degre_lookup, 
                             by = 'osm_id')
+  
+  # Free source objects immediately after merge to reclaim RAM
+  rm(osm_roads, degre_lookup)
+  gc(verbose = FALSE)
+  
   pipeline_message(
     text = "Road network successfully merged with commune density data", 
     level = 2, progress = "end", process = "valid")
@@ -425,6 +476,10 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   osm_full_network <- merge(x = osm_full_network, 
                             y = network_features, 
                             by = 'osm_id')
+  
+  # Free network_features after merge
+  rm(network_features)
+  gc(verbose = FALSE)
   pipeline_message(
     text = "Road network successfully merged with with network features", 
     level = 2, progress = "end", process = "valid")

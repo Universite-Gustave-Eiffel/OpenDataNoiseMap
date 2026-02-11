@@ -193,7 +193,8 @@ n_removed <- n_initial - nrow(x = avatar_clean)
 # Add period factor #
 # ***************** #
 
-period_levels <- c("D", "E", "N", paste0("h", 0:23))
+period_levels <- c("D", "E", "N", paste0("h", 0:23),
+                   paste0("h", 0:23, "_wd"), paste0("h", 0:23, "_we"))
 avatar_clean$period <- factor(x = avatar_clean$period, 
                               levels = period_levels)
 
@@ -301,13 +302,21 @@ pipeline_message(
   level = 2, progress = "end", process = "valid")
 
 # Export merged data to GeoPackage files with periods as milliseconds (integers)
-# h0 = 0, h1 = 3600000, h2 = 7200000, ..., h23 = 82800000
+# h0 = 0, h1 = 3600000, ..., h23 = 82800000
+# h0_wd = 100000000, h1_wd = 103600000, ...
+# h0_we = 200000000, h1_we = 203600000, ...
 # D = 90000000, E = 93600000, N = 97200000
 training_data_export <- training_data
 training_data_export$period_ms <- sapply(X = training_data_export$period, 
                                          FUN = function(p) {
-  if (grepl(pattern = "^h", x = p)) {
-    # Extract hour number: h0 -> 0, h1 -> 1, etc.
+  p <- as.character(p)
+  if (grepl(pattern = "^h\\d+_wd$", x = p)) {
+    hour <- as.integer(sub("^h(\\d+)_wd$", "\\1", p))
+    return(as.integer(100000000L + hour * 3600000L))
+  } else if (grepl(pattern = "^h\\d+_we$", x = p)) {
+    hour <- as.integer(sub("^h(\\d+)_we$", "\\1", p))
+    return(as.integer(200000000L + hour * 3600000L))
+  } else if (grepl(pattern = "^h", x = p)) {
     hour <- as.integer(x = sub(pattern = "^h", 
                                replacement = "", 
                                x = p))

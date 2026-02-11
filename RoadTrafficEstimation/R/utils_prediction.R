@@ -145,37 +145,35 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   feature_matrix[rows_used, ] <- feature_matrix_part
   feature_matrix <- as.data.frame(feature_matrix, stringsAsFactors = FALSE)
   
-  # Align feature columns with training model
-  model_features <- models_list$flow_D$model$feature_names
-  if (!is.null(model_features)) {
-    missing_cols <- setdiff(model_features, colnames(feature_matrix))
-    if (length(missing_cols) > 0) {
-      for (mc in missing_cols) {
-        feature_matrix[[mc]] <- 0
+  # Helper: align feature matrix to a model's expected features and predict
+  predict_with_alignment <- function(model, feature_matrix_base) {
+    model_features <- model$feature_names
+    if (!is.null(model_features)) {
+      fm <- feature_matrix_base
+      missing_cols <- setdiff(model_features, colnames(fm))
+      if (length(missing_cols) > 0) {
+        for (mc in missing_cols) fm[[mc]] <- 0
       }
+      fm <- fm[, model_features, drop = FALSE]
+      dmat <- xgboost::xgb.DMatrix(data = as.matrix(fm))
+    } else {
+      dmat <- xgboost::xgb.DMatrix(data = as.matrix(feature_matrix_base))
     }
-    extra_cols <- setdiff(colnames(feature_matrix), model_features)
-    if (length(extra_cols) > 0) {
-      feature_matrix <- feature_matrix[, setdiff(colnames(feature_matrix), extra_cols), drop = FALSE]
-    }
-    feature_matrix <- feature_matrix[, model_features, drop = FALSE]
+    predict(model, dmat)
   }
-  
-  # Convert to xgb.DMatrix
-  dmatrix <- xgboost::xgb.DMatrix(data = as.matrix(feature_matrix))
   
   # Predict base models (period D)
   if (is.null(models_list$flow_D$model)) {
     stop("Missing base model for period D: flow_D")
   }
-  flow_D <- predict(models_list$flow_D$model, dmatrix)
+  flow_D <- predict_with_alignment(models_list$flow_D$model, feature_matrix)
   truck_pct_D <- if (is.null(models_list$truck_pct_D$model)) {
     pipeline_message(
       text = "Missing base model truck_pct_D: outputs will be NA",
       process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
-    predict(models_list$truck_pct_D$model, dmatrix)
+    predict_with_alignment(models_list$truck_pct_D$model, feature_matrix)
   }
   speed_D <- if (is.null(models_list$speed_D$model)) {
     pipeline_message(
@@ -183,7 +181,7 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
       process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
-    predict(models_list$speed_D$model, dmatrix)
+    predict_with_alignment(models_list$speed_D$model, feature_matrix)
   }
   
   # Initialize results data.frame
@@ -207,21 +205,21 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
       ratio_flow <- if (is.null(ratio_flow_model)) {
         rep(NA_real_, length(flow_D))
       } else {
-        predict(ratio_flow_model, dmatrix)
+        predict_with_alignment(ratio_flow_model, feature_matrix)
       }
       ratio_truck_pct <- if (all(is.na(truck_pct_D))) {
         rep(NA_real_, length(truck_pct_D))
       } else if (is.null(ratio_truck_model)) {
         rep(NA_real_, length(truck_pct_D))
       } else {
-        predict(ratio_truck_model, dmatrix)
+        predict_with_alignment(ratio_truck_model, feature_matrix)
       }
       ratio_speed <- if (all(is.na(speed_D))) {
         rep(NA_real_, length(speed_D))
       } else if (is.null(ratio_speed_model)) {
         rep(NA_real_, length(speed_D))
       } else {
-        predict(ratio_speed_model, dmatrix)
+        predict_with_alignment(ratio_speed_model, feature_matrix)
       }
       
       # Apply ratios to base predictions
@@ -243,6 +241,29 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   speed_cols <- grep("^speed_", names(results), value = TRUE)
   if (length(speed_cols) > 0) {
     results[speed_cols] <- lapply(results[speed_cols], function(x) pmax(0, x))
+  }
+  
+  # Guard NaN/Inf: impute with median by highway type + emit warning
+  pred_cols <- c(flow_cols, truck_cols, speed_cols)
+  total_nan <- 0L
+  for (col in pred_cols) {
+    bad_idx <- which(is.nan(results[[col]]) | is.infinite(results[[col]]))
+    if (length(bad_idx) > 0) {
+      total_nan <- total_nan + length(bad_idx)
+      # Impute each NaN with the median of same highway type
+      for (hw in unique(results$highway[bad_idx])) {
+        hw_rows <- which(results$highway == hw)
+        hw_good <- results[[col]][setdiff(hw_rows, bad_idx)]
+        med_val <- if (length(hw_good) > 0) median(hw_good, na.rm = TRUE) else NA_real_
+        results[[col]][intersect(bad_idx, hw_rows)] <- med_val
+      }
+    }
+  }
+  if (total_nan > 0) {
+    pipeline_message(
+      text = sprintf("NaN/Inf detected in predictions: %d values imputed with median by highway type",
+                     total_nan),
+      process = "warning")
   }
   
   pipeline_message(

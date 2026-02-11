@@ -389,36 +389,81 @@ if (CONFIG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
     process = "info")
 }
 
+# Free large objects no longer needed before combining CSV chunks
+if (exists("osm_full_network")) { rm(osm_full_network) }
+if (exists("count_points_data")) { rm(count_points_data) }
+if (exists("count_points")) { rm(count_points) }
+if (exists("degre_lookup")) { rm(degre_lookup) }
+if (exists("osm_roads")) { rm(osm_roads) }
+if (exists("pointsId_with_roads")) { rm(pointsId_with_roads) }
+gc(verbose = FALSE)
+
+# Check if combined RDS already exists (cache)
+if (file.exists(CONFIG$AVATAR_RDS_DATA_FILEPATH)) {
+  pipeline_message(
+    text = sprintf("Loading cached Avatar data from %s",
+                   rel_path(CONFIG$AVATAR_RDS_DATA_FILEPATH)),
+    level = 2, progress = "start", process = "load")
+  avatar_data <- readRDS(CONFIG$AVATAR_RDS_DATA_FILEPATH)
+  pipeline_message(
+    text = sprintf("Avatar data loaded from cache (%s rows)",
+                   fmt(nrow(avatar_data))),
+    level = 2, progress = "end", process = "valid")
+} else {
+
 # List of files for all chunks
 files <- list.files(path = CONFIG$AVATAR_CSV_DATA_DIRPATH, 
                     pattern = "avatar_data_chunk_.*\\.csv", 
                     full.names = TRUE)
 
-# Load and combine
+# Load and combine using data.table for memory efficiency
 if (length(files) > 0) {
   pipeline_message(text = "Combining all downloaded chunks", 
                    level = 2, progress = "start", process = "join")
-  data_list <- lapply(files, function(file) {
-    tryCatch(read.csv(file = file, 
-                      sep = ";", 
-                      stringsAsFactors = FALSE), 
-             error = function(e){NULL})
-  })
-  valid_data <- data_list[!sapply(data_list, is.null)]
   
-  if (length(valid_data) > 0) {
-    # Standardize columns
-    standardized_data <- standardize_columns(data_list = valid_data)
-    avatar_data <- do.call(rbind, standardized_data)
-    rownames(avatar_data) <- NULL
+  # Read all CSV files with fread (much more memory-efficient than read.csv)
+  # Process in batches to limit peak memory usage
+  batch_size <- 50
+  n_batches <- ceiling(length(files) / batch_size)
+  batch_results <- vector("list", n_batches)
+  
+  for (b in seq_len(n_batches)) {
+    idx_start <- (b - 1) * batch_size + 1
+    idx_end <- min(b * batch_size, length(files))
+    batch_files <- files[idx_start:idx_end]
+    
+    batch_list <- lapply(batch_files, function(file) {
+      tryCatch(
+        data.table::fread(file = file, sep = ";", stringsAsFactors = FALSE),
+        error = function(e) NULL)
+    })
+    batch_list <- batch_list[!sapply(batch_list, is.null)]
+    
+    if (length(batch_list) > 0) {
+      # Fill missing columns with NA for this batch
+      batch_results[[b]] <- data.table::rbindlist(batch_list, fill = TRUE)
+    }
+    rm(batch_list)
+  }
+  
+  # Combine all batches
+  valid_batches <- batch_results[!sapply(batch_results, is.null)]
+  rm(batch_results)
+  gc(verbose = FALSE)
+  
+  if (length(valid_batches) > 0) {
+    avatar_data <- data.table::rbindlist(valid_batches, fill = TRUE)
+    avatar_data <- as.data.frame(avatar_data)
+    rm(valid_batches)
+    gc(verbose = FALSE)
     
     # Save to RDS
     saveRDS(object = avatar_data, 
             file = CONFIG$AVATAR_RDS_DATA_FILEPATH)
     
     pipeline_message(
-      text = sprintf("Avatar data successfully combined and saved into file ", 
-                     rel_path(CONFIG$AVATAR_CSV_DATA_DIRPATH)), 
+      text = sprintf("Avatar data successfully combined (%s rows) and saved", 
+                     fmt(nrow(avatar_data))), 
       level = 2, progress = "end", process = "save")
   } else {
     pipeline_message(text = "No valid Avatar data files", process = "stop")
@@ -427,7 +472,10 @@ if (length(files) > 0) {
   pipeline_message(text = "No Avatar data files found", process = "stop")
 }
 
-rm(standardized_data, count_points_data, count_points, valid_data)
+} # end else (no cached RDS)
+
+rm(list = intersect(ls(), c("avatar_data", "valid_batches", "files")))
+gc(verbose = FALSE)
 
 pipeline_message(text = "Avatar count points and OSM roads successfully merged", 
                  level = 0, progress = "end", process = "valid")

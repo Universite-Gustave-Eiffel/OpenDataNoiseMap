@@ -1,0 +1,45 @@
+# ==== Data files (large, binary, generated) ====
+*.gpkg
+*.pbf
+*.rds
+*.csv
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.qmd
+
+# ==== Output directories ====
+RoadTrafficEstimation/data/output/
+RoadTrafficEstimation/data/osm/
+RoadTrafficEstimation/data/insee/
+data/output/
+
+# ==== Logs ====
+*.log
+
+# ==== R artifacts ====
+.Rhistory
+.RData
+.Rproj.user
+Rplots.pdf
+
+# ==== Figures (generated) ====
+RoadTrafficEstimation/figures/
+
+# ==== OS files ====
+.DS_Store
+Thumbs.db
+
+# ==== IDE ====
+.vscode/
+.idea/
+
+# ==== renv ====
+renv/library/
+renv/staging/
+renv/cellar/
+
+# ==== Environment ====
+.Renviron

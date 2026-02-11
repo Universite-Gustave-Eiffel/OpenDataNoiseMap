@@ -110,24 +110,14 @@ for (source_name in names(sensors_list)) {
 }
 
 # ------------------------------------------------------------------------------
-# Load France engineered network
+# Combine sensors and load relevant network
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Loading France engineered network",
-  level = 1, progress = "start", process = "load")
-
-osm_france <- sf::st_read(
-  CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
-  quiet = TRUE)
-
-if (sf::st_crs(osm_france) != CONFIG$TARGET_CRS) {
-  osm_france <- sf::st_transform(osm_france, CONFIG$TARGET_CRS)
-}
-
-pipeline_message(
-  text = sprintf("Network loaded: %s roads", fmt(nrow(osm_france))),
-  level = 1, progress = "end", process = "valid")
+if (length(sensors_list) == 0) {
+  pipeline_message(
+    text = "No sensor files found — skipping sensor predictions",
+    process = "warning")
+} else {
 
 # Combine all sensors
 all_sensors <- do.call(rbind, sensors_list)
@@ -162,7 +152,7 @@ predictions_long <- predictions_wide %>%
   pivot_longer(
     cols = matches("^(flow|truck_pct|speed)_"),
     names_to = c(".value", "period"),
-    names_pattern = "(.+)_(.+)"
+    names_pattern = "^(flow|truck_pct|speed)_(.+)$"
   )
 
 predictions_long <- predictions_long %>%
@@ -273,3 +263,5 @@ pipeline_message(
 
 pipeline_message(text = "Noise sensors traffic prediction completed", 
                  level = 0, progress = "end", process = "valid")
+
+} # end if (length(sensors_list) > 0)

@@ -5,7 +5,7 @@
 # 
 # Usage:
 #   Rscript run_pipeline.R --phase <preparation|training|prediction|all> \
-#                          --mode <nantes|paris|sensors|all> \
+#                          --mode <nantes|paris|pemb|sensors|all> \
 #                          [--region <full|small|test>] [--test]
 # ==============================================================================
 
@@ -51,7 +51,7 @@ while (i <= length(args)) {
 
 # Validate arguments
 valid_phases <- c("preparation", "training", "prediction", "all")
-valid_modes <- c("nantes", "paris", "sensors", "all")
+valid_modes <- c("nantes", "paris", "pemb", "sensors", "all")
 valid_regions <- c("full", "small", "test")
 
 if (!PHASE_ARG %in% valid_phases) {
@@ -95,8 +95,8 @@ pipeline_message(
 
 # Define modes to run
 modes_to_run <- if (MODE_ARG == "all") {
-  c("preparation", "training", "nantes", "paris", "sensors")
-} else if (MODE_ARG %in% c("nantes", "paris", "sensors")) {
+  c("preparation", "training", "nantes", "paris", "pemb", "sensors")
+} else if (MODE_ARG %in% c("nantes", "paris", "pemb", "sensors")) {
   c("preparation", "training", MODE_ARG)
 } else {
   MODE_ARG
@@ -110,7 +110,14 @@ phases_to_run <- if (PHASE_ARG == "all") {
 }
 
 if (PHASE_ARG == "prediction" && MODE_ARG != "all") {
-  phases_to_run <- unique(c("preparation", "training", phases_to_run))
+  # Only add preparation and training if models are not already available
+  if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH) ||
+      !file.exists(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)) {
+    phases_to_run <- unique(c("preparation", "training", phases_to_run))
+    pipeline_message(
+      text = "Models not found — adding preparation and training phases",
+      process = "warning")
+  }
 }
 
 # Helper pour %notin%
@@ -180,6 +187,11 @@ if ("prediction" %in% phases_to_run) {
   # Prediction for Paris
   if ("paris" %in% modes_to_run) {
     source("R/prediction/predict_paris.R")
+  }
+  
+  # Prediction for PEMB (Paris Est Marne & Bois)
+  if ("pemb" %in% modes_to_run) {
+    source("R/prediction/predict_pemb.R")
   }
   
   # Prediction for sensors

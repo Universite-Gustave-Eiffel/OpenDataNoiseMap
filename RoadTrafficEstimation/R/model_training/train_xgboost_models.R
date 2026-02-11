@@ -74,7 +74,8 @@ road_feature_formula <- as.formula(
   object = paste("~", paste(available_road_features, collapse = " + ")))
 
 # Temporal periods configuration
-all_periods <- c("D", "E", "N", paste0("h", 0:23))
+all_periods <- c("D", "E", "N", paste0("h", 0:23),
+                 paste0("h", 0:23, "_wd"), paste0("h", 0:23, "_we"))
 
 # ***************************** #
 # Training model configurations #
