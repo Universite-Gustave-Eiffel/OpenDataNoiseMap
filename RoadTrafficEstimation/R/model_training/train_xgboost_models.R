@@ -2,6 +2,8 @@
 # STAGE 6D: XGBOOST TRAINING LEARNING MODEL
 # ==============================================================================
 
+# Note: dplyr and xgboost are already loaded by bootstrap.R
+
 pipeline_message(text = "Training the learning model", 
                  level = 0, progress = "start", process = "learn")
 
@@ -63,11 +65,32 @@ pipeline_message(text = "Configuring training model",
 # OSM variables used as features #
 # ****************************** #
 
-# Check available OSM network features
-available_road_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
+# Candidate OSM/network features (use those actually present in training data)
+candidate_road_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
                              "oneway_osm", "lanes_osm", "speed", 
                              "connectivity", "betweenness", 
-                             "closeness", "pagerank")
+                             "closeness", "pagerank",
+                             "coreness", "dead_end_score", "edge_length_m")
+
+available_road_features <- intersect(candidate_road_features, names(training_data))
+missing_road_features <- setdiff(candidate_road_features, available_road_features)
+
+if (length(missing_road_features) > 0) {
+  pipeline_message(
+    text = sprintf("Some candidate features are missing and will be skipped: %s",
+                   paste(missing_road_features, collapse = ", ")),
+    process = "warning")
+}
+
+if (length(available_road_features) == 0) {
+  stop("No road/network features available in training data")
+}
+
+pipeline_message(
+  text = sprintf("Using %d road/network features: %s",
+                 length(available_road_features),
+                 paste(available_road_features, collapse = ", ")),
+  process = "info")
 
 # Build formula with existing features
 road_feature_formula <- as.formula(

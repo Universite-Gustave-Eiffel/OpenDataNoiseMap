@@ -22,6 +22,75 @@
 fmt <- function(x){
   format(x, scientific = FALSE, big.mark = ",") 
 }
+
+# ------------------------------------------------------------------------------
+# Memory monitoring utilities
+# ------------------------------------------------------------------------------
+
+#' @title Get available system memory in GB
+#' @description Reads /proc/meminfo (Linux) to get available RAM.
+#' @return Numeric. Available memory in GB, or NA on non-Linux systems.
+#' @export
+get_available_memory_gb <- function() {
+  if (.Platform$OS.type != "unix" || !file.exists("/proc/meminfo")) {
+    return(NA_real_)
+  }
+  meminfo <- readLines("/proc/meminfo", warn = FALSE)
+  avail_line <- grep("^MemAvailable:", meminfo, value = TRUE)
+  if (length(avail_line) == 0) return(NA_real_)
+  avail_kb <- as.numeric(sub("^MemAvailable:\\s+(\\d+).*", "\\1", avail_line))
+  round(avail_kb / 1024 / 1024, 1)
+}
+
+#' @title Check memory before a critical operation
+#' @description Checks that enough RAM is available before loading large data.
+#'   If available memory is below min_gb, stops with a clear error message.
+#'   If below warn_gb, emits a warning but continues.
+#' @param operation_name Character. Description of the operation (for messages).
+#' @param min_gb Numeric. Minimum GB required to proceed (default: 2).
+#' @param warn_gb Numeric. Threshold for warning (default: 4).
+#' @return Invisibly returns the available memory in GB.
+#' @export
+check_memory_available <- function(operation_name = "operation",
+                                    min_gb = 2,
+                                    warn_gb = 4) {
+  avail_gb <- get_available_memory_gb()
+  if (is.na(avail_gb)) {
+    # Non-Linux: can't check, just continue
+    return(invisible(NA_real_))
+  }
+  
+  r_mem_gb <- round(sum(gc(verbose = FALSE)[, 2]) / 1024, 1)
+  
+  if (avail_gb < min_gb) {
+    stop(sprintf(
+      paste0("\n",
+             "============================================================\n",
+             "  MEMORY PROTECTION: Operation aborted to prevent OOM crash\n",
+             "============================================================\n",
+             "  Operation: %s\n",
+             "  Available RAM: %.1f GB (minimum required: %.1f GB)\n",
+             "  R session using: %.1f GB\n",
+             "  \n",
+             "  Solutions:\n",
+             "  1. Close other applications to free RAM\n",
+             "  2. Use --region test for a smaller zone\n",
+             "  3. Run on a machine with more RAM (HPC)\n",
+             "============================================================"),
+      operation_name, avail_gb, min_gb, r_mem_gb),
+      call. = FALSE)
+  }
+  
+  if (avail_gb < warn_gb) {
+    pipeline_message(
+      text = sprintf("Low memory warning: %.1f GB available for '%s' (R using %.1f GB)",
+                     avail_gb, operation_name, r_mem_gb),
+      process = "warning")
+  }
+  
+  invisible(avail_gb)
+}
+
 # ------------------------------------------------------------------------------
 # Internal environment for pipeline timing
 # ------------------------------------------------------------------------------

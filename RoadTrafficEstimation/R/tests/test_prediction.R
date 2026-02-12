@@ -82,8 +82,42 @@ test_prediction <- function() {
     tests_failed <- tests_failed + 1
   }
   
-  # Test 3: Sensors predictions file
-  pipeline_message(text = "Test 3: Sensors predictions file", 
+  # Test 3: PEMB predictions file
+  pipeline_message(text = "Test 3: PEMB predictions file", 
+                   level = 1, progress = "start", process = "test")
+  
+  if (file.exists(CONFIG$PEMB_PREDICTION_FILEPATH)) {
+    pemb <- sf::st_read(CONFIG$PEMB_PREDICTION_FILEPATH, quiet = TRUE)
+    
+    if (nrow(pemb) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(pemb))) {
+      issues <- 0
+      if (any(pemb$TV < 0, na.rm = TRUE)) issues <- issues + 1
+      if (any(pemb$HGV < 0, na.rm = TRUE)) issues <- issues + 1
+      if (any(pemb$LV < 0, na.rm = TRUE)) issues <- issues + 1
+      
+      if (issues == 0) {
+        pipeline_message(text = sprintf("✓ PEMB predictions: %s rows", fmt(nrow(pemb))),
+                         level = 1, progress = "end", process = "pass")
+        tests_passed <- tests_passed + 1
+      } else {
+        pipeline_message(text = sprintf("✗ PEMB predictions: %d data quality issues", issues),
+                         level = 1, progress = "end", process = "fail")
+        tests_failed <- tests_failed + 1
+      }
+    } else {
+      pipeline_message(text = "✗ PEMB predictions: missing required columns",
+                       level = 1, progress = "end", process = "fail")
+      tests_failed <- tests_failed + 1
+    }
+  } else {
+    pipeline_message(text = sprintf("✗ PEMB predictions file not found: %s",
+                                   CONFIG$PEMB_PREDICTION_FILEPATH),
+                     level = 1, progress = "end", process = "fail")
+    tests_failed <- tests_failed + 1
+  }
+  
+  # Test 4: Sensors predictions file
+  pipeline_message(text = "Test 4: Sensors predictions file", 
                    level = 1, progress = "start", process = "test")
   
   if (file.exists(CONFIG$SENSORS_ALL_PREDICTION_FILEPATH)) {
@@ -117,14 +151,15 @@ test_prediction <- function() {
     tests_failed <- tests_failed + 1
   }
   
-  # Test 4: Check consistency (HGV < TV)
-  pipeline_message(text = "Test 4: Prediction data consistency", 
+  # Test 5: Check consistency (HGV < TV)
+  pipeline_message(text = "Test 5: Prediction data consistency", 
                    level = 1, progress = "start", process = "test")
   
   consistency_ok <- TRUE
   
   for (filepath in c(CONFIG$NANTES_PREDICTION_FILEPATH, 
                      CONFIG$PARIS_PREDICTION_FILEPATH,
+                     CONFIG$PEMB_PREDICTION_FILEPATH,
                      CONFIG$SENSORS_ALL_PREDICTION_FILEPATH)) {
     if (file.exists(filepath)) {
       pred <- sf::st_read(filepath, quiet = TRUE)

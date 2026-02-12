@@ -6,10 +6,7 @@
 # avec des fonctions spécifiques aux étapes 01-06.
 # ==============================================================================
 
-# Source des utilitaires génériques nécessaires
-source("R/utils_osm.R", encoding = "UTF-8")
-source("R/utils_sf.R", encoding = "UTF-8")
-source("R/utils_avatar.R", encoding = "UTF-8")
+# Note: utils_osm.R, utils_sf.R, utils_avatar.R are already loaded by bootstrap.R
 
 # ------------------------------------------------------------------------------
 # Fonctions supplémentaires spécifiques à la préparation des données
@@ -71,7 +68,8 @@ check_feature_completeness <- function(network) {
   required_features <- c(
     "highway", "DEGRE", "ref_letter", "first_word",
     "oneway_osm", "lanes_osm", "speed",
-    "connectivity", "betweenness", "closeness", "pagerank"
+    "connectivity", "betweenness", "closeness", "pagerank",
+    "coreness", "dead_end_score", "edge_length_m"
   )
   
   available <- intersect(required_features, names(network))

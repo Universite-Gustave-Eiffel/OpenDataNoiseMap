@@ -44,7 +44,8 @@ test_data_preparation <- function() {
     
     required_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
                           "oneway_osm", "lanes_osm", "speed",
-                          "connectivity", "betweenness", "closeness", "pagerank")
+                          "connectivity", "betweenness", "closeness", "pagerank",
+                          "coreness", "dead_end_score", "edge_length_m")
     
     if (nrow(osm_eng) > 0 && all(required_features %in% names(osm_eng))) {
       pipeline_message(text = sprintf("✓ OSM engineered: %s roads, %s features", 

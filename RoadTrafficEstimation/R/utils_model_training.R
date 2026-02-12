@@ -6,8 +6,7 @@
 # et l'analyse de l'importance des features.
 # ==============================================================================
 
-# Source des utilitaires génériques nécessaires
-source("R/utils_io.R", encoding = "UTF-8")
+# Note: utils_io.R is already loaded by bootstrap.R
 
 # ------------------------------------------------------------------------------
 # Fonctions d'entraînement et d'évaluation

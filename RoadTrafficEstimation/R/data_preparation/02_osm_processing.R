@@ -294,6 +294,10 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   node_closeness <- igraph::closeness(graph = g, 
                                       cutoff = CONFIG$CUTOFF_CLOSENESS, 
                                       mode = "all")
+
+  # K-core index (node structural embeddedness)
+  pipeline_message(text = "Computing node coreness", process = "info")
+  node_coreness <- igraph::coreness(graph = g, mode = "all")
   
   pipeline_message(text = "Centrality scores computed", 
                    level = 2, progress = "start", process = "valid")
@@ -326,6 +330,14 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     (node_closeness[from_indices] + node_closeness[to_indices]) / 2
   edge_pagerank <- 
     (node_pagerank[from_indices] + node_pagerank[to_indices]) / 2
+
+  # Additional lightweight and predictive edge features
+  edge_coreness <-
+    (node_coreness[from_indices] + node_coreness[to_indices]) / 2
+  edge_dead_end_score <-
+    (as.numeric(node_connectivity[from_indices] == 1) +
+       as.numeric(node_connectivity[to_indices] == 1)) / 2
+  edge_length_m <- as.numeric(sf::st_length(roads_for_network))
   
   pipeline_message(text = "Edge-level metrics computed", 
                    level = 2, progress = "end", process = "valid")
@@ -342,12 +354,17 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     connectivity = edge_connectivity,
     betweenness = edge_betweenness,
     closeness = edge_closeness,
-    pagerank = edge_pagerank)
+    pagerank = edge_pagerank,
+    coreness = edge_coreness,
+    dead_end_score = edge_dead_end_score,
+    edge_length_m = edge_length_m)
   
   # Memory cleanup — free graph objects AND large spatial objects no longer needed
   rm(g, edge_df, node_connectivity, node_betweenness, 
-     node_closeness, node_pagerank, edge_connectivity, edge_betweenness,
-     edge_closeness, edge_pagerank,
+      node_closeness, node_pagerank, node_coreness,
+      edge_connectivity, edge_betweenness,
+      edge_closeness, edge_pagerank, edge_coreness,
+      edge_dead_end_score, edge_length_m,
      roads_for_network, unique_roads, edge_ends, from_indices, to_indices,
      coords_dt, start_pts, end_pts)
   gc(verbose = FALSE)
@@ -490,6 +507,9 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   # Project data into target CRS
   osm_full_network <- osm_full_network %>% 
     st_transform(crs = CONFIG$TARGET_CRS)
+
+  # Add QGIS-friendly datetime fields when `period` exists
+  osm_full_network <- add_period_datetime_columns(osm_full_network)
   
   # Write final road dataset
   start_timer()

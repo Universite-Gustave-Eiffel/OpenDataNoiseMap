@@ -146,6 +146,13 @@ pipeline_message(
                  length(feature_info$all_periods)),
   level = 1, progress = "end", process = "valid")
 
+# Save periods list before freeing models
+all_periods <- feature_info$all_periods
+
+# Free model data no longer needed
+rm(models_list, feature_info, osm_sensors_dt)
+gc(verbose = FALSE)
+
 # Convert to long format
 library(tidyr)
 predictions_long <- predictions_wide %>%
@@ -160,9 +167,12 @@ predictions_long <- predictions_long %>%
     HGV = flow * (truck_pct / 100),
     LV = flow - HGV,
     TV = flow,
-    period = factor(period, levels = feature_info$all_periods)
+    period = factor(period, levels = all_periods)
   ) %>%
   select(osm_id, highway, period, TV, HGV, LV, speed, truck_pct)
+
+# Add QGIS-friendly datetime fields for each period
+predictions_long <- add_period_datetime_columns(predictions_long)
 
 # Add geometry
 predictions_sf <- merge(
@@ -176,6 +186,9 @@ predictions_sf <- sf::st_as_sf(predictions_sf)
 if (sf::st_crs(predictions_sf) != CONFIG$TARGET_CRS) {
   predictions_sf <- sf::st_transform(predictions_sf, CONFIG$TARGET_CRS)
 }
+
+# Enforce datetime fields on exported layers
+predictions_sf <- add_period_datetime_columns(predictions_sf)
 
 # Validate predictions
 validation <- validate_predictions(predictions_long)
@@ -220,6 +233,7 @@ for (source_name in names(sensors_list)) {
     # Filter predictions
     predictions_source <- predictions_sf[
       predictions_sf$osm_id %in% roads_in_source$osm_id, ]
+    predictions_source <- add_period_datetime_columns(predictions_source)
     
     # Export
     output_file <- file.path(

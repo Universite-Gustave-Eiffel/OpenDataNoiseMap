@@ -111,7 +111,8 @@ network_clean <- merge(network_clean, id_mapping, by = "osm_id", all.x = TRUE)
 # Select network columns
 network_cols <- c("count_point_id", "osm_id", "highway", "DEGRE", "ref_letter", 
                   "first_word", "oneway_osm", "lanes_osm", "speed", 
-                  "connectivity", "betweenness", "closeness", "pagerank")
+                  "connectivity", "betweenness", "closeness", "pagerank",
+                  "coreness", "dead_end_score", "edge_length_m")
 
 available_network_cols <- intersect(network_cols, names(network_clean))
 network_clean <- network_clean[, ..available_network_cols]
@@ -215,7 +216,7 @@ avatar_cols <- c("count_point_id", "period",
                 "truck_pct", "ratio_truck_pct",
                 "perc_flow_predicted", "perc_flow_trucks_predicted", 
                 "perc_speed_predicted", "perc_occupancy_predicted",
-                "n_directions_measured", "n_hours_with_data", 
+                "n_hours_with_data", 
                 "n_total_observations")
 
 available_avatar_cols <- intersect(x = avatar_cols, 
@@ -277,10 +278,11 @@ final_cols <- c("osm_id", "count_point_id", "period",
                "highway", "DEGRE", "ref_letter", "first_word", 
                "oneway_osm", "lanes_osm", "speed", 
                "connectivity", "betweenness", "closeness", "pagerank",
+               "coreness", "dead_end_score", "edge_length_m",
                # Quality indicators
                "perc_flow_predicted", "perc_flow_trucks_predicted",
                "perc_speed_predicted", "perc_occupancy_predicted",
-               "n_directions_measured", "n_hours_with_data", 
+               "n_hours_with_data", 
                "n_total_observations")
 available_final_cols <- intersect(x = final_cols, 
                                   y = names(training_data))
@@ -301,45 +303,17 @@ pipeline_message(
                  rel_path(CONFIG$TRAINING_RDS_DATA_FILEPATH)),
   level = 2, progress = "end", process = "valid")
 
-# Export merged data to GeoPackage files with periods as milliseconds (integers)
-# h0 = 0, h1 = 3600000, ..., h23 = 82800000
-# h0_wd = 100000000, h1_wd = 103600000, ...
-# h0_we = 200000000, h1_we = 203600000, ...
-# D = 90000000, E = 93600000, N = 97200000
-training_data_export <- training_data
-training_data_export$period_ms <- sapply(X = training_data_export$period, 
-                                         FUN = function(p) {
-  p <- as.character(p)
-  if (grepl(pattern = "^h\\d+_wd$", x = p)) {
-    hour <- as.integer(sub("^h(\\d+)_wd$", "\\1", p))
-    return(as.integer(100000000L + hour * 3600000L))
-  } else if (grepl(pattern = "^h\\d+_we$", x = p)) {
-    hour <- as.integer(sub("^h(\\d+)_we$", "\\1", p))
-    return(as.integer(200000000L + hour * 3600000L))
-  } else if (grepl(pattern = "^h", x = p)) {
-    hour <- as.integer(x = sub(pattern = "^h", 
-                               replacement = "", 
-                               x = p))
-    return(as.integer(x = hour * 3600000))
-  } else if (p == "D") {
-    return(as.integer(x = 25 * 3600000))
-  } else if (p == "E") {
-    return(as.integer(x = 26 * 3600000))
-  } else if (p == "N") {
-    return(as.integer(x = 27 * 3600000))
-  } else {
-    return(NA_integer_)
-  }
-})
-
 # Add geometry from France engineered network
 training_data_sf <- merge(
-  x = training_data_export, 
+  x = training_data, 
   y = osm_france_engineered[, c("osm_id", "geom")],  
   by = "osm_id")
 
 # Convert to sf object
 training_data_sf <- sf::st_as_sf(x = training_data_sf)
+
+# Add QGIS-friendly datetime fields when `period` exists
+training_data_sf <- add_period_datetime_columns(training_data_sf)
 
 # Export to GeoPackage file
 sf::st_write(

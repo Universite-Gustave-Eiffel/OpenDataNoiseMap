@@ -6,9 +6,7 @@
 # les modèles XGBoost, et formater les sorties.
 # ==============================================================================
 
-# Source des utilitaires génériques nécessaires
-source("R/utils_io.R", encoding = "UTF-8")
-source("R/utils_sf.R", encoding = "UTF-8")
+# Note: utils_io.R and utils_sf.R are already loaded by bootstrap.R
 
 # ------------------------------------------------------------------------------
 # Fonctions de chargement et filtrage spatial
@@ -25,18 +23,13 @@ load_network_for_prediction <- function(bbox, config) {
                    rel_path(config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)),
     level = 1, progress = "start", process = "load")
   
-  # Load full network
-  osm_network <- sf::st_read(
-    dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
-    quiet = TRUE)
+  # Memory check before loading large GPKG
+  check_memory_available(
+    operation_name = "Load France engineered network (GPKG)",
+    min_gb = 2, warn_gb = 4)
   
-  # Ensure correct CRS
-  if (sf::st_crs(osm_network) != config$TARGET_CRS) {
-    osm_network <- osm_network %>% 
-      st_transform(crs = config$TARGET_CRS)
-  }
-  
-  # Crop to bbox if provided
+  # Use spatial filter at read time (wkt_filter) to avoid loading entire France
+  # This is MUCH more memory-efficient than load-all-then-filter
   if (!is.null(bbox) && length(bbox) == 4) {
     xmin <- as.numeric(bbox[1])
     ymin <- as.numeric(bbox[2])
@@ -46,18 +39,37 @@ load_network_for_prediction <- function(bbox, config) {
       stop("Invalid bbox values for prediction crop: ",
            paste(bbox, collapse = ", "))
     }
-    bbox_polygon <- sf::st_bbox(
-      c(xmin = xmin, ymin = ymin, 
-        xmax = xmax, ymax = ymax),
-      crs = config$TARGET_CRS) %>%
-      sf::st_as_sfc()
     
-    osm_network <- sf::st_filter(osm_network, bbox_polygon)
+    # Build WKT polygon for spatial filter at GDAL level
+    wkt_bbox <- sprintf("POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
+                        xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax, xmin, ymin)
+    
+    osm_network <- sf::st_read(
+      dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+      wkt_filter = wkt_bbox,
+      quiet = TRUE)
     
     pipeline_message(
-      text = sprintf("Network cropped to bbox: %s roads", 
+      text = sprintf("Network loaded with spatial filter: %s roads",
                      fmt(nrow(osm_network))),
       process = "info")
+  } else {
+    # No bbox: load full network (warning: memory-intensive)
+    pipeline_message(
+      text = "No bbox provided — loading entire France network (memory-intensive)",
+      process = "warning")
+    check_memory_available(
+      operation_name = "Load entire France network (no bbox)",
+      min_gb = 8, warn_gb = 12)
+    osm_network <- sf::st_read(
+      dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+      quiet = TRUE)
+  }
+  
+  # Ensure correct CRS
+  if (sf::st_crs(osm_network) != config$TARGET_CRS) {
+    osm_network <- osm_network %>% 
+      st_transform(crs = config$TARGET_CRS)
   }
 
   if (nrow(osm_network) == 0) {
@@ -83,9 +95,35 @@ load_network_around_points <- function(points, buffer_radius, config) {
                    buffer_radius, nrow(points)),
     level = 1, progress = "start", process = "load")
   
-  # Load full network
+  # Memory check
+  check_memory_available(
+    operation_name = "Load network around sensor points",
+    min_gb = 2, warn_gb = 4)
+  
+  # Ensure points CRS
+  if (sf::st_crs(points) != config$TARGET_CRS) {
+    points <- points %>% 
+      st_transform(crs = config$TARGET_CRS)
+  }
+  
+  # Compute bounding box of all points + buffer for efficient GPKG read
+  pts_bbox <- sf::st_bbox(points)
+  wkt_bbox <- sprintf("POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
+                      pts_bbox["xmin"] - buffer_radius,
+                      pts_bbox["ymin"] - buffer_radius,
+                      pts_bbox["xmax"] + buffer_radius,
+                      pts_bbox["ymin"] - buffer_radius,
+                      pts_bbox["xmax"] + buffer_radius,
+                      pts_bbox["ymax"] + buffer_radius,
+                      pts_bbox["xmin"] - buffer_radius,
+                      pts_bbox["ymax"] + buffer_radius,
+                      pts_bbox["xmin"] - buffer_radius,
+                      pts_bbox["ymin"] - buffer_radius)
+  
+  # Read only the bbox region from GPKG (much faster + less memory)
   osm_network <- sf::st_read(
     dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+    wkt_filter = wkt_bbox,
     quiet = TRUE)
   
   # Ensure correct CRS
@@ -94,16 +132,9 @@ load_network_around_points <- function(points, buffer_radius, config) {
       st_transform(crs = config$TARGET_CRS)
   }
   
-  if (sf::st_crs(points) != config$TARGET_CRS) {
-    points <- points %>% 
-      st_transform(crs = config$TARGET_CRS)
-  }
-  
-  # Create buffers
+  # Create buffers and filter precisely
   buffers <- sf::st_buffer(points, dist = buffer_radius)
   combined_buffer <- sf::st_union(buffers)
-  
-  # Filter roads within buffers
   osm_network <- sf::st_filter(osm_network, combined_buffer)
   
   pipeline_message(
@@ -129,20 +160,39 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
     text = "Applying XGBoost models to network",
     level = 1, progress = "start", process = "calc")
   
-  # Prepare feature matrix (same as training)
+  # Memory check: predictions will create ~n_roads × n_periods × 3 columns
+  n_roads <- nrow(network_data)
+  n_periods <- length(feature_info$all_periods)
+  est_mb <- round(n_roads * n_periods * 3 * 8 / 1024^2)  # 8 bytes per double
+  check_memory_available(
+    operation_name = sprintf("XGBoost prediction (%s roads × %d periods, ~%d MB result)",
+                             fmt(n_roads), n_periods, est_mb),
+    min_gb = 1, warn_gb = 3)
+  
+  # Prepare feature matrix (same encoding as training: sparse.model.matrix)
   rownames(network_data) <- seq_len(nrow(network_data))
-  feature_matrix_part <- model.matrix(
+  feature_matrix_part <- Matrix::sparse.model.matrix(
     object = feature_info$road_feature_formula,
-    data = network_data,
-    na.action = na.pass)
+    data = network_data)
   rows_used <- as.integer(rownames(feature_matrix_part))
+  if (length(rows_used) == 0 || anyNA(rows_used)) {
+    rows_used <- seq_len(nrow(feature_matrix_part))
+  }
+  rows_used <- rows_used[rows_used >= 1 & rows_used <= nrow(network_data)]
   feature_matrix <- matrix(
     NA_real_,
     nrow = nrow(network_data),
     ncol = ncol(feature_matrix_part),
     dimnames = list(rownames(network_data), colnames(feature_matrix_part))
   )
-  feature_matrix[rows_used, ] <- feature_matrix_part
+  if (length(rows_used) != nrow(feature_matrix_part)) {
+    # Fallback alignment when sparse.model.matrix rownames are unavailable
+    n_common <- min(length(rows_used), nrow(feature_matrix_part))
+    rows_used <- rows_used[seq_len(n_common)]
+    feature_matrix[rows_used, ] <- as.matrix(feature_matrix_part[seq_len(n_common), , drop = FALSE])
+  } else {
+    feature_matrix[rows_used, ] <- as.matrix(feature_matrix_part)
+  }
   feature_matrix <- as.data.frame(feature_matrix, stringsAsFactors = FALSE)
   
   # Helper: align feature matrix to a model's expected features and predict
@@ -314,4 +364,82 @@ validate_predictions <- function(predictions) {
     issues = issues,
     n_rows = nrow(predictions)
   )
+}
+
+#' Add QGIS-friendly datetime columns from period labels
+#'
+#' Mapping rules:
+#' - D/E/N -> reference day in 1970 (D=06-18h, E=18-22h, N=22-06h)
+#' - h0_wd..h23_wd -> weekdays in 1971 (reference day: 1971-01-01)
+#' - h0_we..h23_we -> weekend in 1972 (reference Saturday: 1972-01-01)
+#' - h0..h23 -> generic hourly periods in 1973 (reference day: 1973-01-01)
+#'
+#' @param predictions_long data.frame with a `period` column
+#' @return data.frame with added `datetimestart` and `datetimeend` POSIXct columns
+add_period_datetime_columns <- function(predictions_long) {
+  if (!"period" %in% names(predictions_long)) {
+    return(predictions_long)
+  }
+
+  period_chr <- as.character(predictions_long$period)
+  n <- length(period_chr)
+
+  datetimestart <- as.POSIXct(rep(NA_character_, n), tz = "UTC")
+  datetimeend <- as.POSIXct(rep(NA_character_, n), tz = "UTC")
+
+  # D / E / N reference periods (1970)
+  idx_D <- which(period_chr == "D")
+  if (length(idx_D) > 0) {
+    datetimestart[idx_D] <- as.POSIXct("1970-01-01 06:00:00", tz = "UTC")
+    datetimeend[idx_D] <- as.POSIXct("1970-01-01 18:00:00", tz = "UTC")
+  }
+
+  idx_E <- which(period_chr == "E")
+  if (length(idx_E) > 0) {
+    datetimestart[idx_E] <- as.POSIXct("1970-01-01 18:00:00", tz = "UTC")
+    datetimeend[idx_E] <- as.POSIXct("1970-01-01 22:00:00", tz = "UTC")
+  }
+
+  idx_N <- which(period_chr == "N")
+  if (length(idx_N) > 0) {
+    datetimestart[idx_N] <- as.POSIXct("1970-01-01 22:00:00", tz = "UTC")
+    datetimeend[idx_N] <- as.POSIXct("1970-01-02 06:00:00", tz = "UTC")
+  }
+
+  # Generic hourly periods h0..h23 (1973)
+  m_h <- regexec("^h([0-9]{1,2})$", period_chr)
+  g_h <- regmatches(period_chr, m_h)
+  idx_h <- which(lengths(g_h) == 2)
+  if (length(idx_h) > 0) {
+    h_vals <- as.integer(vapply(g_h[idx_h], function(x) x[2], character(1)))
+    start_str <- sprintf("1973-01-01 %02d:00:00", h_vals)
+    datetimestart[idx_h] <- as.POSIXct(start_str, tz = "UTC")
+    datetimeend[idx_h] <- datetimestart[idx_h] + 3600
+  }
+
+  # Weekday hourly periods h0_wd..h23_wd (1971)
+  m_wd <- regexec("^h([0-9]{1,2})_wd$", period_chr)
+  g_wd <- regmatches(period_chr, m_wd)
+  idx_wd <- which(lengths(g_wd) == 2)
+  if (length(idx_wd) > 0) {
+    h_vals <- as.integer(vapply(g_wd[idx_wd], function(x) x[2], character(1)))
+    start_str <- sprintf("1971-01-01 %02d:00:00", h_vals)
+    datetimestart[idx_wd] <- as.POSIXct(start_str, tz = "UTC")
+    datetimeend[idx_wd] <- datetimestart[idx_wd] + 3600
+  }
+
+  # Weekend hourly periods h0_we..h23_we (1972)
+  m_we <- regexec("^h([0-9]{1,2})_we$", period_chr)
+  g_we <- regmatches(period_chr, m_we)
+  idx_we <- which(lengths(g_we) == 2)
+  if (length(idx_we) > 0) {
+    h_vals <- as.integer(vapply(g_we[idx_we], function(x) x[2], character(1)))
+    start_str <- sprintf("1972-01-01 %02d:00:00", h_vals)
+    datetimestart[idx_we] <- as.POSIXct(start_str, tz = "UTC")
+    datetimeend[idx_we] <- datetimestart[idx_we] + 3600
+  }
+
+  predictions_long$datetimestart <- datetimestart
+  predictions_long$datetimeend <- datetimeend
+  predictions_long
 }

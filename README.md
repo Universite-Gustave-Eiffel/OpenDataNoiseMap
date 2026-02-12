@@ -6,8 +6,8 @@ This repository hosts the methodology and tools used to estimate the noise expos
 
 The analysis is conducted at two spatial levels aimed at capturing different aspects of noise exposure:
 
-1.  **Building Level**: Noise levels are calculated around the building closest to the agent's postal address, assumed to be their home.
-2.  **Neighborhood Level (500m buffer)**: Sound levels are calculated within a 500-meter radius around the agent's location. This involves 100 random receiver points selected within this buffer zone (excluding building footprints and road right-of-ways).
+1.  **Building Level**: Noise levels are calculated around the building closest to the agents postal address, assumed to be their home.
+2.  **Neighborhood Level (500m buffer)**: Sound levels are calculated within a 500-meter radius around the agents location. This involves 100 random receiver points selected within this buffer zone (excluding building footprints and road right-of-ways).
 
 ### Sound Sources Evaluated
 

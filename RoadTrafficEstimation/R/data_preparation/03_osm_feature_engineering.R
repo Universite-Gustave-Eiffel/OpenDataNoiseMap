@@ -181,6 +181,9 @@ if (!"sf" %in% class(osm_france_engineered)) {
   osm_france_engineered <- sf::st_as_sf(osm_france_engineered)
 }
 
+# Add QGIS-friendly datetime fields when `period` exists
+osm_france_engineered <- add_period_datetime_columns(osm_france_engineered)
+
 # Export to GeoPackage
 sf::st_write(
   obj = osm_france_engineered, 
@@ -219,7 +222,8 @@ pipeline_message(
 # Feature completeness check
 required_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
                       "oneway_osm", "lanes_osm", "speed", 
-                      "connectivity", "betweenness", "closeness", "pagerank")
+                      "connectivity", "betweenness", "closeness", "pagerank",
+                      "coreness", "dead_end_score", "edge_length_m")
 
 available_features <- intersect(required_features, 
                                names(osm_france_engineered))

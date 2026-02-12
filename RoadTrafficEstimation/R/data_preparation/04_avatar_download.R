@@ -225,6 +225,9 @@ if (sf::st_crs(full_network_avatar_id) != CONFIG$TARGET_CRS){
     st_transform(crs = CONFIG$TARGET_CRS)
 }
 
+# Add QGIS-friendly datetime fields when `period` exists
+full_network_avatar_id <- add_period_datetime_columns(full_network_avatar_id)
+
 # Write final OSM road network with count point data
 sf::st_write(
   full_network_avatar_id,
@@ -423,9 +426,23 @@ if (length(files) > 0) {
   
   # Read all CSV files with fread (much more memory-efficient than read.csv)
   # Process in batches to limit peak memory usage
-  batch_size <- 50
+  # CRITICAL: Small batch size to avoid OOM when combining
+  batch_size <- 25  # Reduced from 50 to lower memory pressure
   n_batches <- ceiling(length(files) / batch_size)
-  batch_results <- vector("list", n_batches)
+  
+  # Memory check before starting
+  check_memory_available(
+    operation_name = sprintf("Combine %d Avatar CSV chunks", length(files)),
+    min_gb = 8, warn_gb = 12)
+
+  # Disk-streamed concatenation to avoid keeping all batches in RAM
+  temp_combined_csv <- file.path(CONFIG$AVATAR_CSV_DATA_DIRPATH,
+                                 "avatar_data_combined_tmp.csv")
+  if (file.exists(temp_combined_csv)) {
+    file.remove(temp_combined_csv)
+  }
+
+  wrote_header <- FALSE
   
   for (b in seq_len(n_batches)) {
     idx_start <- (b - 1) * batch_size + 1
@@ -441,35 +458,67 @@ if (length(files) > 0) {
     
     if (length(batch_list) > 0) {
       # Fill missing columns with NA for this batch
-      batch_results[[b]] <- data.table::rbindlist(batch_list, fill = TRUE)
+      batch_dt <- data.table::rbindlist(batch_list, fill = TRUE)
+
+      # Append batch to temporary combined CSV on disk
+      data.table::fwrite(
+        x = batch_dt,
+        file = temp_combined_csv,
+        sep = ";",
+        append = wrote_header,
+        col.names = !wrote_header,
+        quote = TRUE,
+        na = ""
+      )
+      wrote_header <- TRUE
+
+      rm(batch_dt)
     }
     rm(batch_list)
+    gc(verbose = FALSE)  # Force cleanup after each batch
+    
+    # Memory check every 5 batches
+    if (b %% 5 == 0) {
+      avail_gb <- get_available_memory_gb()
+      if (!is.na(avail_gb) && avail_gb < 6) {
+        pipeline_message(
+          text = sprintf("Low memory during batch %d/%d: %.1f GB available",
+                         b, n_batches, avail_gb),
+          process = "warning")
+      }
+    }
   }
   
-  # Combine all batches
-  valid_batches <- batch_results[!sapply(batch_results, is.null)]
-  rm(batch_results)
+  if (!wrote_header || !file.exists(temp_combined_csv)) {
+    stop("No valid Avatar data batches after download")
+  }
+
+  # Read merged temporary CSV once (single in-memory object)
+  check_memory_available(
+    operation_name = "Load merged Avatar temporary CSV",
+    min_gb = 6, warn_gb = 10)
+
+  avatar_data <- data.table::fread(
+    file = temp_combined_csv,
+    sep = ";",
+    stringsAsFactors = FALSE
+  )
+
+  # Cleanup temporary merged CSV as soon as loaded
+  unlink(temp_combined_csv)
   gc(verbose = FALSE)
   
-  if (length(valid_batches) > 0) {
-    avatar_data <- data.table::rbindlist(valid_batches, fill = TRUE)
-    avatar_data <- as.data.frame(avatar_data)
-    rm(valid_batches)
-    gc(verbose = FALSE)
+  # Save to RDS
+  saveRDS(object = avatar_data, 
+          file = CONFIG$AVATAR_RDS_DATA_FILEPATH)
     
-    # Save to RDS
-    saveRDS(object = avatar_data, 
-            file = CONFIG$AVATAR_RDS_DATA_FILEPATH)
-    
-    pipeline_message(
-      text = sprintf("Avatar data successfully combined (%s rows) and saved", 
-                     fmt(nrow(avatar_data))), 
-      level = 2, progress = "end", process = "save")
-  } else {
-    pipeline_message(text = "No valid Avatar data files", process = "stop")
-  }
+  pipeline_message(
+    text = sprintf("Avatar data successfully combined (%s rows) and saved", 
+                   fmt(nrow(avatar_data))), 
+    level = 2, progress = "end", process = "save")
 } else {
   pipeline_message(text = "No Avatar data files found", process = "stop")
+  stop("No Avatar CSV files found for combination")
 }
 
 } # end else (no cached RDS)

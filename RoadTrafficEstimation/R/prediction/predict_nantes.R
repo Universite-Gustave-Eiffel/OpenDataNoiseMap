@@ -103,6 +103,13 @@ pipeline_message(
                  length(feature_info$all_periods)),
   level = 1, progress = "end", process = "valid")
 
+# Save periods list before freeing models
+all_periods <- feature_info$all_periods
+
+# Free model data no longer needed
+rm(models_list, feature_info, osm_nantes_dt)
+gc(verbose = FALSE)
+
 # ------------------------------------------------------------------------------
 # Convert to long format with period column
 # ------------------------------------------------------------------------------
@@ -110,6 +117,12 @@ pipeline_message(
 pipeline_message(
   text = "Converting to long format",
   level = 1, progress = "start", process = "calc")
+
+# Memory check before pivot (multiplies rows by n_periods)
+check_memory_available(
+  operation_name = sprintf("Pivot to long format (%s roads)",
+                           fmt(nrow(predictions_wide))),
+  min_gb = 2, warn_gb = 4)
 
 # Pivot to long format
 library(tidyr)
@@ -126,12 +139,19 @@ predictions_long <- predictions_long %>%
     HGV = flow * (truck_pct / 100),          # Heavy goods vehicles
     LV = flow - HGV,                          # Light vehicles
     TV = flow,                                # Total vehicles
-    period = factor(period, levels = feature_info$all_periods)
+    period = factor(period, levels = all_periods)
   )
 
 # Select final columns
 predictions_long <- predictions_long %>%
   select(osm_id, highway, period, TV, HGV, LV, speed, truck_pct)
+
+# Add QGIS-friendly datetime fields for each period
+predictions_long <- add_period_datetime_columns(predictions_long)
+
+# Free wide format no longer needed
+rm(predictions_wide)
+gc(verbose = FALSE)
 
 pipeline_message(
   text = sprintf("Long format: %s rows (roads × periods)", 
@@ -165,6 +185,11 @@ pipeline_message(
   text = "Exporting predictions with geometry",
   level = 1, progress = "start", process = "save")
 
+# Memory check before geometry join (duplicates geometry for each period)
+check_memory_available(
+  operation_name = sprintf("Geometry merge (%s rows)", fmt(nrow(predictions_long))),
+  min_gb = 2, warn_gb = 4)
+
 # Join geometry from original network
 predictions_sf <- merge(
   predictions_long,
@@ -179,6 +204,9 @@ predictions_sf <- sf::st_as_sf(predictions_sf)
 if (sf::st_crs(predictions_sf) != CONFIG$TARGET_CRS) {
   predictions_sf <- sf::st_transform(predictions_sf, CONFIG$TARGET_CRS)
 }
+
+# Enforce datetime fields on exported layer
+predictions_sf <- add_period_datetime_columns(predictions_sf)
 
 # Export to GeoPackage
 sf::st_write(
@@ -205,7 +233,7 @@ pipeline_message(
   level = 1, process = "info")
 
 pipeline_message(
-  text = sprintf("  - Periods: %s", length(feature_info$all_periods)),
+  text = sprintf("  - Periods: %s", length(all_periods)),
   level = 1, process = "info")
 
 pipeline_message(
