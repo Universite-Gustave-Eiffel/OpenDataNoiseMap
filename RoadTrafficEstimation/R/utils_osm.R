@@ -162,7 +162,7 @@ download_geofabrik_pbf <- function(region = "France",
   }
   
   pipeline_message(
-    text = sprintf("Download successfully completed. File saved as ", 
+    text = sprintf("Download successfully completed. File saved as %s", 
                    rel_path(dest_file)), 
     level = 2, progress = "end", process = "valid")
   
@@ -406,9 +406,12 @@ process_network_features <- function(data, rules) {
   # Highway type normalization (ordered factor) #
   # ------------------------------------------- #
   highway_levels <- c(
-    "residential", "tertiary", "secondary", "primary", "trunk", "motorway",
-    "tertiary_link", "secondary_link", "primary_link", "trunk_link",
-    "motorway_link", "unclassified"
+    "unclassified", "residential",
+    "tertiary", "tertiary_link",
+    "secondary", "secondary_link",
+    "primary", "primary_link",
+    "trunk", "trunk_link",
+    "motorway", "motorway_link"
   )
   data[, highway := as.character(x = highway)]
   data[is.na(highway) | highway == "", highway := "unclassified"]
@@ -422,8 +425,8 @@ process_network_features <- function(data, rules) {
   n_missing_degre <- sum(is.na(data$DEGRE))
   if (n_missing_degre > 0) {
     pipeline_message(
-      text = sprintf("Imputing %s missing DEGRE values → %d (urban default) %s", 
-                     CONFIG$DEFAULT_DEGRE, fmt(x = n_missing_degre)), 
+      text = sprintf("Imputing %s missing DEGRE values → %d (urban default)", 
+                     fmt(x = n_missing_degre), CONFIG$DEFAULT_DEGRE), 
       process = "warning")
     # Set default value when missing DEGRE
     data[is.na(DEGRE), DEGRE := CONFIG$DEFAULT_DEGRE]
@@ -436,15 +439,23 @@ process_network_features <- function(data, rules) {
     } else{
       "ref"
     }
+  valid_ref_letters <- c("A", "N", "D", "M", "C", "VC", "CR")
   data[, ref_letter := {
     ref_val <- as.character(x = get(x = ref_col))
     ref_val[is.na(ref_val) | ref_val == ""] <- "missing"
-    substr(x= gsub(pattern = "^([A-Za-z]).*", 
-                   replacement = "\\1", 
-                   x = ref_val), 
-           start = 1, 
-           stop = 1)}]
-  data[ref_letter == "", ref_letter := "missing"]
+    # Keep first reference when multiple refs are present (e.g. "D906;N7")
+    ref_val <- sub(pattern = "[;,].*$", replacement = "", x = ref_val)
+    # Extract alphabetic prefix (e.g. "D906" → "D", "CR12" → "CR", "VC3" → "VC")
+    prefix <- toupper(gsub(pattern = "^([A-Za-z]+).*$",
+                           replacement = "\\1",
+                           x = ref_val))
+    # Remap equivalent prefixes
+    prefix[prefix == "RD"] <- "D"   # Route Départementale → D
+    prefix[prefix == "E"]  <- "A"   # Européenne → Autoroute
+    prefix[prefix == "B"]  <- "A"   # Bretelle -> class proche autoroutière
+    prefix[!prefix %in% valid_ref_letters] <- "missing"
+    prefix
+  }]
   data[, ref_letter := factor(x = ref_letter)]
   # ------------------------------------------ #
   # First word of road name (semantic feature) #
@@ -460,17 +471,19 @@ process_network_features <- function(data, rules) {
     fw[fw == "" | fw == "na"] <- "missing"
     fw
   }]
-  # Collapse rare first words (< 100 occurrences)
-  first_word_counts <- data[, .N, by = first_word]
-  rare_words <- first_word_counts[N < 100, first_word]
-  if (length(x = rare_words) > 0) {
-    n_rare <- sum(data$first_word %in% rare_words)
+  # Keep only valid first words (French road type vocabulary)
+  valid_first_words <- c("missing", "rue", "avenue", "boulevard", "chemin",
+                         "impasse", "allee", "place", "route", "quai",
+                         "cours", "voie", "autoroute", "rocade")
+  # Normalize accented forms
+  data[first_word == "all\u00e9e", first_word := "allee"]
+  n_invalid <- sum(!data$first_word %in% valid_first_words)
+  if (n_invalid > 0) {
     pipeline_message(
-      text = sprintf("Setting %s rare first_words (<100 occurrences) to 'missing'", 
-                     fmt(n_rare)), 
+      text = sprintf("Setting %s non-standard first_words to 'missing'",
+                     fmt(n_invalid)),
       process = "warning")
-    
-    data[first_word %in% rare_words, first_word := "missing"]
+    data[!first_word %in% valid_first_words, first_word := "missing"]
   }
   data[, first_word := factor(x = first_word)]
   # -------------------- #
@@ -487,13 +500,15 @@ process_network_features <- function(data, rules) {
     } else {
         NA_character_
     }
-    ow[is.na(ow) | ow == ""] <- "missing"
+    ow[is.na(ow) | ow == ""] <- "no"
     ow[ow == "-1"] <- "yes"  # reverse oneway
-    ow[!ow %in% c("yes", "no", "missing")] <- "yes"
+    ow[!ow %in% c("yes", "no")] <- "no"
+    # motorway and motorway_link are implicitly one-way in OSM
+    ow[as.character(highway) %in% c("motorway", "motorway_link")] <- "yes"
     ow
   }]
   data[, oneway_osm := factor(x = oneway_osm, 
-                              levels = c("yes", "no", "missing"))]
+                              levels = c("yes", "no"))]
   # ---------------------------------------------- #
   # Lane count handling (both directions combined) #
   # ---------------------------------------------- #

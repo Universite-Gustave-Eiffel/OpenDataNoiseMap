@@ -312,6 +312,15 @@ training_data <- merge(
   all.x = FALSE,                                                                # Inner join - keep only matched observations
   all.y = FALSE)
 
+# Ratio vitesse réelle / vitesse réglementaire OSM (quand disponible)
+training_data$ratio_speed_to_osm <- ifelse(
+  !is.na(training_data$aggregate_speed) &
+    !is.na(training_data$speed) &
+    training_data$speed > 0,
+  training_data$aggregate_speed / training_data$speed,
+  NA_real_
+)
+
 # Final column order
 final_cols <- c("osm_id", "count_point_id", "period",
                # Targets
@@ -322,7 +331,7 @@ final_cols <- c("osm_id", "count_point_id", "period",
                "occupancy_D", "truck_pct_D",
                # Ratios
                "ratio_flow", "ratio_flow_trucks", 
-               "ratio_speed", "ratio_occupancy",
+               "ratio_speed", "ratio_occupancy", "ratio_speed_to_osm",
                "truck_pct", "ratio_truck_pct",
                # Network features
                "highway", "DEGRE", "ref_letter", "first_word", 
