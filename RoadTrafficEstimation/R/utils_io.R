@@ -326,3 +326,69 @@ rel_path <- function(path) {
   rel_path <- fs::path_rel(path = path, start = PROJECT_ROOT)
   paste0("./", rel_path)
 }
+
+#'
+#' @title Check available system memory
+#' @description Estimates currently available RAM and optionally stops/warns
+#'              when below a threshold.
+#' @param operation_name Character. Name of the operation for logs.
+#' @param min_gb Numeric. Minimum required RAM in GB; below this threshold,
+#'               execution stops.
+#' @param warn_gb Numeric. Warning threshold in GB.
+#' @return Invisibly returns the estimated available RAM in GB.
+#' @export
+check_memory_available <- function(operation_name = "Operation",
+                                   min_gb = 1,
+                                   warn_gb = 3) {
+  available_gb <- NA_real_
+
+  # Linux fast-path: /proc/meminfo
+  if (file.exists("/proc/meminfo")) {
+    meminfo <- readLines("/proc/meminfo", warn = FALSE)
+    mem_line <- meminfo[grepl("^MemAvailable:", meminfo)]
+    if (length(mem_line) == 1) {
+      mem_kb <- suppressWarnings(as.numeric(gsub("[^0-9]", "", mem_line)))
+      if (is.finite(mem_kb)) {
+        available_gb <- mem_kb / 1024 / 1024
+      }
+    }
+  }
+
+  # Fallback (best effort) when MemAvailable is unavailable
+  if (!is.finite(available_gb)) {
+    gc_info <- gc()
+    if (is.matrix(gc_info) && "Vcells" %in% rownames(gc_info)) {
+      used_mb <- gc_info["Vcells", "used"] * 8 / 1024 / 1024
+      available_gb <- max(0, (16 * 1024 - used_mb) / 1024) # coarse fallback
+    }
+  }
+
+  if (!is.finite(available_gb)) {
+    pipeline_message(
+      text = sprintf("Memory check unavailable for: %s", operation_name),
+      process = "warning")
+    return(invisible(NA_real_))
+  }
+
+  if (available_gb < min_gb) {
+    pipeline_message(
+      text = sprintf(
+        "%s requires at least %.1f GB RAM, but only %.1f GB available",
+        operation_name, min_gb, available_gb
+      ),
+      process = "stop"
+    )
+  }
+
+  if (available_gb < warn_gb) {
+    pipeline_message(
+      text = sprintf(
+        "Low memory before %s: %.1f GB available (warning threshold: %.1f GB)",
+        operation_name, available_gb, warn_gb
+      ),
+      process = "warning"
+    )
+  }
+
+  invisible(available_gb)
+}
