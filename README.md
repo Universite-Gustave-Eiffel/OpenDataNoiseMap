@@ -1,3 +1,5 @@
+![License](https://img.shields.io/badge/License-AGPL_v3-blue.svg)
+
 # OpenDataNoiseMap - Noise Exposure Estimation
 
 This repository hosts the methodology and tools used to estimate the noise exposure of individual agents. The project combines road, rail, and air traffic noise modeling to provide a comprehensive assessment of environmental sound levels.
