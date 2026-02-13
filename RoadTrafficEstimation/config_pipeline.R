@@ -91,6 +91,14 @@ TRUCK_PARAMS <- list(
 
 NROUNDS <- 1500            # More boosting rounds for better convergence
 
+# Quality/robustness options (low overhead)
+# Split by count_point_id to avoid leakage between train/test
+USE_GROUPED_SENSOR_SPLIT <- TRUE
+# Use Avatar quality indicators as XGBoost sample weights
+USE_AVATAR_QUALITY_WEIGHTS <- TRUE
+# Lower bound for sample weights (avoid zero-weight rows)
+MIN_AVATAR_SAMPLE_WEIGHT <- 0.20
+
 # ------------------------------------------------------------------------------
 # Directories
 # ------------------------------------------------------------------------------
@@ -301,6 +309,9 @@ CONFIG <<- list(
   TRAINING_PARAMS=TRAINING_PARAMS,
   TRUCK_PARAMS=TRUCK_PARAMS,
   NROUNDS=NROUNDS,
+  USE_GROUPED_SENSOR_SPLIT = USE_GROUPED_SENSOR_SPLIT,
+  USE_AVATAR_QUALITY_WEIGHTS = USE_AVATAR_QUALITY_WEIGHTS,
+  MIN_AVATAR_SAMPLE_WEIGHT = MIN_AVATAR_SAMPLE_WEIGHT,
   TRAINING_DATA_DIR = TRAINING_DATA_DIR,
   TRAINING_RDS_DATA_FILEPATH = TRAINING_RDS_DATA_FILEPATH,
   TRAINING_GPKG_DATA_FILEPATH = TRAINING_GPKG_DATA_FILEPATH,

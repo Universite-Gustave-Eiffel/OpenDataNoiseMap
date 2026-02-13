@@ -149,7 +149,7 @@ predictions_long <- predictions_long %>%
 
 # Select final columns
 predictions_long <- predictions_long %>%
-  select(osm_id, highway, period, TV, HGV, LV, speed, truck_pct)
+  select(osm_id, highway, period, TV, HGV, LV, speed, osm_speed, osm_speed_imputed, truck_pct)
 
 # Add QGIS-friendly datetime fields for each period
 predictions_long <- add_period_datetime_columns(predictions_long)
@@ -261,6 +261,43 @@ for (p in c("D", "E", "N", "h7", "h12", "h18")) {
     pipeline_message(
       text = sprintf("  - Period %s: %d veh/h avg, %.1f km/h, %.1f%% trucks",
                      p, stats$avg_TV, stats$avg_speed, stats$avg_truck_pct),
+      level = 1, process = "info")
+  }
+}
+
+# Highway diagnostics on daytime period (D) for realism checks
+if ("D" %in% predictions_long$period) {
+  hw_stats_d <- predictions_long %>%
+    filter(period == "D") %>%
+    group_by(highway) %>%
+    summarise(
+      n = n(),
+      avg_TV = round(mean(TV, na.rm = TRUE)),
+      avg_speed = round(mean(speed, na.rm = TRUE), 1),
+      p10_speed = round(quantile(speed, 0.10, na.rm = TRUE), 1),
+      p90_speed = round(quantile(speed, 0.90, na.rm = TRUE), 1),
+      avg_truck_pct = round(mean(truck_pct, na.rm = TRUE), 1),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(n))
+
+  pipeline_message(
+    text = "  - Highway diagnostics (period D, top classes by n):",
+    level = 1, process = "info")
+
+  top_hw <- head(hw_stats_d, 8)
+  for (i in seq_len(nrow(top_hw))) {
+    pipeline_message(
+      text = sprintf(
+        "    * %s (n=%s): TV=%d veh/h | speed=%.1f km/h [P10=%.1f, P90=%.1f] | truck=%.1f%%",
+        top_hw$highway[i],
+        fmt(top_hw$n[i]),
+        top_hw$avg_TV[i],
+        top_hw$avg_speed[i],
+        top_hw$p10_speed[i],
+        top_hw$p90_speed[i],
+        top_hw$avg_truck_pct[i]
+      ),
       level = 1, process = "info")
   }
 }

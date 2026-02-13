@@ -443,6 +443,8 @@ process_network_features <- function(data, rules) {
   data[, ref_letter := {
     ref_val <- as.character(x = get(x = ref_col))
     ref_val[is.na(ref_val) | ref_val == ""] <- "missing"
+    # Keep first reference when multiple refs are present (e.g. "D906;N7")
+    ref_val <- sub(pattern = "[;,].*$", replacement = "", x = ref_val)
     # Extract alphabetic prefix (e.g. "D906" → "D", "CR12" → "CR", "VC3" → "VC")
     prefix <- toupper(gsub(pattern = "^([A-Za-z]+).*$",
                            replacement = "\\1",
@@ -450,7 +452,7 @@ process_network_features <- function(data, rules) {
     # Remap equivalent prefixes
     prefix[prefix == "RD"] <- "D"   # Route Départementale → D
     prefix[prefix == "E"]  <- "A"   # Européenne → Autoroute
-    prefix[prefix == "B"]  <- "A"   # Boulevard → Autoroute
+    prefix[prefix == "B"]  <- "A"   # Bretelle -> class proche autoroutière
     prefix[!prefix %in% valid_ref_letters] <- "missing"
     prefix
   }]
@@ -498,13 +500,15 @@ process_network_features <- function(data, rules) {
     } else {
         NA_character_
     }
-    ow[is.na(ow) | ow == ""] <- "missing"
+    ow[is.na(ow) | ow == ""] <- "no"
     ow[ow == "-1"] <- "yes"  # reverse oneway
-    ow[!ow %in% c("yes", "no", "missing")] <- "yes"
+    ow[!ow %in% c("yes", "no")] <- "no"
+    # motorway and motorway_link are implicitly one-way in OSM
+    ow[as.character(highway) %in% c("motorway", "motorway_link")] <- "yes"
     ow
   }]
   data[, oneway_osm := factor(x = oneway_osm, 
-                              levels = c("yes", "no", "missing"))]
+                              levels = c("yes", "no"))]
   # ---------------------------------------------- #
   # Lane count handling (both directions combined) #
   # ---------------------------------------------- #

@@ -169,7 +169,7 @@ predictions_long <- predictions_long %>%
     TV = flow,
     period = factor(period, levels = all_periods)
   ) %>%
-  select(osm_id, highway, period, TV, HGV, LV, speed, truck_pct)
+  select(osm_id, highway, period, TV, HGV, LV, speed, osm_speed, osm_speed_imputed, truck_pct)
 
 # Add QGIS-friendly datetime fields for each period
 predictions_long <- add_period_datetime_columns(predictions_long)

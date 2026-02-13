@@ -225,7 +225,13 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   } else {
     predict_with_alignment(models_list$truck_pct_D$model, feature_matrix)
   }
-  speed_D <- if (is.null(models_list$speed_D$model)) {
+  speed_model_target <- NA_character_
+  if (!is.null(models_list$speed_D$config) &&
+      !is.null(models_list$speed_D$config$target)) {
+    speed_model_target <- as.character(models_list$speed_D$config$target)
+  }
+
+  speed_D_raw <- if (is.null(models_list$speed_D$model)) {
     pipeline_message(
       text = "Missing base model speed_D: outputs will be NA",
       process = "warning")
@@ -233,11 +239,50 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   } else {
     predict_with_alignment(models_list$speed_D$model, feature_matrix)
   }
+
+  speed_osm_raw <- suppressWarnings(as.numeric(network_data$speed))
+  speed_osm_missing <- is.na(speed_osm_raw) | speed_osm_raw <= 0
+
+  if (identical(speed_model_target, "ratio_speed_to_osm")) {
+    # New model: speed_D predicts a ratio to OSM speed.
+    speed_osm_base <- speed_osm_raw
+    speed_osm_base[speed_osm_missing] <- CONFIG$DEFAULT_VEHICLE_SPEED
+    speed_D <- if (all(is.na(speed_D_raw))) {
+      rep(NA_real_, length(speed_D_raw))
+    } else {
+      pmax(5, speed_D_raw * speed_osm_base)
+    }
+  } else {
+    # Legacy model: speed_D already predicts absolute speed (km/h).
+    speed_D <- speed_D_raw
+  }
+
+  # Keep OSM speed as separate attribute for downstream model choice.
+  # If OSM speed is missing/invalid, impute with reconstructed speed_D.
+  speed_osm <- speed_osm_raw
+  n_speed_osm_missing <- sum(speed_osm_missing)
+  if (n_speed_osm_missing > 0) {
+    pipeline_message(
+      text = sprintf(
+        "Prediction-time OSM speed imputation: %s missing values imputed with %s",
+        fmt(n_speed_osm_missing),
+        ifelse(all(is.na(speed_D)), "DEFAULT_VEHICLE_SPEED", "speed_D XGBoost predictions")
+      ),
+      process = "warning"
+    )
+    if (all(is.na(speed_D))) {
+      speed_osm[speed_osm_missing] <- CONFIG$DEFAULT_VEHICLE_SPEED
+    } else {
+      speed_osm[speed_osm_missing] <- pmax(5, speed_D[speed_osm_missing])
+    }
+  }
   
   # Initialize results data.frame
   results <- data.frame(
     osm_id = network_data$osm_id,
-    highway = network_data$highway
+    highway = network_data$highway,
+    osm_speed = speed_osm,
+    osm_speed_imputed = as.integer(speed_osm_missing)
   )
   
   # Predict all periods
@@ -280,9 +325,33 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   }
 
   # Clamp predictions to sensible ranges
+  highway_chr <- tolower(as.character(results$highway))
+  speed_min_by_hw <- c(
+    motorway = 30, trunk = 20, primary = 15, secondary = 15, tertiary = 12,
+    residential = 10, unclassified = 10, service = 5, living_street = 5
+  )
+  speed_max_by_hw <- c(
+    motorway = 130, trunk = 110, primary = 90, secondary = 80, tertiary = 70,
+    residential = 50, unclassified = 60, service = 40, living_street = 30
+  )
+  flow_max_by_hw <- c(
+    motorway = 12000, trunk = 9000, primary = 7000, secondary = 5000,
+    tertiary = 3000, residential = 1200, unclassified = 1500,
+    service = 600, living_street = 300
+  )
+  speed_min_vec <- as.numeric(speed_min_by_hw[highway_chr])
+  speed_max_vec <- as.numeric(speed_max_by_hw[highway_chr])
+  flow_max_vec <- as.numeric(flow_max_by_hw[highway_chr])
+  speed_min_vec[is.na(speed_min_vec)] <- 5
+  speed_max_vec[is.na(speed_max_vec)] <- 130
+  flow_max_vec[is.na(flow_max_vec)] <- 15000
+
   flow_cols <- grep("^flow_", names(results), value = TRUE)
   if (length(flow_cols) > 0) {
-    results[flow_cols] <- lapply(results[flow_cols], function(x) pmax(0, x))
+    results[flow_cols] <- lapply(
+      results[flow_cols],
+      function(x) pmin(flow_max_vec, pmax(0, x))
+    )
   }
   truck_cols <- grep("^truck_pct_", names(results), value = TRUE)
   if (length(truck_cols) > 0) {
@@ -290,7 +359,10 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   }
   speed_cols <- grep("^speed_", names(results), value = TRUE)
   if (length(speed_cols) > 0) {
-    results[speed_cols] <- lapply(results[speed_cols], function(x) pmax(0, x))
+    results[speed_cols] <- lapply(
+      results[speed_cols],
+      function(x) pmin(speed_max_vec, pmax(speed_min_vec, x))
+    )
   }
   
   # Guard NaN/Inf: impute with median by highway type + emit warning
@@ -301,10 +373,12 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
     if (length(bad_idx) > 0) {
       total_nan <- total_nan + length(bad_idx)
       # Impute each NaN with the median of same highway type
+      global_med <- median(results[[col]][is.finite(results[[col]])], na.rm = TRUE)
       for (hw in unique(results$highway[bad_idx])) {
         hw_rows <- which(results$highway == hw)
         hw_good <- results[[col]][setdiff(hw_rows, bad_idx)]
         med_val <- if (length(hw_good) > 0) median(hw_good, na.rm = TRUE) else NA_real_
+        if (!is.finite(med_val)) med_val <- global_med
         results[[col]][intersect(bad_idx, hw_rows)] <- med_val
       }
     }
@@ -330,32 +404,89 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
 #' @return list with validation results
 validate_predictions <- function(predictions) {
   issues <- list()
+
+  is_long_format <- all(c("period", "speed") %in% names(predictions))
+  has_tv <- "TV" %in% names(predictions)
+  has_truck <- "truck_pct" %in% names(predictions)
   
-  # Check for negative flows
-  flow_cols <- grep("^flow_", names(predictions), value = TRUE)
-  for (col in flow_cols) {
-    n_negative <- sum(predictions[[col]] < 0, na.rm = TRUE)
-    if (n_negative > 0) {
-      issues[[paste0(col, "_negative")]] <- n_negative
+  if (is_long_format) {
+    if (has_tv) {
+      n_negative_tv <- sum(predictions$TV < 0, na.rm = TRUE)
+      if (n_negative_tv > 0) {
+        issues[["TV_negative"]] <- n_negative_tv
+      }
     }
-  }
-  
-  # Check for truck_pct > 100
-  truck_cols <- grep("^truck_pct_", names(predictions), value = TRUE)
-  for (col in truck_cols) {
-    n_exceed <- sum(predictions[[col]] > 100, na.rm = TRUE)
-    if (n_exceed > 0) {
-      issues[[paste0(col, "_exceed_100")]] <- n_exceed
+
+    if (has_truck) {
+      n_exceed_truck <- sum(predictions$truck_pct > 100 | predictions$truck_pct < 0, na.rm = TRUE)
+      if (n_exceed_truck > 0) {
+        issues[["truck_pct_out_of_range"]] <- n_exceed_truck
+      }
     }
-  }
-  
-  # Check for unrealistic speeds
-  speed_cols <- grep("^speed_", names(predictions), value = TRUE)
-  for (col in speed_cols) {
-    n_unrealistic <- sum(predictions[[col]] < 0 | predictions[[col]] > 200, 
-                         na.rm = TRUE)
-    if (n_unrealistic > 0) {
-      issues[[paste0(col, "_unrealistic")]] <- n_unrealistic
+
+    n_unrealistic_speed <- sum(predictions$speed < 5 | predictions$speed > 200, na.rm = TRUE)
+    if (n_unrealistic_speed > 0) {
+      issues[["speed_unrealistic"]] <- n_unrealistic_speed
+    }
+
+    # Temporal coherence checks (when D and N are available)
+    if (has_tv && "osm_id" %in% names(predictions)) {
+      d_rows <- predictions[as.character(predictions$period) == "D", c("osm_id", "TV", "speed")]
+      n_rows <- predictions[as.character(predictions$period) == "N", c("osm_id", "TV", "speed")]
+      names(d_rows) <- c("osm_id", "TV_D", "speed_D")
+      names(n_rows) <- c("osm_id", "TV_N", "speed_N")
+      dn <- merge(d_rows, n_rows, by = "osm_id", all = FALSE)
+      if (nrow(dn) > 0) {
+        n_flow_n_gt_d <- sum(dn$TV_N > (dn$TV_D * 1.05), na.rm = TRUE)
+        if (n_flow_n_gt_d > 0) {
+          issues[["coherence_flow_N_gt_D"]] <- n_flow_n_gt_d
+        }
+        n_speed_n_lt_d <- sum(dn$speed_N + 0.5 < dn$speed_D, na.rm = TRUE)
+        if (n_speed_n_lt_d > 0) {
+          issues[["coherence_speed_N_lt_D"]] <- n_speed_n_lt_d
+        }
+      }
+    }
+
+  } else {
+    # Wide format checks
+    flow_cols <- grep("^flow_", names(predictions), value = TRUE)
+    for (col in flow_cols) {
+      n_negative <- sum(predictions[[col]] < 0, na.rm = TRUE)
+      if (n_negative > 0) {
+        issues[[paste0(col, "_negative")]] <- n_negative
+      }
+    }
+
+    truck_cols <- grep("^truck_pct_", names(predictions), value = TRUE)
+    for (col in truck_cols) {
+      n_exceed <- sum(predictions[[col]] > 100 | predictions[[col]] < 0, na.rm = TRUE)
+      if (n_exceed > 0) {
+        issues[[paste0(col, "_out_of_range")]] <- n_exceed
+      }
+    }
+
+    speed_cols <- grep("^speed_", names(predictions), value = TRUE)
+    for (col in speed_cols) {
+      n_unrealistic <- sum(predictions[[col]] < 5 | predictions[[col]] > 200,
+                           na.rm = TRUE)
+      if (n_unrealistic > 0) {
+        issues[[paste0(col, "_unrealistic")]] <- n_unrealistic
+      }
+    }
+
+    # Temporal coherence for wide format
+    if (all(c("flow_D", "flow_N") %in% names(predictions))) {
+      n_flow_n_gt_d <- sum(predictions$flow_N > (predictions$flow_D * 1.05), na.rm = TRUE)
+      if (n_flow_n_gt_d > 0) {
+        issues[["coherence_flow_N_gt_D"]] <- n_flow_n_gt_d
+      }
+    }
+    if (all(c("speed_D", "speed_N") %in% names(predictions))) {
+      n_speed_n_lt_d <- sum(predictions$speed_N + 0.5 < predictions$speed_D, na.rm = TRUE)
+      if (n_speed_n_lt_d > 0) {
+        issues[["coherence_speed_N_lt_D"]] <- n_speed_n_lt_d
+      }
     }
   }
   
