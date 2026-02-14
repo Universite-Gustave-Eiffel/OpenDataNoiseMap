@@ -25,10 +25,10 @@ JOIN_ROADS_AND_TOWNS_IN_ONE_SHOT <- FALSE
 BUFFER_RADIUS <- 50
 
 # Maximum path length to consider when calculating the betweenness
-CUTOFF_BETWEENNESS <- 10
+CUTOFF_BETWEENNESS <- 25
 
 # Maximum path length to consider when calculating the closeness
-CUTOFF_CLOSENESS <- 10
+CUTOFF_CLOSENESS <- 25
 
 # ------------------------------------------------------------------------------
 # Traffic data processing configuration
@@ -46,8 +46,12 @@ DEFAULT_DEGRE = 1
 START_TIME = "2023-01-01T00:00:00"
 END_TIME = "2023-12-31T00:00:00"
 
-# Load environment variables from file .env
-readRenviron(".Renviron")
+# Load environment variables from .Renviron (project-level or home-level)
+if (file.exists(".Renviron")) {
+  readRenviron(".Renviron")
+} else if (file.exists("~/.Renviron")) {
+  readRenviron("~/.Renviron")
+}
 
 # API token (read from environment variable)
 AVATAR_API_TOKEN <- Sys.getenv("AVATAR_API_TOKEN", 

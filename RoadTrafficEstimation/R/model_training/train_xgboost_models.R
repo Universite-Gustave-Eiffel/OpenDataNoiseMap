@@ -110,9 +110,31 @@ pipeline_message(
                  paste(available_road_features, collapse = ", ")),
   process = "info")
 
-# Build formula with existing features
+# Build formula with existing features + interaction terms
+# Interactions capture highway-specific traffic patterns by density zone,
+# lane count, and network connectivity
+interaction_terms <- character(0)
+if (all(c("highway", "DEGRE") %in% available_road_features)) {
+  interaction_terms <- c(interaction_terms, "highway:DEGRE")
+}
+if (all(c("highway", "lanes_osm") %in% available_road_features)) {
+  interaction_terms <- c(interaction_terms, "highway:lanes_osm")
+}
+if (all(c("DEGRE", "connectivity") %in% available_road_features)) {
+  interaction_terms <- c(interaction_terms, "DEGRE:connectivity")
+}
+
+formula_parts <- c(available_road_features, interaction_terms)
 road_feature_formula <- as.formula(
-  object = paste("~", paste(available_road_features, collapse = " + ")))
+  object = paste("~", paste(formula_parts, collapse = " + ")))
+
+if (length(interaction_terms) > 0) {
+  pipeline_message(
+    text = sprintf("Added %d interaction terms: %s",
+                   length(interaction_terms),
+                   paste(interaction_terms, collapse = ", ")),
+    process = "info")
+}
 
 # Temporal periods configuration
 all_periods <- c("D", "E", "N", paste0("h", 0:23),
@@ -513,7 +535,24 @@ for (model_name in names(all_configs)) {
     }
   } else {
     params <- CONFIG$TRAINING_PARAMS
-    best_rounds <- CONFIG$NROUNDS
+    # Cross-validation to select optimal nrounds (avoids overfitting)
+    nfold <- min(5, max(2, length(x = y_train) %/% 50))
+    if (nfold >= 2 && length(y_train) >= 100) {
+      cv_result <- xgboost::xgb.cv(
+        params = params,
+        data = dtrain,
+        nrounds = CONFIG$NROUNDS,
+        nfold = nfold,
+        early_stopping_rounds = 50,
+        verbose = 0,
+        showsd = FALSE)
+      best_rounds <- cv_result$best_iteration
+      pipeline_message(text = sprintf("CV(%d-fold) selected %d rounds (from max %d)",
+                                      nfold, best_rounds, CONFIG$NROUNDS), 
+                       process = "info")
+    } else {
+      best_rounds <- CONFIG$NROUNDS
+    }
   }
   
   # Acceptable limits for training
@@ -950,6 +989,22 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(models_list)) &&
     if (nrow(d_matrix) != nrow(d_data)) {
       kept_rows <- as.integer(rownames(d_matrix))
       d_data <- d_data[kept_rows, ]
+    }
+
+    # Align feature columns with what the model expects
+    # (subset of test data may have fewer factor levels → fewer columns)
+    model_features <- models_list[["flow_D"]]$model$feature_names
+    if (!is.null(model_features)) {
+      current_cols <- colnames(d_matrix)
+      missing_cols <- setdiff(model_features, current_cols)
+      if (length(missing_cols) > 0) {
+        zero_mat <- Matrix::Matrix(0, nrow = nrow(d_matrix),
+                                   ncol = length(missing_cols),
+                                   sparse = TRUE)
+        colnames(zero_mat) <- missing_cols
+        d_matrix <- cbind(d_matrix, zero_mat)
+      }
+      d_matrix <- d_matrix[, model_features, drop = FALSE]
     }
 
     if (nrow(d_matrix) > 0) {

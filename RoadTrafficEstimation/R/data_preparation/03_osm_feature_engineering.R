@@ -244,3 +244,8 @@ if (length(available_features) < length(required_features)) {
 
 pipeline_message(text = "OSM France feature engineering completed", 
                  level = 0, progress = "end", process = "valid")
+
+# Cleanup large objects to free memory for next steps
+rm(list = intersect(ls(), c("osm_france_engineered", "osm_full_network",
+                            "imputation_rules")))
+gc(verbose = FALSE)

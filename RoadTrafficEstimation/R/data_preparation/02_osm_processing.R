@@ -524,3 +524,9 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
                   rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 2, progress = "end", process = "valid")
 }
+
+# Cleanup large objects to free memory for next steps
+rm(list = intersect(ls(), c("osm_roads", "commune_data", "degre_lookup",
+                            "unique_roads", "edges", "g", "node_data",
+                            "osm_full_network")))
+gc(verbose = FALSE)

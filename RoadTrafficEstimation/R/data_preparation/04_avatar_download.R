@@ -433,7 +433,7 @@ if (length(files) > 0) {
   # Memory check before starting
   check_memory_available(
     operation_name = sprintf("Combine %d Avatar CSV chunks", length(files)),
-    min_gb = 8, warn_gb = 12)
+    min_gb = 4, warn_gb = 8)
 
   # Disk-streamed concatenation to avoid keeping all batches in RAM
   temp_combined_csv <- file.path(CONFIG$AVATAR_CSV_DATA_DIRPATH,
@@ -496,7 +496,7 @@ if (length(files) > 0) {
   # Read merged temporary CSV once (single in-memory object)
   check_memory_available(
     operation_name = "Load merged Avatar temporary CSV",
-    min_gb = 6, warn_gb = 10)
+    min_gb = 3, warn_gb = 6)
 
   avatar_data <- data.table::fread(
     file = temp_combined_csv,
