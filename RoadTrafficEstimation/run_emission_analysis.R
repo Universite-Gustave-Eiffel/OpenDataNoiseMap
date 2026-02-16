@@ -86,7 +86,7 @@ pipeline_message(text = "Acoustic emission error analysis (dB)",
 
 emission_test <- data.frame()
 
-if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(models_list)) &&
+if (all(c("flow_D", "speed_D") %in% names(models_list)) &&
     !is.null(shared_base_test_sensors)) {
 
   d_data <- training_data %>%
@@ -95,9 +95,30 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(models_list)) &&
            !is.na(aggregate_flow), aggregate_flow >= 1)
 
   if (nrow(d_data) > 0) {
-    d_matrix <- Matrix::sparse.model.matrix(
-      object = road_feature_formula,
-      data = d_data)
+    # Safe sparse matrix: handle single-level categoricals after NA removal
+    safe_sparse_model_matrix <- function(formula_obj, data_df) {
+      vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
+      if (nrow(data_df) == 0L) return(Matrix::sparse.model.matrix(formula_obj, data_df))
+      mm_data <- data_df
+      for (v in vars_in_formula) {
+        if (is.factor(mm_data[[v]])) mm_data[[v]] <- as.character(mm_data[[v]])
+      }
+      mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+      cc_idx <- complete.cases(mm_subset)
+      cc_data <- mm_data[cc_idx, , drop = FALSE]
+      for (v in vars_in_formula) {
+        if (is.character(mm_data[[v]])) {
+          lv <- unique(cc_data[[v]])
+          lv <- lv[!is.na(lv) & nzchar(lv)]
+          if (length(lv) <= 1) mm_data[[v]] <- 0
+        }
+      }
+      Matrix::sparse.model.matrix(formula_obj, mm_data)
+    }
+
+    d_matrix <- safe_sparse_model_matrix(
+      formula_obj = road_feature_formula,
+      data_df = d_data)
 
     if (nrow(d_matrix) != nrow(d_data)) {
       kept_rows <- as.integer(rownames(d_matrix))
@@ -155,12 +176,17 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(models_list)) &&
     if (nrow(d_matrix) > 0) {
       # --- Base predictions (period D) ---
       d_matrix_flow <- align_matrix_to_model(d_matrix, models_list[["flow_D"]]$model)
-      d_matrix_truck <- align_matrix_to_model(d_matrix, models_list[["truck_pct_D"]]$model)
       d_matrix_speed <- align_matrix_to_model(d_matrix, models_list[["speed_D"]]$model)
 
       pred_flow_D_log <- predict(models_list[["flow_D"]]$model, d_matrix_flow)
       pred_flow_D <- 10^pred_flow_D_log
-      pred_truck_D <- predict(models_list[["truck_pct_D"]]$model, d_matrix_truck)
+      pred_truck_D <- if (!is.null(models_list[["truck_pct_D"]]$model)) {
+        d_matrix_truck <- align_matrix_to_model(d_matrix, models_list[["truck_pct_D"]]$model)
+        predict(models_list[["truck_pct_D"]]$model, d_matrix_truck)
+      } else {
+        pipeline_message(text = "truck_pct_D model missing — using observed truck_pct", process = "info")
+        ifelse(!is.na(d_data$truck_pct) & d_data$truck_pct >= 0, d_data$truck_pct, 0)
+      }
       pred_speed_ratio_to_osm <- predict(models_list[["speed_D"]]$model, d_matrix_speed)
 
       osm_speed_raw <- suppressWarnings(as.numeric(d_data$speed))

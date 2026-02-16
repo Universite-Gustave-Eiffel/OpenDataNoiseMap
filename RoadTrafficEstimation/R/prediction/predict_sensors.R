@@ -18,9 +18,6 @@
 pipeline_message(text = "Noise sensors traffic prediction", 
                  level = 0, progress = "start", process = "calc")
 
-# Source utilities
-source("R/utils_prediction.R", encoding = "UTF-8")
-
 # Buffer radius for sensors
 SENSOR_BUFFER_RADIUS <- 800  # meters
 

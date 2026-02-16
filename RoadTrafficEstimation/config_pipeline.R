@@ -109,45 +109,23 @@ MIN_AVATAR_SAMPLE_WEIGHT <- 0.20
 # Input data directory
 INPUT_DATA_DIR <- normalizePath(path = file.path("data", "input"), 
                                 mustWork = FALSE)
-assign(x = "INPUT_DATA_DIR", 
-       value = INPUT_DATA_DIR, 
-       envir = .GlobalEnv)
 
 # Output data directory
 OUTPUT_DATA_DIR <- normalizePath(path = file.path("data", "output"), 
                                  mustWork = FALSE)
-assign(x = "OUTPUT_DATA_DIR", 
-       value = OUTPUT_DATA_DIR, 
-       envir = .GlobalEnv)
-
-# Output OSM data directory
-OUTPUT_OSM_DATA_DIR <- normalizePath(path = file.path("data", "output"), 
-                                     mustWork = FALSE)
-assign(x = "OUTPUT_OSM_DATA_DIR", 
-       value = OUTPUT_OSM_DATA_DIR, 
-       envir = .GlobalEnv)
 
 # Output training data directory
 TRAINING_DATA_DIR <- normalizePath(
   path = file.path(OUTPUT_DATA_DIR, "training"), 
   mustWork = FALSE)
-assign(x = "TRAINING_DATA_DIR", 
-       value = TRAINING_DATA_DIR, 
-       envir = .GlobalEnv)
 
 # Output forecasting data directory
 FORECAST_DATA_DIR <- normalizePath(path = file.path(OUTPUT_DATA_DIR, "forecast"), 
                                    mustWork = FALSE)
-assign(x = "FORECAST_DATA_DIR", 
-       value = FORECAST_DATA_DIR, 
-       envir = .GlobalEnv)
 
 # Figures directory
 FIGS_DIR <- normalizePath(path = "figures", 
                           mustWork = FALSE)
-assign(x = "FIGS_DIR", 
-       value = FIGS_DIR, 
-       envir = .GlobalEnv)
 
 # ------------------------------------------------------------------------------
 # Input data paths (depend on INPUT_DATA_DIR defined in setup)
@@ -196,9 +174,6 @@ IMPUTATION_RULES_FRANCE_FILEPATH <-
 # Avatar data directory
 AVATAR_DATA_DIR <- normalizePath(path = file.path(OUTPUT_DATA_DIR, "avatar"), 
                                  mustWork = FALSE)
-assign(x = "AVATAR_DATA_DIR", 
-       value = AVATAR_DATA_DIR, 
-       envir = .GlobalEnv)
 
 # Avatar / traffic data
 count_points_filename <- "03_avatar_count_points.json"
@@ -246,6 +221,19 @@ SENSORS_ALL_PREDICTION_FILEPATH <- file.path(FORECAST_DATA_DIR,
                                               "07_predictions_sensors_all.gpkg")
 PEMB_PREDICTION_FILEPATH <- file.path(FORECAST_DATA_DIR, 
                                       "07_predictions_pemb.gpkg")
+
+# France-wide prediction (tiled, geometry-separated)
+FRANCE_OUTPUT_DIR <- file.path(FORECAST_DATA_DIR, "france")
+FRANCE_GEOMETRY_FILEPATH <- file.path(FRANCE_OUTPUT_DIR,
+                                       "07_france_network.gpkg")
+FRANCE_TRAFFIC_DEN_FILEPATH <- file.path(FRANCE_OUTPUT_DIR,
+                                          "07_france_traffic_DEN.gpkg")
+FRANCE_TRAFFIC_HOURLY_FILEPATH <- file.path(FRANCE_OUTPUT_DIR,
+                                             "07_france_traffic_hourly.gpkg")
+FRANCE_TRAFFIC_HOURLY_WD_FILEPATH <- file.path(FRANCE_OUTPUT_DIR,
+                                                "07_france_traffic_hourly_wd.gpkg")
+FRANCE_TRAFFIC_HOURLY_WE_FILEPATH <- file.path(FRANCE_OUTPUT_DIR,
+                                                "07_france_traffic_hourly_we.gpkg")
 
 # Figures (avec préfixe de phase)
 FIG_HOURLY_TRAFFIC_FILENAME <- "04_hourly_traffic_patterns.pdf"
@@ -326,7 +314,14 @@ CONFIG <<- list(
   NANTES_PREDICTION_FILEPATH = NANTES_PREDICTION_FILEPATH,
   PARIS_PREDICTION_FILEPATH = PARIS_PREDICTION_FILEPATH,
   SENSORS_ALL_PREDICTION_FILEPATH = SENSORS_ALL_PREDICTION_FILEPATH,
-  PEMB_PREDICTION_FILEPATH = PEMB_PREDICTION_FILEPATH
+  PEMB_PREDICTION_FILEPATH = PEMB_PREDICTION_FILEPATH,
+  # France-wide tiled prediction
+  FRANCE_OUTPUT_DIR = FRANCE_OUTPUT_DIR,
+  FRANCE_GEOMETRY_FILEPATH = FRANCE_GEOMETRY_FILEPATH,
+  FRANCE_TRAFFIC_DEN_FILEPATH = FRANCE_TRAFFIC_DEN_FILEPATH,
+  FRANCE_TRAFFIC_HOURLY_FILEPATH = FRANCE_TRAFFIC_HOURLY_FILEPATH,
+  FRANCE_TRAFFIC_HOURLY_WD_FILEPATH = FRANCE_TRAFFIC_HOURLY_WD_FILEPATH,
+  FRANCE_TRAFFIC_HOURLY_WE_FILEPATH = FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
 )
 
 pipeline_message(text = "Pipeline configured", 

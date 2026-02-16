@@ -1,67 +1,44 @@
 # ==============================================================================
-# STAGE 6: TRAINING DATASET MERGE
-# ==============================================================================
-# Ce script fusionne les données Avatar nettoyées avec la couche France 
-# engineered (déjà pré-calculée avec tous les features) pour créer le dataset
-# d'entraînement final.
-#
-# Entrées:
-#   - 02_osm_network_france_engineered.gpkg (couche France avec features)
-#   - 03_osm_network_with_avatar_ids.gpkg (réseau OSM filtré capteurs Avatar)
-#   - 04_avatar_aggregated_with_ratios.rds (données trafic agrégées)
-# Sorties:
-#   - 05_training_dataset.rds/.gpkg (dataset final pour entraînement)
-#
-# En mode TEST: utilise une fraction des données pour rapidité
+# STAGE 5: ROAD FEATURE ENGINEERING
 # ==============================================================================
 
-pipeline_message(text = "Training dataset merge", 
+pipeline_message(text = "Road feature engineering processing", 
                  level = 0, progress = "start", process = "calc")
 
-# Check if running in TEST mode
-IS_TEST_MODE <- exists("TEST_REGION") && !is.null(TEST_REGION)
-
 # ------------------------------------------------------------------------------
-# Load OSM France engineered network (with all features pre-computed)
+# Load full road network with connectivities and towns
 # ------------------------------------------------------------------------------
 
-if (!exists('osm_france_engineered') || 
-    !is.data.frame(get('osm_france_engineered'))) {
+if (!exists('osm_full_network') 
+    || isFALSE(is.data.frame(osm_full_network))){
   
   pipeline_message(
-    text = sprintf("Loading OSM France engineered network from %s", 
-                   rel_path(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
+    text = sprintf("Loading OSM full road network from %s", 
+                   rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
-  osm_france_engineered <- sf::st_read(
-    dsn = CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+  osm_full_network <- sf::st_read(
+    dsn = CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
     quiet = TRUE)
   
-  if (sf::st_crs(osm_france_engineered) != CONFIG$TARGET_CRS) {
-    osm_france_engineered <- osm_france_engineered %>% 
+  if (sf::st_crs(osm_full_network) != CONFIG$TARGET_CRS){
+    osm_full_network <- osm_full_network %>% 
       st_transform(crs = CONFIG$TARGET_CRS)
   }
   
-  pipeline_message(
-    text = sprintf("OSM France engineered network loaded: %s roads", 
-                   fmt(nrow(osm_france_engineered))), 
-    level = 1, progress = "end", process = "valid")
-}
-
-# Crop to test region if in TEST mode
-if (IS_TEST_MODE) {
-  osm_france_engineered <- crop_to_test_region(osm_france_engineered)
+  pipeline_message(text = "OSM full road network successfully loaded", 
+                   level = 1, progress = "end", process = "valid")
 }
 
 # ------------------------------------------------------------------------------
-# Load OSM network with Avatar IDs (to filter engineered network)
+# Load full road network with Avatar count point indexes
 # ------------------------------------------------------------------------------
 
-if (!exists('full_network_avatar_id') || 
-    !is.data.frame(get('full_network_avatar_id'))) {
+if (!exists('full_network_avatar_id') 
+    || isFALSE(is.data.frame(full_network_avatar_id))){
   
   pipeline_message(
-    text = sprintf("Loading OSM network with Avatar IDs from %s", 
+    text = sprintf("Loading full road network with count point data from %s", 
                    rel_path(CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
@@ -69,59 +46,134 @@ if (!exists('full_network_avatar_id') ||
     dsn = CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH, 
     quiet = TRUE)
   
-  if (sf::st_crs(full_network_avatar_id) != CONFIG$TARGET_CRS) {
+  if (sf::st_crs(full_network_avatar_id) != CONFIG$TARGET_CRS){
     full_network_avatar_id <- full_network_avatar_id %>% 
       st_transform(crs = CONFIG$TARGET_CRS)
   }
   
   pipeline_message(
-    text = sprintf("OSM network with Avatar IDs loaded: %s roads", 
-                   fmt(nrow(full_network_avatar_id))), 
+    text = "Full road network with count point data successfully loaded", 
     level = 1, progress = "end", process = "valid")
 }
 
 # ------------------------------------------------------------------------------
-# Filter engineered network to Avatar roads only
+# Road network processing
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Filtering France engineered network to Avatar roads", 
-  level = 1, progress = "start", process = "join")
+pipeline_message(text = "Assignment of rules to the road network", 
+                 level = 1, progress = "start", process = "join")
 
-# Coerce to data.table
-setDT(osm_france_engineered)
+# ********************************************** #
+# Compute imputation rules from the full network #
+# ********************************************** #
+
+pipeline_message(
+  text = "Building of default allocation rules for roads without information", 
+  level = 2, progress = "start", process = "build")
+
+# Coerce OSM and Avatar data frame to data.table
+setDT(osm_full_network)
 setDT(full_network_avatar_id)
 
-pipeline_message(text = describe_df(osm_france_engineered), process = "info")
+pipeline_message(text = describe_df(osm_full_network), process = "info")
 pipeline_message(text = describe_df(full_network_avatar_id), process = "info")
 
-# Get Avatar road OSM IDs
-avatar_osm_ids <- unique(full_network_avatar_id$osm_id)
+# Clean highway types
+osm_full_network$highway <- as.character(x = osm_full_network$highway)
+osm_full_network$highway[
+  is.na(osm_full_network$highway) | 
+    osm_full_network$highway == ""] <- "unclassified"
 
-# Filter engineered network to Avatar roads
-network_clean <- osm_france_engineered[osm_id %in% avatar_osm_ids]
+# Imputation rules
+lanes_col <- if ("lanes_osm" %in% names(osm_full_network)){
+  "lanes_osm"
+} else {
+  "lanes"
+}
+maxspeed_col <- if ("maxspeed_osm" %in% names(osm_full_network)){
+  "maxspeed_osm"
+} else {
+    "maxspeed"
+}
 
-# Get Avatar count point ID mapping (osm_id -> id + lane_number)
-id_mapping <- full_network_avatar_id[, .(osm_id, id, lane_number)]
-setnames(id_mapping, "id", "count_point_id")
+imputation_rules <- osm_full_network[, .(
+  median_lanes = median(x = as.numeric(lanes_col), 
+                        na.rm = TRUE),
+  median_speed = median(x = as.numeric(maxspeed_col), 
+                        na.rm = TRUE),
+  n_roads = .N), 
+  by = highway]
 
-# Add count_point_id and lane_number to network_clean
-network_clean <- merge(network_clean, id_mapping, by = "osm_id", all.x = TRUE)
+# Default values for imputation rules where information is missing
+imputation_rules[is.na(median_lanes), 
+                 median_lanes := CONFIG$DEFAULT_NUMBER_OF_LANES]
+imputation_rules[is.na(median_speed), 
+                 median_speed := CONFIG$DEFAULT_VEHICLE_SPEED]
+imputation_rules <- rbind(
+  imputation_rules, 
+  data.table(highway = "missing", 
+             median_lanes = CONFIG$DEFAULT_NUMBER_OF_LANES, 
+             median_speed = CONFIG$DEFAULT_VEHICLE_SPEED, 
+             n_roads = CONFIG$DEFAULT_NUMBER_OF_ROADS))
 
+# Save rules for later use
+saveRDS(object = imputation_rules, 
+  file = CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH)
+
+pipeline_message(text = describe_df(imputation_rules), process = "info")
+
+pipeline_message(
+  text = sprintf("Default road traffic imputation rules successfully built and 
+                saved into file ", 
+                 rel_path(CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH)), 
+  level = 2, progress = "end", process = "save")
+
+# ************************************************************** #
+# Clean road network and impute filtered network (Avatar subset) #
+# ************************************************************** #
+
+pipeline_message(
+  text = "Assigning default road traffic rules to the road network", 
+  level = 2, progress = "start", process = "join")
+
+# Apply to filtered network
+network_processed <- process_network_features(data = full_network_avatar_id, 
+                                              rules = imputation_rules)
 # Select network columns
-network_cols <- c("count_point_id", "osm_id", "highway", "DEGRE", "ref_letter", 
-                  "first_word", "oneway_osm", "lanes_osm", "lanes_directional",
-                  "speed", "junction_osm", "lane_number",
+# junction_osm: roundabout detection from OSM tags
+# lane_number: AVATAR directional lane count (measures ONE direction)
+network_cols <- c("id", "osm_id", "highway", "DEGRE", "ref_letter", 
+                  "first_word", "oneway_osm", "lanes_osm", "speed", 
+                  "junction_osm", "lane_number",
                   "connectivity", "betweenness", "closeness", "pagerank",
                   "coreness", "dead_end_score", "edge_length_m")
 
-available_network_cols <- intersect(network_cols, names(network_clean))
-network_clean <- network_clean[, ..available_network_cols]
+# Define common columns
+available_network_cols <- intersect(x= network_cols, 
+                                    y=  names(network_processed))
+
+# Clean road network data
+network_clean <- network_processed[, available_network_cols]
+
+pipeline_message(text = sprintf("Network data cleaned: %s roads, %s attributes", 
+                 fmt(nrow(x = network_clean)), ncol(network_clean)), 
+                 process = "info")
+
+# Save processed network
+saveRDS(object = network_clean, 
+        file = CONFIG$AVATAR_CLEAN_NETWORK_RDS_DATA_FILEPATH)
+assign(x = "network_clean", 
+       value = network_clean, 
+       envir = .GlobalEnv)
 
 pipeline_message(
-  text = sprintf("Network filtered to Avatar roads: %s roads, %s attributes", 
-                 fmt(nrow(network_clean)), ncol(network_clean)), 
-  level = 1, progress = "end", process = "valid")
+  text = sprintf("Default road traffic rules assigned to the road network and 
+                  saved into file ", 
+                 rel_path(CONFIG$AVATAR_CLEAN_NETWORK_RDS_DATA_FILEPATH)), 
+  level = 2, progress = "end", process = "save")
+
+pipeline_message(text = "Rules assigned to the road network", 
+                 level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Avatar data processing
@@ -195,8 +247,7 @@ n_removed <- n_initial - nrow(x = avatar_clean)
 # Add period factor #
 # ***************** #
 
-period_levels <- c("D", "E", "N", paste0("h", 0:23),
-                   paste0("h", 0:23, "_wd"), paste0("h", 0:23, "_we"))
+period_levels <- c("D", "E", "N", paste0("h", 0:23))
 avatar_clean$period <- factor(x = avatar_clean$period, 
                               levels = period_levels)
 
@@ -217,7 +268,7 @@ avatar_cols <- c("count_point_id", "period",
                 "truck_pct", "ratio_truck_pct",
                 "perc_flow_predicted", "perc_flow_trucks_predicted", 
                 "perc_speed_predicted", "perc_occupancy_predicted",
-                "n_hours_with_data", 
+                "n_directions_measured", "n_hours_with_data", 
                 "n_total_observations")
 
 available_avatar_cols <- intersect(x = avatar_cols, 
@@ -239,7 +290,7 @@ assign(x = "avatar_clean",
 pipeline_message(text = describe_df(avatar_clean), process = "info")
 
 pipeline_message(
-  text = sprintf("Avatar data successfully cleaned up and saved into file %s", 
+  text = sprintf("Avatar data successfully cleaned up and saved into file ", 
                 rel_path(CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
@@ -255,12 +306,14 @@ pipeline_message(
   text = "Merging cleaned up Avatar data with cleaned up OSM road network", 
   level = 2, progress = "start", process = "join")
 
-# Merge avatar data with network attributes (inner join)
+# Merge avatar data with network attributes (keep only avatar observations that 
+# have matched network data)
 training_data <- merge(
   x = as.data.frame(avatar_clean), 
-  y = as.data.frame(network_clean),
-  by = "count_point_id",
-  all.x = FALSE,  # Inner join - keep only matched observations
+  y = network_clean,
+  by.x = "count_point_id", 
+  by.y = "id",
+  all.x = FALSE,                                                                # Inner join - keep only matched observations
   all.y = FALSE)
 
 # Ratio vitesse réelle / vitesse réglementaire OSM (quand disponible)
@@ -286,14 +339,14 @@ final_cols <- c("osm_id", "count_point_id", "period",
                "truck_pct", "ratio_truck_pct",
                # Network features
                "highway", "DEGRE", "ref_letter", "first_word", 
-               "oneway_osm", "lanes_osm", "lanes_directional",
-               "speed", "junction_osm", "lane_number",
+               "oneway_osm", "lanes_osm", "speed", 
+               "junction_osm", "lane_number",
                "connectivity", "betweenness", "closeness", "pagerank",
                "coreness", "dead_end_score", "edge_length_m",
                # Quality indicators
                "perc_flow_predicted", "perc_flow_trucks_predicted",
                "perc_speed_predicted", "perc_occupancy_predicted",
-               "n_hours_with_data", 
+               "n_directions_measured", "n_hours_with_data", 
                "n_total_observations")
 available_final_cols <- intersect(x = final_cols, 
                                   y = names(training_data))
@@ -310,32 +363,51 @@ saveRDS(object = training_data,
         file = CONFIG$TRAINING_RDS_DATA_FILEPATH)
 
 pipeline_message(
-  text = sprintf("Training dataset successfully created and saved to %s", 
-                 rel_path(CONFIG$TRAINING_RDS_DATA_FILEPATH)),
+  text = sprintf("Cleaned up Avatar data and OSM road network successfully 
+                 merged and saved into file ", 
+                 rel_path(CONFIG$AVATAR_RDS_DATA_FILEPATH)),
   level = 2, progress = "end", process = "valid")
 
-# Add geometry from France engineered network
-training_data_sf <- merge(
-  x = training_data, 
-  y = osm_france_engineered[, c("osm_id", "geom")],  
-  by = "osm_id")
+# Export merged data to GeoPackage files with periods as milliseconds (integers)
+# h0 = 0, h1 = 3600000, h2 = 7200000, ..., h23 = 82800000
+# D = 90000000, E = 93600000, N = 97200000
+training_data_export <- training_data
+training_data_export$period_ms <- sapply(X = training_data_export$period, 
+                                         FUN = function(p) {
+  if (grepl(pattern = "^h", x = p)) {
+    # Extract hour number: h0 -> 0, h1 -> 1, etc.
+    hour <- as.integer(x = sub(pattern = "^h", 
+                               replacement = "", 
+                               x = p))
+    return(as.integer(x = hour * 3600000))
+  } else if (p == "D") {
+    return(as.integer(x = 25 * 3600000))
+  } else if (p == "E") {
+    return(as.integer(x = 26 * 3600000))
+  } else if (p == "N") {
+    return(as.integer(x = 27 * 3600000))
+  } else {
+    return(NA_integer_)
+  }
+})
+
+# Add geometry from network data
+training_data_sf <- merge(x = training_data_export, 
+                          y = osm_full_network,  
+                          by = "osm_id")
 
 # Convert to sf object
 training_data_sf <- sf::st_as_sf(x = training_data_sf)
 
-# Add QGIS-friendly datetime fields when `period` exists
-training_data_sf <- add_period_datetime_columns(training_data_sf)
-
 # Export to GeoPackage file
-sf::st_write(
-  obj = training_data_sf, 
-  dsn = CONFIG$TRAINING_GPKG_DATA_FILEPATH, 
-  delete_dsn = TRUE)
+sf::st_write(obj = training_data_sf, 
+             dsn = CONFIG$TRAINING_GPKG_DATA_FILEPATH, 
+             delete_dsn = TRUE)
 
-pipeline_message(
-  text = sprintf("Training dataset saved to %s", 
-                 rel_path(CONFIG$TRAINING_GPKG_DATA_FILEPATH)), 
-  level = 1, progress = "end", process = "valid")
+pipeline_message(text = sprintf("Avatar data successfully merged with OSM road 
+                                network and saved into file %s", 
+                                CONFIG$TRAINING_GPKG_DATA_FILEPATH), 
+                 level = 1, progress = "end", process = "valid")
 
-pipeline_message(text = "Training dataset merge completed", 
+pipeline_message(text = "Road feature engineering successfully processed", 
                  level = 0, progress = "end", process = "valid")

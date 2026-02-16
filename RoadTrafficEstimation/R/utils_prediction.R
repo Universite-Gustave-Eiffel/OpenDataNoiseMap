@@ -168,12 +168,55 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
     operation_name = sprintf("XGBoost prediction (%s roads × %d periods, ~%d MB result)",
                              fmt(n_roads), n_periods, est_mb),
     min_gb = 1, warn_gb = 3)
+
+  # lane_number is an AVATAR-derived directional lane feature used in training.
+  # For region-wide prediction (no AVATAR), derive a proxy from OSM lanes.
+  if (!"lane_number" %in% names(network_data)) {
+    if ("lanes_directional" %in% names(network_data)) {
+      network_data$lane_number <- suppressWarnings(as.numeric(network_data$lanes_directional))
+    } else if ("lanes_osm" %in% names(network_data)) {
+      lanes_raw <- suppressWarnings(as.numeric(network_data$lanes_osm))
+      network_data$lane_number <- pmax(1, round(lanes_raw / 2))
+    } else {
+      network_data$lane_number <- 1
+    }
+    network_data$lane_number[is.na(network_data$lane_number) | !is.finite(network_data$lane_number)] <- 1
+    pipeline_message(
+      text = "lane_number missing in prediction input; derived proxy from OSM lane attributes",
+      process = "info")
+  }
+
+  safe_sparse_model_matrix <- function(formula_obj, data_df) {
+    vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
+    if (nrow(data_df) == 0L) {
+      return(Matrix::sparse.model.matrix(object = formula_obj, data = data_df))
+    }
+    mm_data <- data_df
+    for (v in vars_in_formula) {
+      if (is.factor(mm_data[[v]])) {
+        mm_data[[v]] <- as.character(mm_data[[v]])
+      }
+    }
+    mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+    cc_idx <- complete.cases(mm_subset)
+    cc_data <- mm_data[cc_idx, , drop = FALSE]
+    for (v in vars_in_formula) {
+      if (is.character(mm_data[[v]])) {
+        lv <- unique(cc_data[[v]])
+        lv <- lv[!is.na(lv) & nzchar(lv)]
+        if (length(lv) <= 1) {
+          mm_data[[v]] <- 0
+        }
+      }
+    }
+    Matrix::sparse.model.matrix(object = formula_obj, data = mm_data)
+  }
   
   # Prepare feature matrix (same encoding as training: sparse.model.matrix)
   rownames(network_data) <- seq_len(nrow(network_data))
-  feature_matrix_part <- Matrix::sparse.model.matrix(
-    object = feature_info$road_feature_formula,
-    data = network_data)
+  feature_matrix_part <- safe_sparse_model_matrix(
+    formula_obj = feature_info$road_feature_formula,
+    data_df = network_data)
   rows_used <- as.integer(rownames(feature_matrix_part))
   if (length(rows_used) == 0 || anyNA(rows_used)) {
     rows_used <- seq_len(nrow(feature_matrix_part))
@@ -573,4 +616,498 @@ add_period_datetime_columns <- function(predictions_long) {
   predictions_long$datetimestart <- datetimestart
   predictions_long$datetimeend <- datetimeend
   predictions_long
+}
+
+# ==============================================================================
+# GENERIC REGION PREDICTION
+# ==============================================================================
+
+#' Run traffic prediction for a geographic region
+#'
+#' Loads the France engineered network (cropped to bbox), applies XGBoost
+#' models, converts to long format, validates, and exports to GeoPackage.
+#'
+#' @param region_name Character. Human-readable region name for log messages.
+#' @param bbox Named numeric vector c(xmin, ymin, xmax, ymax) in EPSG:2154.
+#' @param output_filepath Character. Full path to the output .gpkg file.
+#' @param config CONFIG list with file paths and parameters.
+#' @return Invisible NULL. Side effect: writes GPKG to disk.
+predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) {
+
+  pipeline_message(text = sprintf("%s traffic prediction", region_name),
+                   level = 0, progress = "start", process = "calc")
+
+  # --- Load models ---
+  pipeline_message(text = "Loading trained XGBoost models",
+                   level = 1, progress = "start", process = "load")
+
+  if (!file.exists(config$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
+    pipeline_message(
+      text = sprintf("Models not found: %s",
+                     rel_path(config$XGB_MODELS_WITH_RATIOS_FILEPATH)),
+      process = "stop")
+  }
+
+  models_list <- readRDS(config$XGB_MODELS_WITH_RATIOS_FILEPATH)
+  feature_info <- readRDS(config$XGB_RATIO_FEATURE_INFO_FILEPATH)
+
+  pipeline_message(
+    text = sprintf("Models loaded: %s models for %s periods",
+                   length(models_list),
+                   length(feature_info$all_periods)),
+    level = 1, progress = "end", process = "valid")
+
+  # --- Bbox ---
+  pipeline_message(
+    text = sprintf("Bbox: [%s, %s, %s, %s]",
+                   bbox[1], bbox[2], bbox[3], bbox[4]),
+    process = "info")
+
+  # --- Load network ---
+  osm_region <- load_network_for_prediction(bbox = bbox, config = config)
+
+  pipeline_message(
+    text = sprintf("Network loaded: %s roads in %s",
+                   fmt(nrow(osm_region)), region_name),
+    process = "info")
+
+  # --- Apply predictions ---
+  pipeline_message(text = sprintf("Applying XGBoost models to %s network", region_name),
+                   level = 1, progress = "start", process = "calc")
+
+  osm_region_dt <- as.data.frame(sf::st_drop_geometry(osm_region))
+
+  predictions_wide <- apply_xgboost_predictions(
+    network_data = osm_region_dt,
+    models_list = models_list,
+    feature_info = feature_info)
+
+  pipeline_message(
+    text = sprintf("Predictions completed: %s roads x %s periods",
+                   fmt(nrow(predictions_wide)),
+                   length(feature_info$all_periods)),
+    level = 1, progress = "end", process = "valid")
+
+  all_periods <- feature_info$all_periods
+  rm(models_list, feature_info, osm_region_dt)
+  gc(verbose = FALSE)
+
+  # --- Long format ---
+  pipeline_message(text = "Converting to long format",
+                   level = 1, progress = "start", process = "calc")
+
+  check_memory_available(
+    operation_name = sprintf("Pivot to long format (%s roads)",
+                             fmt(nrow(predictions_wide))),
+    min_gb = 2, warn_gb = 4)
+
+  predictions_long <- predictions_wide %>%
+    tidyr::pivot_longer(
+      cols = matches("^(flow|truck_pct|speed)_"),
+      names_to = c(".value", "period"),
+      names_pattern = "^(flow|truck_pct|speed)_(.+)$"
+    ) %>%
+    mutate(
+      HGV = flow * (truck_pct / 100),
+      LV = flow - HGV,
+      TV = flow,
+      period = factor(period, levels = all_periods)
+    ) %>%
+    select(osm_id, highway, period, TV, HGV, LV, speed,
+           osm_speed, osm_speed_imputed, truck_pct)
+
+  predictions_long <- add_period_datetime_columns(predictions_long)
+
+  rm(predictions_wide)
+  gc(verbose = FALSE)
+
+  pipeline_message(
+    text = sprintf("Long format: %s rows (roads x periods)",
+                   fmt(nrow(predictions_long))),
+    level = 1, progress = "end", process = "valid")
+
+  # --- Validate ---
+  validation <- validate_predictions(predictions_long)
+  if (!validation$is_valid) {
+    pipeline_message(
+      text = sprintf("Validation warnings: %s issues detected",
+                     length(validation$issues)),
+      process = "warning")
+    for (issue_name in names(validation$issues)) {
+      pipeline_message(
+        text = sprintf("  - %s: %s cases",
+                       issue_name, validation$issues[[issue_name]]),
+        process = "warning")
+    }
+  }
+
+  # --- Export ---
+  pipeline_message(text = "Exporting predictions with geometry",
+                   level = 1, progress = "start", process = "save")
+
+  check_memory_available(
+    operation_name = sprintf("Geometry merge (%s rows)",
+                             fmt(nrow(predictions_long))),
+    min_gb = 2, warn_gb = 4)
+
+  predictions_sf <- merge(
+    predictions_long,
+    osm_region[, c("osm_id", "name", "geom")],
+    by = "osm_id", all.x = TRUE)
+
+  predictions_sf <- sf::st_as_sf(predictions_sf)
+
+  if (sf::st_crs(predictions_sf) != config$TARGET_CRS) {
+    predictions_sf <- sf::st_transform(predictions_sf, config$TARGET_CRS)
+  }
+
+  predictions_sf <- add_period_datetime_columns(predictions_sf)
+
+  sf::st_write(
+    obj = predictions_sf,
+    dsn = output_filepath,
+    delete_dsn = TRUE,
+    quiet = FALSE)
+
+  pipeline_message(
+    text = sprintf("Predictions exported to %s",
+                   rel_path(output_filepath)),
+    level = 1, progress = "end", process = "save")
+
+  # --- Summary ---
+  pipeline_message(
+    text = sprintf("Prediction summary for %s:", region_name),
+    level = 1, process = "info")
+  pipeline_message(
+    text = sprintf("  - Roads: %s", fmt(length(unique(predictions_long$osm_id)))),
+    level = 1, process = "info")
+  pipeline_message(
+    text = sprintf("  - Periods: %s", length(all_periods)),
+    level = 1, process = "info")
+  pipeline_message(
+    text = sprintf("  - Total predictions: %s", fmt(nrow(predictions_long))),
+    level = 1, process = "info")
+
+  period_stats <- predictions_long %>%
+    group_by(period) %>%
+    summarise(
+      avg_TV = round(mean(TV, na.rm = TRUE)),
+      avg_speed = round(mean(speed, na.rm = TRUE), 1),
+      avg_truck_pct = round(mean(truck_pct, na.rm = TRUE), 1),
+      .groups = "drop"
+    )
+
+  for (p in c("D", "E", "N", "h7", "h12", "h18")) {
+    if (p %in% period_stats$period) {
+      stats <- period_stats[period_stats$period == p, ]
+      pipeline_message(
+        text = sprintf("  - Period %s: %d veh/h avg, %.1f km/h, %.1f%% trucks",
+                       p, stats$avg_TV, stats$avg_speed, stats$avg_truck_pct),
+        level = 1, process = "info")
+    }
+  }
+
+  pipeline_message(text = sprintf("%s prediction completed", region_name),
+                   level = 0, progress = "end", process = "valid")
+
+  invisible(NULL)
+}
+
+# ==============================================================================
+# FRANCE-WIDE TILED PREDICTION (GEOMETRY-SEPARATED)
+# ==============================================================================
+#
+# Architecture:
+#   - Geometry layer:  07_france_network.gpkg  (osm_id + road attributes + geom)
+#   - Traffic data:    07_france_traffic_DEN.gpkg        (D, E, N — 3 periods)
+#                      07_france_traffic_hourly.gpkg     (h0..h23 — 24 periods)
+#                      07_france_traffic_hourly_wd.gpkg  (h0_wd..h23_wd — 24 periods)
+#                      07_france_traffic_hourly_we.gpkg  (h0_we..h23_we — 24 periods)
+#
+# Geometry is written ONCE; traffic data files are attribute-only tables keyed
+# by osm_id. Users join in QGIS / PostGIS / R as needed.
+#
+# Spatial tiling avoids loading all 4M+ roads into RAM at once.
+# ==============================================================================
+
+#' Define temporal chunk groups
+#' @return Named list of character vectors (period names per chunk)
+get_temporal_chunks <- function() {
+  list(
+    DEN        = c("D", "E", "N"),
+    hourly     = paste0("h", 0:23),
+    hourly_wd  = paste0("h", 0:23, "_wd"),
+    hourly_we  = paste0("h", 0:23, "_we")
+  )
+}
+
+#' Build spatial tile grid covering France extent
+#'
+#' @param tile_size_m Tile side length in meters (Lambert-93)
+#' @return data.frame with columns: tile_id, xmin, ymin, xmax, ymax
+build_france_tiles <- function(tile_size_m = 200000) {
+  # France extent in EPSG:2154 (Lambert-93) — rounded outward
+  france_xmin <- 100000
+  france_ymin <- 6050000
+  france_xmax <- 1250000
+  france_ymax <- 7150000
+
+  xs <- seq(france_xmin, france_xmax, by = tile_size_m)
+  ys <- seq(france_ymin, france_ymax, by = tile_size_m)
+
+  tiles <- expand.grid(x = xs, y = ys, stringsAsFactors = FALSE)
+  tiles$tile_id <- seq_len(nrow(tiles))
+  tiles$xmin <- tiles$x
+  tiles$ymin <- tiles$y
+  tiles$xmax <- tiles$x + tile_size_m
+  tiles$ymax <- tiles$y + tile_size_m
+  tiles[, c("tile_id", "xmin", "ymin", "xmax", "ymax")]
+}
+
+#' Pivot wide predictions to long for a subset of periods
+#'
+#' @param predictions_wide data.frame from apply_xgboost_predictions()
+#' @param periods character vector of period names to include
+#' @param all_periods full ordered period vector (for factor levels)
+#' @return data.frame in long format (no geometry)
+pivot_to_long_chunk <- function(predictions_wide, periods, all_periods) {
+  # Build regex to match only requested periods
+  period_pattern <- paste0("^(flow|truck_pct|speed)_(", paste(periods, collapse = "|"), ")$")
+  cols_to_pivot <- grep(period_pattern, names(predictions_wide), value = TRUE)
+
+  if (length(cols_to_pivot) == 0) return(data.frame())
+
+  predictions_wide %>%
+    dplyr::select(osm_id, dplyr::all_of(cols_to_pivot)) %>%
+    tidyr::pivot_longer(
+      cols = dplyr::all_of(cols_to_pivot),
+      names_to = c(".value", "period"),
+      names_pattern = "^(flow|truck_pct|speed)_(.+)$"
+    ) %>%
+    dplyr::mutate(
+      HGV = flow * (truck_pct / 100),
+      LV  = flow - HGV,
+      TV  = flow,
+      period = factor(period, levels = all_periods)
+    ) %>%
+    dplyr::select(osm_id, period, TV, HGV, LV, speed, truck_pct)
+}
+
+#' Run France-wide prediction with spatial tiling and temporal chunking
+#'
+#' Outputs:
+#'   1. Geometry layer (GPKG with spatial index)
+#'   2. One GPKG per temporal chunk (attribute-only, keyed by osm_id)
+#'
+#' @param config CONFIG list
+#' @param tile_size_m Tile side in meters (default 200 km)
+#' @param chunks Character vector of temporal chunks to export.
+#'   Valid values: "DEN", "hourly", "hourly_wd", "hourly_we".
+#'   Default: all chunks. Use c("DEN") for noise mapping (smallest output).
+#'   Disk estimate per chunk: DEN ~1 GB, hourly/wd/we ~8.5 GB each.
+#' @return Invisible NULL
+predict_france_tiled <- function(config = CONFIG, tile_size_m = 200000,
+                                 chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")) {
+
+  pipeline_message(text = "FRANCE-WIDE tiled prediction",
+                   level = 0, progress = "start", process = "calc")
+
+  # --- Load models (once for all tiles) ---
+  pipeline_message(text = "Loading trained XGBoost models",
+                   level = 1, progress = "start", process = "load")
+
+  if (!file.exists(config$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
+    stop("Models not found: ", config$XGB_MODELS_WITH_RATIOS_FILEPATH)
+  }
+  models_list  <- readRDS(config$XGB_MODELS_WITH_RATIOS_FILEPATH)
+  feature_info <- readRDS(config$XGB_RATIO_FEATURE_INFO_FILEPATH)
+  all_periods  <- feature_info$all_periods
+
+  pipeline_message(
+    text = sprintf("Models loaded: %d models for %d periods",
+                   length(models_list), length(all_periods)),
+    level = 1, progress = "end", process = "valid")
+
+  # --- Define temporal chunks ---
+  temporal_chunks <- get_temporal_chunks()
+  temporal_chunks <- temporal_chunks[intersect(chunks, names(temporal_chunks))]
+
+  if (length(temporal_chunks) == 0) {
+    stop("No valid temporal chunks requested. Valid: DEN, hourly, hourly_wd, hourly_we")
+  }
+
+  pipeline_message(
+    text = sprintf("Temporal chunks to export: %s",
+                   paste(names(temporal_chunks), collapse = ", ")),
+    process = "info")
+
+  # Verify all periods are covered
+  covered <- unlist(temporal_chunks, use.names = FALSE)
+  missing_periods <- setdiff(all_periods, covered)
+  if (length(missing_periods) > 0) {
+    pipeline_message(
+      text = sprintf("Warning: %d periods not in any temporal chunk: %s",
+                     length(missing_periods),
+                     paste(head(missing_periods, 10), collapse = ", ")),
+      process = "warning")
+  }
+
+  # --- Output paths ---
+  output_dir <- config$FRANCE_OUTPUT_DIR
+  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+  geom_path  <- config$FRANCE_GEOMETRY_FILEPATH
+  chunk_paths <- list(
+    DEN       = config$FRANCE_TRAFFIC_DEN_FILEPATH,
+    hourly    = config$FRANCE_TRAFFIC_HOURLY_FILEPATH,
+    hourly_wd = config$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH,
+    hourly_we = config$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
+  )
+  chunk_paths <- chunk_paths[names(temporal_chunks)]
+
+  # --- Build spatial tiles ---
+  tiles <- build_france_tiles(tile_size_m = tile_size_m)
+  pipeline_message(
+    text = sprintf("Tile grid: %d tiles of %d km each",
+                   nrow(tiles), tile_size_m / 1000),
+    process = "info")
+
+  # --- Clean output files (overwrite mode) ---
+  for (fp in c(geom_path, unlist(chunk_paths))) {
+    if (file.exists(fp)) file.remove(fp)
+  }
+
+  # --- Process tiles ---
+  total_roads <- 0L
+  total_tiles_with_data <- 0L
+  tile_times <- numeric(0)
+
+  for (i in seq_len(nrow(tiles))) {
+    tile <- tiles[i, ]
+    t0 <- proc.time()["elapsed"]
+
+    # Load tile from GPKG with spatial filter
+    wkt_bbox <- sprintf(
+      "POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
+      tile$xmin, tile$ymin,
+      tile$xmax, tile$ymin,
+      tile$xmax, tile$ymax,
+      tile$xmin, tile$ymax,
+      tile$xmin, tile$ymin)
+
+    tile_sf <- tryCatch(
+      sf::st_read(
+        dsn   = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+        wkt_filter = wkt_bbox,
+        quiet = TRUE),
+      error = function(e) NULL)
+
+    if (is.null(tile_sf) || nrow(tile_sf) == 0) next
+
+    n_tile <- nrow(tile_sf)
+    total_roads <- total_roads + n_tile
+    total_tiles_with_data <- total_tiles_with_data + 1L
+
+    # --- Write geometry (append mode) ---
+    geom_layer <- tile_sf[, c("osm_id", "name", "highway", "speed",
+                              "lanes_osm", "oneway_osm", "DEGRE")]
+    geom_layer <- add_period_datetime_columns(geom_layer)  # safe no-op if no period col
+    sf::st_write(
+      obj        = geom_layer,
+      dsn        = geom_path,
+      layer      = "france_network",
+      append     = TRUE,
+      quiet      = TRUE)
+
+    # --- Predict ---
+    tile_dt <- as.data.frame(sf::st_drop_geometry(tile_sf))
+    rm(tile_sf, geom_layer)
+
+    predictions_wide <- apply_xgboost_predictions(
+      network_data = tile_dt,
+      models_list  = models_list,
+      feature_info = feature_info)
+
+    rm(tile_dt)
+
+    # --- Write each temporal chunk (append mode, no geometry) ---
+    for (chunk_name in names(temporal_chunks)) {
+      chunk_periods <- temporal_chunks[[chunk_name]]
+      chunk_long <- pivot_to_long_chunk(predictions_wide, chunk_periods, all_periods)
+
+      if (nrow(chunk_long) > 0) {
+        # Convert factor columns to character for GPKG compatibility
+        chunk_long$period <- as.character(chunk_long$period)
+        chunk_long <- add_period_datetime_columns(chunk_long)
+        # Write as plain table (no geometry) in GPKG
+        sf::st_write(
+          obj    = chunk_long,
+          dsn    = chunk_paths[[chunk_name]],
+          layer  = paste0("traffic_", chunk_name),
+          append = TRUE,
+          quiet  = TRUE)
+      }
+      rm(chunk_long)
+    }
+
+    rm(predictions_wide)
+    gc(verbose = FALSE)
+
+    dt <- proc.time()["elapsed"] - t0
+    tile_times <- c(tile_times, dt)
+    avg_time <- mean(tile_times)
+    remaining <- (nrow(tiles) - i) * avg_time
+
+    pipeline_message(
+      text = sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s",
+                     i, nrow(tiles), fmt(n_tile), dt,
+                     fmt(total_roads),
+                     format_duration(remaining)),
+      level = 2, process = "calc")
+  }
+
+  rm(models_list, feature_info)
+  gc(verbose = FALSE)
+
+  # --- Summary ---
+  pipeline_message(text = "France-wide prediction summary:",
+                   level = 1, process = "info")
+  pipeline_message(
+    text = sprintf("  Roads predicted: %s across %d tiles",
+                   fmt(total_roads), total_tiles_with_data),
+    level = 1, process = "info")
+  pipeline_message(
+    text = sprintf("  Geometry layer: %s", rel_path(geom_path)),
+    level = 1, process = "info")
+  for (cn in names(chunk_paths)) {
+    if (file.exists(chunk_paths[[cn]])) {
+      sz <- round(file.info(chunk_paths[[cn]])$size / 1024^2, 1)
+      pipeline_message(
+        text = sprintf("  Traffic [%s]: %s (%.1f MB)",
+                       cn, rel_path(chunk_paths[[cn]]), sz),
+        level = 1, process = "info")
+    }
+  }
+
+  pipeline_message(text = "FRANCE-WIDE prediction completed",
+                   level = 0, progress = "end", process = "valid")
+
+  invisible(NULL)
+}
+
+#' Format seconds into human-readable duration
+#' @param seconds numeric
+#' @return character
+format_duration <- function(seconds) {
+  if (!is.finite(seconds) || seconds < 0) return("??")
+  h <- floor(seconds / 3600)
+  m <- floor((seconds %% 3600) / 60)
+  s <- round(seconds %% 60)
+  if (h > 0) {
+    sprintf("%dh%02dm%02ds", h, m, s)
+  } else if (m > 0) {
+    sprintf("%dm%02ds", m, s)
+  } else {
+    sprintf("%ds", s)
+  }
 }

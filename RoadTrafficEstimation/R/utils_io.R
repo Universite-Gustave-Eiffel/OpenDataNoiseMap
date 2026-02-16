@@ -361,28 +361,7 @@ get_available_memory_gb <- function() {
 check_memory_available <- function(operation_name = "Operation",
                                    min_gb = 1,
                                    warn_gb = 3) {
-  available_gb <- NA_real_
-
-  # Linux fast-path: /proc/meminfo
-  if (file.exists("/proc/meminfo")) {
-    meminfo <- readLines("/proc/meminfo", warn = FALSE)
-    mem_line <- meminfo[grepl("^MemAvailable:", meminfo)]
-    if (length(mem_line) == 1) {
-      mem_kb <- suppressWarnings(as.numeric(gsub("[^0-9]", "", mem_line)))
-      if (is.finite(mem_kb)) {
-        available_gb <- mem_kb / 1024 / 1024
-      }
-    }
-  }
-
-  # Fallback (best effort) when MemAvailable is unavailable
-  if (!is.finite(available_gb)) {
-    gc_info <- gc()
-    if (is.matrix(gc_info) && "Vcells" %in% rownames(gc_info)) {
-      used_mb <- gc_info["Vcells", "used"] * 8 / 1024 / 1024
-      available_gb <- max(0, (16 * 1024 - used_mb) / 1024) # coarse fallback
-    }
-  }
+  available_gb <- get_available_memory_gb()
 
   if (!is.finite(available_gb)) {
     pipeline_message(

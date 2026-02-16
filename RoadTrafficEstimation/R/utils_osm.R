@@ -418,10 +418,10 @@ process_network_features <- function(data, rules) {
   data[, highway := factor(x = highway,
                            levels = c(highway_levels, "missing"),
                            ordered = TRUE)]
-  # --------------------------- #
-  # Connectivity degree (DEGRE) #
-  # --------------------------- #
-  data[, DEGRE := as.numeric(x = DEGRE)]
+  # ----------------------------------------- #
+  # Commune density class (DEGRE — INSEE)     #
+  # ----------------------------------------- #
+  data[, DEGRE := as.integer(x = DEGRE)]
   n_missing_degre <- sum(is.na(data$DEGRE))
   if (n_missing_degre > 0) {
     pipeline_message(
@@ -431,6 +431,7 @@ process_network_features <- function(data, rules) {
     # Set default value when missing DEGRE
     data[is.na(DEGRE), DEGRE := CONFIG$DEFAULT_DEGRE]
   }
+  data[, DEGRE := factor(DEGRE)]
   # ------------------------------------- #
   # Road reference letter (A, D, N, etc.) #
   # ------------------------------------- #
@@ -555,5 +556,28 @@ process_network_features <- function(data, rules) {
                   yes = CONFIG$DEFAULT_VEHICLE_SPEED, 
                   no = speed_lookup[as.character(x = highway)])]
   }
+  # -------------------------------- #
+  # Junction type (roundabout, etc.) #
+  # -------------------------------- #
+  if ("junction_osm" %in% names(data)) {
+    data[, junction_osm := as.character(junction_osm)]
+    data[is.na(junction_osm) | junction_osm == "", junction_osm := "none"]
+    data[, junction_osm := factor(junction_osm)]
+    pipeline_message(
+      text = sprintf("Junction types: %s",
+                     paste(levels(data$junction_osm), collapse = ", ")),
+      process = "info")
+  }
+  # ------------------------------------------------- #
+  # Directional lane count (for flow-per-lane metric)  #
+  # ------------------------------------------------- #
+  # OSM lanes_osm = total lanes (both directions combined)
+  # Avatar measures traffic in ONE direction only
+  # → Derive lanes_directional: lanes serving one direction of traffic
+  data[, lanes_directional := ifelse(
+    as.character(oneway_osm) == "yes",
+    lanes_osm,                        # one-way: all lanes serve one direction
+    pmax(1, round(lanes_osm / 2))     # two-way: half the lanes per direction
+  )]
   return(as.data.frame(data))
 }

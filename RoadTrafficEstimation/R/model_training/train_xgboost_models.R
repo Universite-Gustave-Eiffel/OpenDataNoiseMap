@@ -84,8 +84,8 @@ pipeline_message(text = "Configuring training model",
 
 # Candidate OSM/network features (use those actually present in training data)
 candidate_road_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
-                             "oneway_osm", "lanes_osm",
-                             "speed",
+                             "oneway_osm", "lanes_osm", "lanes_directional",
+                             "speed", "junction_osm", "lane_number",
                              "connectivity", "betweenness", 
                              "closeness", "pagerank",
                              "coreness", "dead_end_score", "edge_length_m")
@@ -122,6 +122,9 @@ if (all(c("highway", "lanes_osm") %in% available_road_features)) {
 }
 if (all(c("DEGRE", "connectivity") %in% available_road_features)) {
   interaction_terms <- c(interaction_terms, "DEGRE:connectivity")
+}
+if (all(c("junction_osm", "highway") %in% available_road_features)) {
+  interaction_terms <- c(interaction_terms, "junction_osm:highway")
 }
 
 formula_parts <- c(available_road_features, interaction_terms)
@@ -248,6 +251,39 @@ get_quality_indicator_column <- function(target_name, available_cols) {
   if (!is.na(col) && col %in% available_cols) col else NA_character_
 }
 
+safe_sparse_model_matrix <- function(formula_obj, data_df) {
+  vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
+  if (nrow(data_df) == 0L) {
+    return(Matrix::sparse.model.matrix(object = formula_obj, data = data_df))
+  }
+
+  # Work on a copy and normalize categorical vars to character
+  mm_data <- data_df
+  for (v in vars_in_formula) {
+    if (is.factor(mm_data[[v]])) {
+      mm_data[[v]] <- as.character(mm_data[[v]])
+    }
+  }
+
+  # model.matrix drops rows with NA on variables used in formula; check levels
+  # on that effective subset and neutralize categorical variables with <=1 level
+  mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+  cc_idx <- complete.cases(mm_subset)
+  cc_data <- mm_data[cc_idx, , drop = FALSE]
+
+  for (v in vars_in_formula) {
+    if (is.character(mm_data[[v]])) {
+      lv <- unique(cc_data[[v]])
+      lv <- lv[!is.na(lv) & nzchar(lv)]
+      if (length(lv) <= 1) {
+        mm_data[[v]] <- 0
+      }
+    }
+  }
+
+  Matrix::sparse.model.matrix(object = formula_obj, data = mm_data)
+}
+
 # ----------------------------------------------------------------------------
 # CNOSSOS-EU emission via NoiseModelling Java bridge
 # ----------------------------------------------------------------------------
@@ -318,9 +354,9 @@ for (model_name in names(all_configs)) {
                    level = 2, progress = "start", process = "calc")
   
   # Create sparse feature matrix (may eliminate more rows due to NA in features)
-  sparse_data_matrix <- Matrix::sparse.model.matrix(
-    object = road_feature_formula, 
-    data = clean_training_data_over_period)
+  sparse_data_matrix <- safe_sparse_model_matrix(
+    formula_obj = road_feature_formula,
+    data_df = clean_training_data_over_period)
   
   pipeline_message(text = "Sparse feature matrix constructed successfully", 
                    level = 2, progress = "end", process = "valid")
@@ -878,8 +914,9 @@ for (model_name in names(models_list)) {
   data_clean <- test_data[valid_idx, ]
   y_clean <- y_all[valid_idx]
   
-  sparse_data_matrix <- Matrix::sparse.model.matrix(object = road_feature_formula, 
-                                       data = data_clean)
+  sparse_data_matrix <- safe_sparse_model_matrix(
+    formula_obj = road_feature_formula,
+    data_df = data_clean)
   
   if (nrow(x = sparse_data_matrix) != nrow(x = data_clean)) {
     kept_rows <- as.integer(rownames(sparse_data_matrix))
@@ -982,9 +1019,9 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(models_list)) &&
            !is.na(aggregate_flow), aggregate_flow >= 1)
 
   if (nrow(d_data) > 0) {
-    d_matrix <- Matrix::sparse.model.matrix(
-      object = road_feature_formula,
-      data = d_data)
+    d_matrix <- safe_sparse_model_matrix(
+      formula_obj = road_feature_formula,
+      data_df = d_data)
 
     if (nrow(d_matrix) != nrow(d_data)) {
       kept_rows <- as.integer(rownames(d_matrix))

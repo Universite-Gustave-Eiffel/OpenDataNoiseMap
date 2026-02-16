@@ -75,6 +75,7 @@ pipeline_message(text = "Configuring features and model configs",
 candidate_road_features <- c(
   "highway", "DEGRE", "ref_letter", "first_word",
   "oneway_osm", "lanes_osm", "speed",
+  "junction_osm", "lane_number",
   "connectivity", "betweenness", "closeness", "pagerank",
   "coreness", "dead_end_score", "edge_length_m")
 
@@ -95,6 +96,8 @@ if (all(c("highway", "lanes_osm") %in% available_road_features))
   interaction_terms <- c(interaction_terms, "highway:lanes_osm")
 if (all(c("DEGRE", "connectivity") %in% available_road_features))
   interaction_terms <- c(interaction_terms, "DEGRE:connectivity")
+if (all(c("junction_osm", "highway") %in% available_road_features))
+  interaction_terms <- c(interaction_terms, "junction_osm:highway")
 
 formula_parts <- c(available_road_features, interaction_terms)
 road_feature_formula <- as.formula(paste("~", paste(formula_parts, collapse = " + ")))
@@ -334,6 +337,36 @@ get_quality_indicator_column <- function(target_name, available_cols) {
   if (!is.na(col) && col %in% available_cols) col else NA_character_
 }
 
+safe_sparse_model_matrix <- function(formula_obj, data_df) {
+  vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
+  if (nrow(data_df) == 0L) {
+    return(Matrix::sparse.model.matrix(object = formula_obj, data = data_df))
+  }
+
+  mm_data <- data_df
+  for (v in vars_in_formula) {
+    if (is.factor(mm_data[[v]])) {
+      mm_data[[v]] <- as.character(mm_data[[v]])
+    }
+  }
+
+  mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+  cc_idx <- complete.cases(mm_subset)
+  cc_data <- mm_data[cc_idx, , drop = FALSE]
+
+  for (v in vars_in_formula) {
+    if (is.character(mm_data[[v]])) {
+      lv <- unique(cc_data[[v]])
+      lv <- lv[!is.na(lv) & nzchar(lv)]
+      if (length(lv) <= 1) {
+        mm_data[[v]] <- 0
+      }
+    }
+  }
+
+  Matrix::sparse.model.matrix(object = formula_obj, data = mm_data)
+}
+
 pipeline_message(text = "Sensor split ready",
                  level = 1, progress = "end", process = "valid")
 
@@ -392,8 +425,9 @@ for (model_name in names(all_configs)) {
   pipeline_message(text = "Building sparse feature matrix",
                    level = 2, progress = "start", process = "calc")
   
-  sparse_data_matrix <- Matrix::sparse.model.matrix(
-    object = road_feature_formula, data = clean_data)
+  sparse_data_matrix <- safe_sparse_model_matrix(
+    formula_obj = road_feature_formula,
+    data_df = clean_data)
   
   # Re-align if rows were dropped
   if (nrow(sparse_data_matrix) != nrow(clean_data)) {

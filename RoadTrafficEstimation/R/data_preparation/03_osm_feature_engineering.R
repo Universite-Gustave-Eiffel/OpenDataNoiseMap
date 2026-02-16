@@ -221,7 +221,8 @@ pipeline_message(
 
 # Feature completeness check
 required_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
-                      "oneway_osm", "lanes_osm", "speed", 
+                      "oneway_osm", "lanes_osm", "lanes_directional",
+                      "speed", "junction_osm",
                       "connectivity", "betweenness", "closeness", "pagerank",
                       "coreness", "dead_end_score", "edge_length_m")
 

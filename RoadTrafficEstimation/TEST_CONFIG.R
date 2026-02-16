@@ -108,6 +108,18 @@ CONFIG$SENSORS_ALL_PREDICTION_FILEPATH <-
 CONFIG$PEMB_PREDICTION_FILEPATH <- 
   file.path(TEST_OUTPUT_DIR, "07_predictions_pemb_TEST.gpkg")
 
+CONFIG$FRANCE_OUTPUT_DIR <- file.path(TEST_OUTPUT_DIR, "france_TEST")
+CONFIG$FRANCE_GEOMETRY_FILEPATH <-
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_network_TEST.gpkg")
+CONFIG$FRANCE_TRAFFIC_DEN_FILEPATH <-
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_DEN_TEST.gpkg")
+CONFIG$FRANCE_TRAFFIC_HOURLY_FILEPATH <-
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_TEST.gpkg")
+CONFIG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH <-
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_wd_TEST.gpkg")
+CONFIG$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH <-
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_we_TEST.gpkg")
+
 CONFIG$FORECAST_DATA_DIR <- TEST_OUTPUT_DIR
 
 # ==============================================================================

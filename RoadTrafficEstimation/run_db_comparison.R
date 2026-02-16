@@ -90,6 +90,32 @@ align_matrix_to_model <- function(mat, model) {
   mat[, expected, drop = FALSE]
 }
 
+safe_sparse_model_matrix <- function(formula_obj, data_df) {
+  vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
+  if (nrow(data_df) == 0L) {
+    return(Matrix::sparse.model.matrix(formula_obj, data_df))
+  }
+  mm_data <- data_df
+  for (v in vars_in_formula) {
+    if (is.factor(mm_data[[v]])) {
+      mm_data[[v]] <- as.character(mm_data[[v]])
+    }
+  }
+  mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+  cc_idx <- complete.cases(mm_subset)
+  cc_data <- mm_data[cc_idx, , drop = FALSE]
+  for (v in vars_in_formula) {
+    if (is.character(mm_data[[v]])) {
+      lv <- unique(cc_data[[v]])
+      lv <- lv[!is.na(lv) & nzchar(lv)]
+      if (length(lv) <= 1) {
+        mm_data[[v]] <- 0
+      }
+    }
+  }
+  Matrix::sparse.model.matrix(formula_obj, mm_data)
+}
+
 # Helper: run emission predictions for a model set
 run_emission_predictions <- function(models_list, label) {
   pipeline_message(text = sprintf("Running emission predictions [%s]", label),
@@ -101,7 +127,7 @@ run_emission_predictions <- function(models_list, label) {
            count_point_id %in% shared_test_sensors,
            !is.na(aggregate_flow), aggregate_flow >= 1)
   
-  d_matrix <- Matrix::sparse.model.matrix(road_feature_formula, d_data)
+  d_matrix <- safe_sparse_model_matrix(road_feature_formula, d_data)
   if (nrow(d_matrix) != nrow(d_data)) {
     kept <- as.integer(rownames(d_matrix))
     d_data <- d_data[kept, ]
@@ -110,8 +136,16 @@ run_emission_predictions <- function(models_list, label) {
   # Base predictions (D)
   pred_flow_D <- 10^predict(models_list[["flow_D"]]$model,
                              align_matrix_to_model(d_matrix, models_list[["flow_D"]]$model))
-  pred_truck_D <- predict(models_list[["truck_pct_D"]]$model,
-                           align_matrix_to_model(d_matrix, models_list[["truck_pct_D"]]$model))
+  if (!is.null(models_list[["truck_pct_D"]]$model)) {
+    pred_truck_D <- predict(models_list[["truck_pct_D"]]$model,
+                            align_matrix_to_model(d_matrix, models_list[["truck_pct_D"]]$model))
+  } else {
+    pred_truck_D <- ifelse(!is.na(d_data$truck_pct) & d_data$truck_pct >= 0,
+                           d_data$truck_pct, 0)
+    pipeline_message(
+      text = sprintf("[%s] Missing base model truck_pct_D: using observed truck_pct as fallback", label),
+      process = "warning")
+  }
   pred_speed_ratio <- predict(models_list[["speed_D"]]$model,
                                align_matrix_to_model(d_matrix, models_list[["speed_D"]]$model))
   

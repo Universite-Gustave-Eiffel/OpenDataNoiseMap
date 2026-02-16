@@ -51,7 +51,7 @@ while (i <= length(args)) {
 
 # Validate arguments
 valid_phases <- c("preparation", "training", "prediction", "all")
-valid_modes <- c("nantes", "paris", "pemb", "sensors", "all")
+valid_modes <- c("nantes", "paris", "pemb", "sensors", "france", "all")
 valid_regions <- c("full", "small", "test")
 
 if (!PHASE_ARG %in% valid_phases) {
@@ -96,7 +96,7 @@ pipeline_message(
 # Define modes to run
 modes_to_run <- if (MODE_ARG == "all") {
   c("preparation", "training", "nantes", "paris", "pemb", "sensors")
-} else if (MODE_ARG %in% c("nantes", "paris", "pemb", "sensors")) {
+} else if (MODE_ARG %in% c("nantes", "paris", "pemb", "sensors", "france")) {
   c("preparation", "training", MODE_ARG)
 } else {
   MODE_ARG
@@ -119,9 +119,6 @@ if (PHASE_ARG == "prediction" && MODE_ARG != "all") {
       process = "warning")
   }
 }
-
-# Helper pour %notin%
-`%notin%` <- Negate(`%in%`)
 
 # Filter modes and phases
 
@@ -197,6 +194,11 @@ if ("prediction" %in% phases_to_run) {
   # Prediction for sensors
   if ("sensors" %in% modes_to_run) {
     source("R/prediction/predict_sensors.R")
+  }
+  
+  # Prediction for France (tiled, geometry-separated)
+  if ("france" %in% modes_to_run) {
+    source("R/prediction/predict_france.R")
   }
   
   if (RUN_TESTS) {

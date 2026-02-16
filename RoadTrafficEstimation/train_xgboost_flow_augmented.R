@@ -63,6 +63,7 @@ pipeline_message(text = "Building feature formula",
 
 candidate_road_features <- c("highway", "DEGRE", "ref_letter", "first_word",
                               "oneway_osm", "lanes_osm", "speed",
+                              "junction_osm", "lane_number",
                               "connectivity", "betweenness", "closeness",
                               "pagerank", "coreness", "dead_end_score",
                               "edge_length_m")
@@ -81,6 +82,8 @@ if (all(c("highway", "lanes_osm") %in% available_road_features))
   interaction_terms <- c(interaction_terms, "highway:lanes_osm")
 if (all(c("DEGRE", "connectivity") %in% available_road_features))
   interaction_terms <- c(interaction_terms, "DEGRE:connectivity")
+if (all(c("junction_osm", "highway") %in% available_road_features))
+  interaction_terms <- c(interaction_terms, "junction_osm:highway")
 
 formula_parts <- c(available_road_features, interaction_terms)
 road_feature_formula <- as.formula(paste("~", paste(formula_parts, collapse = " + ")))
@@ -170,6 +173,36 @@ get_quality_indicator_column <- function(target_name, available_cols) {
   if (!is.na(col) && col %in% available_cols) col else NA_character_
 }
 
+safe_sparse_model_matrix <- function(formula_obj, data_df) {
+  vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
+  if (nrow(data_df) == 0L) {
+    return(Matrix::sparse.model.matrix(formula_obj, data_df))
+  }
+
+  mm_data <- data_df
+  for (v in vars_in_formula) {
+    if (is.factor(mm_data[[v]])) {
+      mm_data[[v]] <- as.character(mm_data[[v]])
+    }
+  }
+
+  mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+  cc_idx <- complete.cases(mm_subset)
+  cc_data <- mm_data[cc_idx, , drop = FALSE]
+
+  for (v in vars_in_formula) {
+    if (is.character(mm_data[[v]])) {
+      lv <- unique(cc_data[[v]])
+      lv <- lv[!is.na(lv) & nzchar(lv)]
+      if (length(lv) <= 1) {
+        mm_data[[v]] <- 0
+      }
+    }
+  }
+
+  Matrix::sparse.model.matrix(formula_obj, mm_data)
+}
+
 # Align sparse matrix columns to model's expected features
 align_matrix_to_model <- function(mat, model_obj) {
   expected <- model_obj$feature_names
@@ -227,7 +260,7 @@ pipeline_message(text = sprintf("Period D flow data: %d sensors", nrow(d_data)),
                  process = "info")
 
 # Sparse matrix for flow features
-d_matrix_full <- Matrix::sparse.model.matrix(road_feature_formula, d_data)
+d_matrix_full <- safe_sparse_model_matrix(road_feature_formula, d_data)
 if (nrow(d_matrix_full) != nrow(d_data)) {
   kept <- as.integer(rownames(d_matrix_full))
   d_data <- d_data[kept, ]
@@ -530,7 +563,7 @@ for (model_name in names(remaining_configs)) {
   }
   
   # --- Build sparse matrix (standard features) ---
-  sparse_mat <- Matrix::sparse.model.matrix(road_feature_formula, clean_data)
+  sparse_mat <- safe_sparse_model_matrix(road_feature_formula, clean_data)
   if (nrow(sparse_mat) != nrow(clean_data)) {
     kept <- as.integer(rownames(sparse_mat))
     clean_data <- clean_data[kept, ]
