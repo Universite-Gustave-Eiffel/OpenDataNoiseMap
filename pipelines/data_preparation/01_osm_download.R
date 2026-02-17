@@ -28,15 +28,15 @@ OVERWRITE <- FALSE
 pipeline_message(text = "Creating output directories", 
                  level = 1, progress = "start", process = "install")
 
-dir.create(CONFIG$OSM_PBF_DIR, recursive = TRUE, showWarnings = FALSE)
-dir.create(CONFIG$OSM_GPKG_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(cfg_data$OSM_PBF_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(cfg_data$OSM_GPKG_DIR, recursive = TRUE, showWarnings = FALSE)
 
-if (!dir.exists(CONFIG$OSM_PBF_DIR)) {
+if (!dir.exists(cfg_data$OSM_PBF_DIR)) {
   pipeline_message(
     text = "PBF output directory does not exist and could not be created.", 
     process = "stop")
 }
-if (!dir.exists(CONFIG$OSM_GPKG_DIR)) {
+if (!dir.exists(cfg_data$OSM_GPKG_DIR)) {
   pipeline_message(
     text = "GPKG output directory does not exist and could not be created.", 
     process = "stop")
@@ -54,7 +54,7 @@ pipeline_message(text = "Downloading OpenStreetMap data",
 
 pbf_file <- download_geofabrik_pbf(
   region    = OSM_REGION,
-  dest_dir = CONFIG$OSM_PBF_DIR,
+  dest_dir = cfg_data$OSM_PBF_DIR,
   overwrite = OVERWRITE
 )
 
@@ -69,7 +69,7 @@ pipeline_message(text = "Converting PBF to GeoPackage",
                  level = 1, progress = "start", process = "calc")
 
 gpkg_filename <- sub("\\.osm\\.pbf$", ".gpkg", basename(pbf_file))
-gpkg_file <- file.path(CONFIG$OSM_GPKG_DIR, gpkg_filename)
+gpkg_file <- file.path(cfg_data$OSM_GPKG_DIR, gpkg_filename)
 
 convert_pbf_to_gpkg(
   pbf_file  = pbf_file,
@@ -83,14 +83,12 @@ pipeline_message(text = "PBF successfully converted to GeoPackage",
 
 pipeline_message(text = sprintf("OpenStreetMap data successfully downloaded from 
                                 Geofabrik, converted into a GeoPackage, and 
-                                saved into file %s", rel_path()), 
-                 level = 0, progress = "start", process = "download")
+                                saved into file %s", rel_path(gpkg_file)), 
+                 level = 0, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Completion
 # ------------------------------------------------------------------------------
-
-message("✅ )
 message("   Region : ", OSM_REGION)
 message("   PBF    : ", pbf_file)
 message("   GPKG   : ", gpkg_file)

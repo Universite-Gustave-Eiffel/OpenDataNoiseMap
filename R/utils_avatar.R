@@ -62,55 +62,123 @@ download_file <- function(
   }
 }
 #' 
-#' @title Download a file with automatic retry logic
-#' @description Attempts to download a file multiple times before failing. This 
-#'              is particularly useful for unstable network connections or 
-#'              remote APIs with intermittent availability.
-#'              The function retries the download after a fixed delay if an 
-#'              error occurs or if the resulting file is empty.
+#' @title Download a file with automatic retry logic and API throttling
+#' @description Attempts to download a file multiple times before failing.
+#'              Adds a delay between requests to comply with API rate limits.
 #' @param url Character string. Remote URL of the file to download.
 #' @param target Character string. Local file path where the downloaded content 
 #'               will be written.
-#' @param max_retries Integer. Maximum number of download attempts before 
-#'                    stopping with an error. Default is `3`.
-#' @param use_auth Logical. If `TRUE`, authentication is enabled and passed to 
-#'                 `download_file()`.
-#' @return Logical. Returns `TRUE` if the file was successfully downloaded and 
-#'         written. An error is raised if all retry attempts fail.
-#' @details The function wraps `download_file()` in a retry loop using 
-#'          `tryCatch()`. Between retries, the process pauses for a short fixed 
-#'          delay to reduce the likelihood of repeated transient failures.
-#' @examples
-#' \dontrun{
-#' download_with_retry(
-#'   url = "https://example.com/large_file.gpkg",
-#'   target = "data/large_file.gpkg",
-#'   max_retries = 5)
-#' }
+#' @param max_retries Integer. Maximum number of download attempts.
+#' @param use_auth Logical. Whether to use authentication.
+#' @param throttle_delay Numeric. Delay (seconds) between requests. 
+#'                       Default = 15 sec (safe for AVATAR API).
+#' @return Logical. TRUE if download succeeds.
 #' @export
 download_with_retry <- function(
-    url, 
-    target, 
-    max_retries = 3, 
-    use_auth = FALSE) {
+    url,
+    target,
+    max_retries = 3,
+    use_auth = FALSE,
+    throttle_delay = 15
+) {
   for (i in 1:max_retries) {
     tryCatch({
-      download_file(url = url, 
-                    target = target, 
-                    use_auth = use_auth)
-      if (file.exists(target) && file.size(target) > 0) {
+      # ---------------------- #
+      # Download attempt       #
+      # ---------------------- #
+      download_file(
+        url = url,
+        target = target,
+        use_auth = use_auth
+      )
+      # ---------------------- #
+      # Success check          #
+      # ---------------------- #
+      if (file.exists(target) &&
+          file.size(target) > 0) {
+        # Throttle after success
+        Sys.sleep(time = throttle_delay)
         return(TRUE)
       }
     }, error = function(e) {
-      if (i == max_retries) {
-        stop("\t\t ⛔ Download failed after retries: ", e$message, 
-             "\n\t\t ⚠️ If necessary, make sure required token is set in 
-             ~/.Renviron or ~/.env \n")
+      msg <- e$message
+      # ---------------------- #
+      # HTTP 429 handling      #
+      # ---------------------- #
+      if (grepl(pattern = "429", x = msg) ||
+          grepl(pattern = "Too Many Requests", x = msg, ignore.case = TRUE)) {
+        wait_time <- 60
+        pipeline_message(
+          sprintf("Rate limit reached. Waiting %s sec", wait_time), 
+          process = "warning")
+        Sys.sleep(time = wait_time)
+      } else {
+        
+        # Standard retry wait
+        Sys.sleep(time = throttle_delay)
       }
-      Sys.sleep(5)
+      # ---------------------- #
+      # Stop if last retry     #
+      # ---------------------- #
+      if (i == max_retries) {
+        pipeline_message(
+          sprintf("Download failed after retries: ", msg,
+                  "\n\t\t ⚠️ If necessary, make sure required token is set in ",
+                  "~/.Renviron or ~/.env \n"), 
+          process = "stop")
+      }
     })
   }
 }
+#' #' @title Download a file with automatic retry logic
+#' #' @description Attempts to download a file multiple times before failing. This 
+#' #'              is particularly useful for unstable network connections or 
+#' #'              remote APIs with intermittent availability.
+#' #'              The function retries the download after a fixed delay if an 
+#' #'              error occurs or if the resulting file is empty.
+#' #' @param url Character string. Remote URL of the file to download.
+#' #' @param target Character string. Local file path where the downloaded content 
+#' #'               will be written.
+#' #' @param max_retries Integer. Maximum number of download attempts before 
+#' #'                    stopping with an error. Default is `3`.
+#' #' @param use_auth Logical. If `TRUE`, authentication is enabled and passed to 
+#' #'                 `download_file()`.
+#' #' @return Logical. Returns `TRUE` if the file was successfully downloaded and 
+#' #'         written. An error is raised if all retry attempts fail.
+#' #' @details The function wraps `download_file()` in a retry loop using 
+#' #'          `tryCatch()`. Between retries, the process pauses for a short fixed 
+#' #'          delay to reduce the likelihood of repeated transient failures.
+#' #' @examples
+#' #' \dontrun{
+#' #' download_with_retry(
+#' #'   url = "https://example.com/large_file.gpkg",
+#' #'   target = "data/large_file.gpkg",
+#' #'   max_retries = 5)
+#' #' }
+#' #' @export
+#' download_with_retry <- function(
+#'     url, 
+#'     target, 
+#'     max_retries = 3, 
+#'     use_auth = FALSE) {
+#'   for (i in 1:max_retries) {
+#'     tryCatch({
+#'       download_file(url = url, 
+#'                     target = target, 
+#'                     use_auth = use_auth)
+#'       if (file.exists(target) && file.size(target) > 0) {
+#'         return(TRUE)
+#'       }
+#'     }, error = function(e) {
+#'       if (i == max_retries) {
+#'         stop("\t\t ⛔ Download failed after retries: ", e$message, 
+#'              "\n\t\t ⚠️ If necessary, make sure required token is set in 
+#'              ~/.Renviron or ~/.env \n")
+#'       }
+#'       Sys.sleep(5)
+#'     })
+#'   }
+#' }
 #' 
 #' @title Validate a downloaded data chunk
 #' @description Checks whether an existing chunk file is valid, non-empty, 
@@ -239,15 +307,15 @@ build_avatar_aggregated_url <- function(
 #' @export
 download_avatar_count_points <- function(
     target,
-    api_token = "",
+    api_token = NULL,
     max_retries = 3, 
     limit = 10000) {
   # Avatar API URL
   url <- paste0("https://avatar.cerema.fr/api/countpoints/?limit=", limit)
-  # Temporarily expose token for download_file
-  old_token <- AVATAR_API_TOKEN
-  on.exit(expr = AVATAR_API_TOKEN <<- old_token, add = TRUE)
-  AVATAR_API_TOKEN <<- api_token
+  # # Temporarily expose token for download_file
+  # old_token <- AVATAR_API_TOKEN
+  # on.exit(expr = AVATAR_API_TOKEN <<- old_token, add = TRUE)
+  # AVATAR_API_TOKEN <<- api_token
   # Download Avatar data ain text format
   download_with_retry(
     url = url,

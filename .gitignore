@@ -12,6 +12,7 @@
 # =========================
 .Renviron
 .env
+.RDataTmp
 
 # =========================
 # renv
@@ -25,6 +26,7 @@ renv.lock
 data/
 !data/.gitkeep
 figures/
+logs/
 
 # =========================
 # Logs

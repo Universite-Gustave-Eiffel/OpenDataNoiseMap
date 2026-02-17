@@ -1,5 +1,5 @@
 # =============================================================================
-# STAGE 7E: PREDICTIONS FOR PARIS METROPOLITAN AREA (LONG FORMAT)
+# PREDICTIONS FOR PARIS METROPOLITAN AREA (LONG FORMAT)
 # =============================================================================
 # Predict hourly traffic flow, speed, and truck % for Greater Paris
 # Output: Long format with 'period' column (D, E, N, h0-h23)

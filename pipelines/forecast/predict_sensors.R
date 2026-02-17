@@ -1,7 +1,7 @@
 # =============================================================================
-# STAGE 7D: PREDICTIONS FOR NANTES SOUTHEAST QUARTER (LONG FORMAT)
+# PREDICTIONS AROUND NOISE SENSORS (800M RADIUS)
 # =============================================================================
-# Predict hourly traffic flow, speed, and truck % for southeast Nantes
+# Predict hourly traffic flow, speed, and truck % for roads within 800m of sensors
 # Output: Long format with 'period' column (D, E, N, h0-h23)
 # =============================================================================
 
@@ -19,65 +19,103 @@ feature_info <- readRDS(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 feature_formula <- feature_info$feature_formula
 all_periods <- feature_info$all_periods
 
-cat(sprintf("  ✓ Loaded %d trained models\n", length(models_list)))
-cat(sprintf("  ✓ Feature formula: %s\n", deparse(feature_formula)))
-cat(sprintf("  ✓ Periods: %s\n\n", paste(all_periods, collapse=", ")))
+# Models loaded successfully (81 total: 3 base + 78 ratios)
+# Feature formula and periods extracted from training
 
 # =============================================================================
-# LOAD AND FILTER NANTES SOUTHEAST DATA
+# LOAD NOISE SENSORS AND FILTER ROADS WITHIN 800M RADIUS
 # =============================================================================
 
-full_network <- st_read(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)
+
+# Load BRUITPARIF and ACOUCITE sensors
+sensors_bruitparif <- st_read("data/POINT_NOISE_BRUITPARIF_COMPARE.shp", quiet = TRUE)
+sensors_acoucite <- st_read("data/POINT_NOISE_ACOUCITE_COMPARE.shp", quiet = TRUE)
+
+# Transform to Lambert93
+sensors_bruitparif <- st_transform(sensors_bruitparif, 2154)
+sensors_acoucite <- st_transform(sensors_acoucite, 2154)
+
+# ===== TEST MODE: ONLY ACOUCITE =====
+cat("⚠️  TEST MODE: Using ONLY ACOUCITE sensors\n")
+sensors_bruitparif <- sensors_bruitparif[0, ]  # Empty dataframe (skip BRUITPARIF)
+
+# Keep only geometry and source column (simplified structure for all sensors)
+sensors_bruitparif_simple <- st_geometry(sensors_bruitparif) %>% st_sf() %>% mutate(source = "BRUITPARIF")
+sensors_acoucite_simple <- st_geometry(sensors_acoucite) %>% st_sf() %>% mutate(source = "ACOUCITE")
+
+# Store original sensors for individual exports
+sensors_bruitparif_full <- sensors_bruitparif
+sensors_acoucite_full <- sensors_acoucite
+
+# Load CHILD sensors from 11 locations
+child_sensor_files <- list(
+  CHILD_HOME_BORDEAUX = "data/CHILD_HOME_BORDEAUXrfhome/CHILD_HOME_BORDEAUX_CBS.shp",
+  CHILD_HOME_BREST = "data/CHILD_HOME_BRESTrfhome/CHILD_HOME_BREST_CBS.shp",
+  CHILD_HOME_LYON = "data/CHILD_HOME_LYONrfhome/CHILD_HOME_LYON_CBS.shp",
+  CHILD_HOME_STRASBOURG_GEO = "data/CHILD_HOME_STRASBOURGgeoclimateHome/CHILD_HOME_STRASBOURG_CBS.shp",
+  CHILD_HOME_STRASBOURG_RF = "data/CHILD_HOME_STRASBOURGrfhome/CHILD_HOME_STRASBOURG_CBS.shp",
+  CHILD_RANDOM_BORDEAUX_GEO = "data/CHILD_RANDOM_BORDEAUXgeoclimate/CHILD_RANDOM_BORDEAUX_CBS.shp",
+  CHILD_RANDOM_BORDEAUX_RF = "data/CHILD_RANDOM_BORDEAUXrf/CHILD_RANDOM_BORDEAUX_CBS.shp",
+  CHILD_RANDOM_BREST = "data/CHILD_RANDOM_BRESTrf/CHILD_RANDOM_BREST_CBS.shp",
+  CHILD_RANDOM_LYON = "data/CHILD_RANDOM_LYONrf/CHILD_RANDOM_LYON_CBS.shp",
+  CHILD_RANDOM_STRASBOURG_RF = "data/CHILD_RANDOM_STRASBOURGrf/CHILD_RANDOM_STRASBOURG_CBS.shp",
+  CHILD_STRASBOURG_GEO = "data/CHILD_STRASBOURGgeoclimate/CHILD_RANDOM_STRASBOURG_CBS.shp"
+)
+
+# Load and store all CHILD sensors (full versions for individual exports)
+# ===== TEST MODE: SKIP CHILD SENSORS =====
+child_sensors_list <- list()
+# for (source_name in names(child_sensor_files)) {
+#   file_path <- child_sensor_files[[source_name]]
+#   if (file.exists(file_path)) {
+#     sensor_data <- st_read(file_path, quiet = TRUE)
+#     sensor_data <- st_transform(sensor_data, 2154)
+#     # Store full version
+#     child_sensors_list[[source_name]] <- sensor_data
+#   } else {
+#     warning(sprintf("%s: file not found", source_name))
+#   }
+# }
+
+# Create simplified versions for combining (only geometry + source)
+child_sensors_simple <- list()  # Empty list in test mode
+# child_sensors_simple <- lapply(names(child_sensors_list), function(source_name) {
+#   st_geometry(child_sensors_list[[source_name]]) %>% st_sf() %>% mutate(source = source_name)
+# })
+
+# Combine all sensors (simplified structure: geometry + source only)
+# ===== TEST MODE: ONLY ACOUCITE =====
+all_sensors <- sensors_acoucite_simple  # Skip BRUITPARIF and CHILD
+
+# Total sensors loaded: BRUITPARIF (31) + ACOUCITE (17) + CHILD (11 sources)
+
+# Create 800m buffer around each sensor
+buffer_radius <- 800  # meters
+sensors_buffer <- st_buffer(all_sensors, dist = buffer_radius)
+
+# Create union of all buffers (to avoid duplicates)
+sensors_union <- st_union(sensors_buffer)
+
+# 1300m buffers created around all sensors
+
+# Load road network
+full_network <- st_read("data/routes_france_osm_complete_including_connectivity_and_communes_for_R.gpkg")
 full_network_2154 <- st_transform(full_network, 2154)
-full_network <- full_network_2154
 
-# Define Nantes Métropole bounds (entire metropolitan area)
-# Nantes center approximately: lon=-1.553, lat=47.218
-# Métropole extends ~15km in each direction
-nantes_center <- list(lon = -1.553, lat = 47.218)
-metropole_bounds <- list(
-  lon_min = nantes_center$lon - 0.15,  # ~15km west
-  lon_max = nantes_center$lon + 0.15,  # ~15km east
-  lat_min = nantes_center$lat - 0.10,  # ~10km south  
-  lat_max = nantes_center$lat + 0.10   # ~10km north
-)
+# Filter roads within sensor buffers
+roads_near_sensors <- st_intersection(full_network_2154, sensors_union)
 
-# Convert corner points to Lambert93 
-corners_wgs84 <- data.frame(
-  lon = c(metropole_bounds$lon_min, metropole_bounds$lon_max),
-  lat = c(metropole_bounds$lat_min, metropole_bounds$lat_max)
-)
-
-corners_sf <- st_as_sf(corners_wgs84, coords = c("lon", "lat"), crs = 4326)
-corners_sf <- st_transform(corners_sf,2154)
-corners_coords <- st_coordinates(corners_sf)
-
-# Create bounding box in Lambert93 (same CRS as full_network)
-bbox_lambert <- st_bbox(c(
-  xmin = min(corners_coords[, "X"]), 
-  xmax = max(corners_coords[, "X"]),
-  ymin = min(corners_coords[, "Y"]), 
-  ymax = max(corners_coords[, "Y"])
-), crs = st_crs(2154))
-
-cat(sprintf("  📍 Bounding box: [%.0f, %.0f] x [%.0f, %.0f] (Lambert93)\n",
-           bbox_lambert["xmin"], bbox_lambert["xmax"],
-           bbox_lambert["ymin"], bbox_lambert["ymax"]))
-
-# Try spatial crop
-nantes_metropole <- st_crop(full_network, bbox_lambert)
-
-cat(sprintf("  ✓ Extracted %s roads from Nantes Métropole\n", format(nrow(nantes_metropole), big.mark=",")))
+# Roads extracted within 1300m radius of all sensors
 
 # Convert to data.table for processing (similar to step 5)
-nantes_dt <- data.table(st_drop_geometry(nantes_metropole))
+sensor_roads_dt <- data.table(st_drop_geometry(roads_near_sensors))
 
 # Load imputation rules from training
-if (file.exists(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)) {
-  imputation_rules <- readRDS(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)
+if (file.exists("rdsFiles/imputation_rules.rds")) {
+  imputation_rules <- readRDS("rdsFiles/imputation_rules.rds")
 } else {
   # Basic imputation rules
-  imputation_rules <- nantes_dt[!is.na(highway), .(
+  imputation_rules <- sensor_roads_dt[!is.na(highway), .(
     median_lanes = median(as.numeric(lanes), na.rm = TRUE),
     median_speed = median(as.numeric(maxspeed), na.rm = TRUE),
     n_roads = .N
@@ -91,24 +129,20 @@ if (file.exists(CONFIG$AVATAR_IMPUTATION_RULES_FILEPATH)) {
 highway_levels <- c("residential", "tertiary", "secondary", "primary", "trunk", "motorway",
                    "tertiary_link", "secondary_link", "primary_link", "trunk_link", 
                    "motorway_link", "unclassified")
-nantes_dt[, highway := as.character(highway)]
-nantes_dt[is.na(highway) | highway == "", highway := "unclassified"]
-nantes_dt[, highway := factor(highway, levels = c(highway_levels, "missing"), ordered = TRUE)]
+sensor_roads_dt[, highway := as.character(highway)]
+sensor_roads_dt[is.na(highway) | highway == "", highway := "unclassified"]
+sensor_roads_dt[, highway := factor(highway, levels = c(highway_levels, "missing"), ordered = TRUE)]
 
-cat(sprintf("  ✅ Highway: ordered=%s, levels=%d, sample=%s\n", 
-           is.ordered(nantes_dt$highway), 
-           length(levels(nantes_dt$highway)),
-           paste(head(as.character(nantes_dt$highway), 3), collapse=", ")))
+# Highway factor created with ordered levels (residential → motorway)
 
-
-nantes_dt[, DEGRE := as.numeric(as.character(DEGRE))]
-nantes_dt[is.na(DEGRE), DEGRE := 1]  # Urban default
+sensor_roads_dt[, DEGRE := as.numeric(as.character(DEGRE))]
+sensor_roads_dt[is.na(DEGRE), DEGRE := 1]  # Urban default
 
 # STEP 3: ref_letter (first letter of route reference)
 # Auto-detect column name (ref, ref_osm, or create missing)
 ref_col <- NA
 for (col in c("ref", "ref_osm")) {
-  if (col %in% names(nantes_dt)) {
+  if (col %in% names(sensor_roads_dt)) {
     ref_col <- col
     break
   }
@@ -117,38 +151,38 @@ for (col in c("ref", "ref_osm")) {
 if (!is.na(ref_col)) {
   # Use regex to extract letter only (match training logic)
   # Training: substr(gsub("^([A-Za-z]).*", "\\1", data[[ref_col]]), 1, 1)
-  nantes_dt[, ref_letter := ifelse(
+  sensor_roads_dt[, ref_letter := ifelse(
     !is.na(get(ref_col)) & get(ref_col) != "",
     substr(gsub("^([A-Za-z]).*", "\\1", get(ref_col)), 1, 1),
     "missing"
   )]
   # If result is not a letter (e.g. was a number), set to missing
-  nantes_dt[!grepl("^[A-Za-z]$", ref_letter), ref_letter := "missing"]
+  sensor_roads_dt[!grepl("^[A-Za-z]$", ref_letter), ref_letter := "missing"]
 } else {
-  nantes_dt[, ref_letter := "missing"]
+  sensor_roads_dt[, ref_letter := "missing"]
 }
-nantes_dt[, ref_letter := factor(ref_letter)]
+sensor_roads_dt[, ref_letter := factor(ref_letter)]
 
 # STEP 4: first_word (first word of road name)
-if ("name" %in% names(nantes_dt)) {
-  nantes_dt[, first_word := ifelse(
+if ("name" %in% names(sensor_roads_dt)) {
+  sensor_roads_dt[, first_word := ifelse(
     !is.na(name) & name != "",
     tolower(trimws(gsub("\\s+.*", "", name))),
     "missing"
   )]
   # Keep only common words, others → "missing" (same logic as training)
-  word_counts <- table(nantes_dt$first_word)
+  word_counts <- table(sensor_roads_dt$first_word)
   rare_words <- names(word_counts[word_counts < 5])  # Conservative threshold
-  nantes_dt[first_word %in% rare_words, first_word := "missing"]
+  sensor_roads_dt[first_word %in% rare_words, first_word := "missing"]
 } else {
-  nantes_dt[, first_word := "missing"]
+  sensor_roads_dt[, first_word := "missing"]
 }
-nantes_dt[, first_word := factor(first_word)]
+sensor_roads_dt[, first_word := factor(first_word)]
 
 # STEP 5: oneway_osm (standardized)
 oneway_col <- NA
 for (col in c("oneway", "oneway_osm")) {
-  if (col %in% names(nantes_dt)) {
+  if (col %in% names(sensor_roads_dt)) {
     oneway_col <- col
     break
   }
@@ -159,7 +193,7 @@ if (!is.na(oneway_col)) {
   # Training: data$oneway_osm[data$oneway_osm == "-1"] <- "yes"
   # Training: data$oneway_osm[!data$oneway_osm %in% allowed_oneway_values] <- "yes"
   
-  val <- as.character(nantes_dt[[oneway_col]])
+  val <- as.character(sensor_roads_dt[[oneway_col]])
   val[is.na(val) | val == ""] <- "missing"
   val[val == "-1"] <- "yes"
   
@@ -170,83 +204,75 @@ if (!is.na(oneway_col)) {
   # Default unknown to "yes" (as in training)
   val[!val %in% c("yes", "no", "missing")] <- "yes"
   
-  nantes_dt[, oneway_osm := val]
+  sensor_roads_dt[, oneway_osm := val]
 } else {
-  nantes_dt[, oneway_osm := "missing"]
+  sensor_roads_dt[, oneway_osm := "missing"]
 }
-nantes_dt[, oneway_osm := factor(oneway_osm, levels = c("yes", "no", "missing"))]
+sensor_roads_dt[, oneway_osm := factor(oneway_osm, levels = c("yes", "no", "missing"))]
 
-# # STEP 6: lanes_osm (imputed by highway type)
-# lanes_col <- NA
-# for (col in c("lanes", "lanes_osm")) {
-#   if (col %in% names(nantes_dt)) {
-#     lanes_col <- col
-#     break
-#   }
-# }
-# 
-# if (!is.na(lanes_col)) {
-#   nantes_dt[, lanes_osm := as.numeric(get(lanes_col))]
-# } else {
-#   nantes_dt[, lanes_osm := NA_real_]
-# }
+# STEP 6: lanes_osm (imputed by highway type)
+lanes_col <- NA
+for (col in c("lanes", "lanes_osm")) {
+  if (col %in% names(sensor_roads_dt)) {
+    lanes_col <- col
+    break
+  }
+}
+
+if (!is.na(lanes_col)) {
+  sensor_roads_dt[, lanes_osm := as.numeric(get(lanes_col))]
+} else {
+  sensor_roads_dt[, lanes_osm := NA_real_]
+}
 
 # Impute missing lanes by highway type
-nantes_dt <- merge(nantes_dt, imputation_rules[, .(highway, median_lanes)], 
+sensor_roads_dt <- merge(sensor_roads_dt, imputation_rules[, .(highway, median_lanes)], 
                   by = "highway", all.x = TRUE)
-nantes_dt[is.na(lanes_osm), lanes_osm := median_lanes]
-nantes_dt[is.na(lanes_osm), lanes_osm := 2]  # Final fallback
-nantes_dt[, median_lanes := NULL]
+sensor_roads_dt[is.na(lanes_osm), lanes_osm := median_lanes]
+sensor_roads_dt[is.na(lanes_osm), lanes_osm := 2]  # Final fallback
+sensor_roads_dt[, median_lanes := NULL]
 
 # STEP 7: speed (maxspeed, imputed by highway type)  
 speed_col <- NA
 for (col in c("maxspeed", "maxspeed_osm", "speed")) {
-  if (col %in% names(nantes_dt)) {
+  if (col %in% names(sensor_roads_dt)) {
     speed_col <- col
     break
   }
 }
 
 if (!is.na(speed_col)) {
-  nantes_dt[, speed := as.numeric(get(speed_col))]
+  sensor_roads_dt[, speed := as.numeric(get(speed_col))]
 } else {
-  nantes_dt[, speed := NA_real_]
+  sensor_roads_dt[, speed := NA_real_]
 }
 
 # Impute missing speed by highway type
-nantes_dt <- merge(nantes_dt, imputation_rules[, .(highway, median_speed)], 
+sensor_roads_dt <- merge(sensor_roads_dt, imputation_rules[, .(highway, median_speed)], 
                   by = "highway", all.x = TRUE)
-nantes_dt[is.na(speed), speed := median_speed]
-nantes_dt[is.na(speed), speed := 50]  # Final fallback
-nantes_dt[, median_speed := NULL]
+sensor_roads_dt[is.na(speed), speed := median_speed]
+sensor_roads_dt[is.na(speed), speed := 50]  # Final fallback
+sensor_roads_dt[, median_speed := NULL]
 
 
 # Verify we have the main columns (without suffixes)
 for (col in c("connectivity", "betweenness", "closeness", "pagerank")) {
-  if (!col %in% names(nantes_dt)) {
-    cat(sprintf("     ⚠️  ERROR: %s still missing!\n", col))
-  } else {
-    cat(sprintf("     ✅ %s: [%.2f, %.2f] mean=%.2f\n", 
-               col, 
-               min(nantes_dt[[col]], na.rm=TRUE),
-               max(nantes_dt[[col]], na.rm=TRUE),
-               mean(nantes_dt[[col]], na.rm=TRUE)))
+  if (!col %in% names(sensor_roads_dt)) {
+    stop(sprintf("ERROR: %s missing from network features", col))
   }
 }
 
 # STEP 9: Impute remaining NAs in network features (isolated road segments)
 network_features <- c("connectivity", "betweenness", "closeness", "pagerank")
 for (feat in network_features) {
-  na_count <- sum(is.na(nantes_dt[[feat]]))
+  na_count <- sum(is.na(sensor_roads_dt[[feat]]))
   if (na_count > 0) {
     # Use 0 for isolated segments (they have no network connectivity)
-    nantes_dt[is.na(get(feat)), (feat) := 0]
-    cat(sprintf("     🔧 Imputed %d NA values in %s with 0 (isolated segments)\n", na_count, feat))
+    sensor_roads_dt[is.na(get(feat)), (feat) := 0]
   }
 }
 
-cat(sprintf("  ✓ Feature engineering complete: %d roads with %d features\n", 
-           nrow(nantes_dt), ncol(nantes_dt)))
+# Feature engineering complete
 
 
 
@@ -256,7 +282,7 @@ cat(sprintf("  ✓ Feature engineering complete: %d roads with %d features\n",
 
 
 # Identify actual feature columns (handle .x/.y suffixes from joins)
-available_cols <- names(nantes_dt)
+available_cols <- names(sensor_roads_dt)
 
 # Complete feature list with actual column names
 feature_vars <- c("highway", "DEGRE", "ref_letter", "first_word", "oneway_osm", 
@@ -266,44 +292,30 @@ all_features <- feature_vars
 feature_formula <- as.formula(paste("~", paste(all_features, collapse = " + ")))
 
 # Highway: Ordered factor (matches training)
-nantes_dt[, highway := factor(highway, levels = c(highway_levels, "missing"), ordered = TRUE)]
-contrasts(nantes_dt$highway) <- contr.poly(length(levels(nantes_dt$highway)))
+sensor_roads_dt[, highway := factor(highway, levels = c(highway_levels, "missing"), ordered = TRUE)]
+contrasts(sensor_roads_dt$highway) <- contr.poly(length(levels(sensor_roads_dt$highway)))
 
 # DEGRE: Numeric (matches training)
-nantes_dt[, DEGRE := as.numeric(as.character(DEGRE))]
+sensor_roads_dt[, DEGRE := as.numeric(as.character(DEGRE))]
 
 # Other factors: Unordered
-nantes_dt[, ref_letter := factor(ref_letter)]
-nantes_dt[, first_word := factor(first_word)]
-nantes_dt[, oneway_osm := factor(oneway_osm, levels = c("yes", "no", "missing"))]
+sensor_roads_dt[, ref_letter := factor(ref_letter)]
+sensor_roads_dt[, first_word := factor(first_word)]
+sensor_roads_dt[, oneway_osm := factor(oneway_osm, levels = c("yes", "no", "missing"))]
 
 # 5. Generate matrix on combined data
-pred_matrix <- sparse.model.matrix(feature_formula, data = nantes_dt)
+pred_matrix <- sparse.model.matrix(feature_formula, data = sensor_roads_dt)
 
-# DEBUG: Check generated columns
-cat(sprintf("  🔍 Generated %d columns. Examples: %s\n", 
-           ncol(pred_matrix), 
-           paste(head(colnames(pred_matrix), 5), collapse=", ")))
-
-# Check if highway.L exists
-if (!any(grepl("highway\\.L", colnames(pred_matrix)))) {
-  cat("     Highway columns found: ", 
-      paste(grep("highway", colnames(pred_matrix), value=TRUE), collapse=", "), "\n")
-} else {
-}
-
-cat(sprintf("  📏 Final prediction matrix: %d roads × %d features\n", 
-           nrow(pred_matrix), ncol(pred_matrix)))
+# Prediction matrix generated with polynomial contrasts for ordered factors
 
 # Verify dimensions match (should be equal after NA imputation)
-if (nrow(pred_matrix) != nrow(nantes_dt)) {
-  stop(sprintf("❌ Dimension mismatch: matrix has %d rows but data has %d rows!\n   Check for remaining NAs in features.", 
-              nrow(pred_matrix), nrow(nantes_dt)))
+if (nrow(pred_matrix) != nrow(sensor_roads_dt)) {
+  stop(sprintf("Dimension mismatch: matrix has %d rows but data has %d rows - check for remaining NAs", 
+              nrow(pred_matrix), nrow(sensor_roads_dt)))
 }
 
-cat(sprintf("  ✅ Data aligned: %d roads\n", nrow(nantes_dt)))
-
-saveRDS(nantes_dt, CONFIG$NANTES_FORECAST_FILEPATH)
+# Data and matrix aligned
+saveRDS(sensor_roads_dt, CONFIG$SENSOR_FORECAST_FILEPATH)
 
 # Initialize results list for long format
 all_results <- list()
@@ -316,9 +328,9 @@ all_results <- list()
 osm_id_col <- "osm_id"
 
 base_predictions <- data.frame(
-  osm_id = nantes_dt[[osm_id_col]],
-  highway = as.character(nantes_dt$highway),
-  name = ifelse("name" %in% names(nantes_dt), as.character(nantes_dt$name), "")
+  osm_id = sensor_roads_dt[[osm_id_col]],
+  highway = as.character(sensor_roads_dt$highway),
+  name = ifelse("name" %in% names(sensor_roads_dt), as.character(sensor_roads_dt$name), "")
 )
 
 base_targets <- c("flow_D", "truck_pct_D", "speed_D")
@@ -329,14 +341,6 @@ for (target in base_targets) {
     config <- models_list[[target]]$config
     training_features <- models_list[[target]]$feature_names
     
-    
-    # DEBUG: Check feature encoding expected by model
-    highway_features <- grep("highway", training_features, value = TRUE)
-    if (length(highway_features) > 0) {
-      cat(sprintf("\n      [DEBUG] Model expects highway features: %s ...\n", 
-                 paste(head(highway_features, 3), collapse=", ")))
-    }
-    
     # ROBUST FEATURE ALIGNMENT
     # Check which features are available
     available_features <- colnames(pred_matrix)
@@ -344,15 +348,6 @@ for (target in base_targets) {
     extra_features <- setdiff(available_features, training_features)
     
     if (length(missing_features) > 0) {
-      cat(sprintf(" [adding %d missing features]", length(missing_features)))
-      
-      # DEBUG: Show which features are missing
-      if (length(missing_features) < 5) {
-        cat(sprintf(" (%s)", paste(missing_features, collapse=", ")))
-      } else {
-        cat(sprintf(" (e.g. %s)", paste(head(missing_features, 3), collapse=", ")))
-      }
-      
       # Add missing features as zeros
       missing_matrix <- Matrix(0, 
                               nrow = nrow(pred_matrix), 
@@ -368,8 +363,7 @@ for (target in base_targets) {
     
     # Verify alignment
     if (ncol(pred_matrix_aligned) != length(training_features)) {
-      cat(sprintf(" ERROR: Feature alignment failed\n"))
-      next
+      stop("Feature alignment failed")
     }
     
     # Predict
@@ -383,8 +377,6 @@ for (target in base_targets) {
     # Store base prediction
     target_clean <- gsub("_D$", "", target)
     base_predictions[[target_clean]] <- round(predictions, 2)
-    
-    cat(sprintf(" ✓ [%.1f, %.1f]\n", min(predictions), max(predictions)))
   }
 }
 
@@ -396,7 +388,7 @@ base_predictions$LV <- base_predictions$TV - base_predictions$HGV
 
 # Store D period in results
 all_results[["D"]] <- base_predictions[, c("osm_id", "highway", "name", "period", 
-                                          "TV", "HGV", "LV")]
+                                          "TV", "HGV", "LV", "speed")]
 
 # =============================================================================
 # RATIO PREDICTIONS (Other Periods)  
@@ -459,10 +451,10 @@ for (period in ratio_periods) {
   
   # Store period results
   all_results[[period]] <- period_data[, c("osm_id", "highway", "name", "period",
-                                          "TV", "HGV", "LV")]
+                                          "TV", "HGV", "LV", "speed")]
 }
 
-cat(sprintf("    ✓ Completed %d periods\n", length(ratio_periods)))
+# All ratio periods processed
 
 # =============================================================================
 # COMBINE INTO LONG FORMAT AND EXPORT
@@ -472,73 +464,93 @@ cat(sprintf("    ✓ Completed %d periods\n", length(ratio_periods)))
 # Combine all periods
 final_results <- do.call(rbind, all_results)
 
-cat(sprintf("  ✓ Final dataset: %s observations (%d roads × %d periods)\n", 
-           format(nrow(final_results), big.mark=","),
-           length(unique(final_results$osm_id)), 
-           length(unique(final_results$period))))
+# Transform to wide format with D/E/N suffixes
+# Filter only D, E, N periods
+final_results_den <- final_results %>% filter(period %in% c("D", "E", "N"))
 
+# Pivot to wide format (including speed)
+library(tidyr)
+final_results_wide <- final_results_den %>%
+  select(osm_id, highway, name, period, TV, HGV, LV, speed) %>%
+  pivot_wider(
+    names_from = period,
+    values_from = c(LV, HGV, TV, speed),
+    names_glue = "{.value}_{period}"
+  )
 
-# Convert period to milliseconds (integer)
-# h0 = 0, h1 = 3600000, h2 = 7200000, ..., h23 = 82800000
-# D = 90000000, E = 93600000, N = 97200000
-final_results_export <- final_results
-
-final_results_export$period_ms <- sapply(final_results_export$period, function(p) {
-  if (grepl("^h", p)) {
-    # Extract hour number: h0 -> 0, h1 -> 1, etc.
-    hour <- as.integer(sub("^h", "", p))
-    return(as.integer(hour * 3600000))
-  } else if (p == "D") {
-    return(as.integer(25 * 3600000))
-  } else if (p == "E") {
-    return(as.integer(26 * 3600000))
-  } else if (p == "N") {
-    return(as.integer(27 * 3600000))
-  } else {
-    return(NA_integer_)
-  }
-})
+# Combine and add PVMT column
+final_results_export <- final_results_wide %>%
+  mutate(PVMT = "FR2N") %>%
+  select(OSM_ID = osm_id, PVMT, 
+         LV_SPD_D = speed_D, LV_SPD_E = speed_E, LV_SPD_N = speed_N,
+         HGV_SPD_D = speed_D, HGV_SPD_E = speed_E, HGV_SPD_N = speed_N,
+         LV_D, LV_E, LV_N,
+         HGV_D, HGV_E, HGV_N)
 
 # Add geometry from network data
-final_results_sf <- merge(final_results_export, full_network_2154,  by = "osm_id")
+final_results_sf <- merge(final_results_export, full_network_2154,  by.x = "OSM_ID", by.y = "osm_id")
 
 # Convert to sf object
 final_results_sf <- st_as_sf(final_results_sf)
 
-# Export to GeoPackage
-output_path <- "output/final_results_sf_with_period_ms.gpkg"
-st_write(final_results_sf, output_path, delete_dsn = TRUE)
+# Export full dataset to shapefile (all sensors combined)
+output_shp <- "output/final_results_ALL_SENSORS_sf_with_period_ms.shp"
+st_write(final_results_sf, output_shp, delete_dsn = TRUE, quiet = TRUE)
+# All sensors combined shapefile exported
+
+# Now create separate exports for each sensor source (13 total)
+
+# Function to export predictions for a specific sensor source
+export_sensor_predictions <- function(sensor_data, source_name, full_network, predictions, buffer_dist) {
+  # Create buffer and union
+  sensor_buffer <- st_buffer(sensor_data, dist = buffer_dist)
+  sensor_union <- st_union(sensor_buffer)
+  
+  # Get roads within buffer
+  roads_in_buffer <- st_intersection(full_network, sensor_union)
+  
+  # Filter predictions
+  predictions_filtered <- predictions[predictions$OSM_ID %in% roads_in_buffer$osm_id, ]
+  
+  # Export
+  output_file <- sprintf("output/final_results_%s_sf_with_period_ms.shp", source_name)
+  st_write(predictions_filtered, output_file, delete_dsn = TRUE, quiet = TRUE)
+  
+  return(output_file)
+}
+
+# Export BRUITPARIF and ACOUCITE (use full versions)
+export_sensor_predictions(sensors_bruitparif_full, "BRUITPARIF", full_network_2154, final_results_sf, buffer_radius)
+export_sensor_predictions(sensors_acoucite_full, "ACOUCITE", full_network_2154, final_results_sf, buffer_radius)
+
+# Export each CHILD sensor source (use full versions)
+for (source_name in names(child_sensors_list)) {
+  export_sensor_predictions(child_sensors_list[[source_name]], source_name, 
+                           full_network_2154, final_results_sf, buffer_radius)
+}
 
 
 
 
 
 
-# Add geometry
-final_results_sf <- merge(
-  final_results, 
-  nantes_metropole[, c("osm_id", "geom")], 
-  by.x = "osm_id", by.y = "osm_id",
-  all.x = TRUE
-) %>%
-  st_as_sf()
 
-# Export single GeoPackage
 
-st_write(final_results_sf, "output/nantes_metropole_predictions.gpkg", 
-         delete_dsn = TRUE, quiet = TRUE)
 
 # =============================================================================
 # SUMMARY STATISTICS
 # =============================================================================
 
 
-cat(sprintf("🗺️  Area: Nantes Métropole (30km × 20km)\n"))
-cat(sprintf("📍 Roads: %s segments\n", format(length(unique(final_results$osm_id)), big.mark=",")))
-cat(sprintf("⏰ Periods: %d (%s)\n", length(unique(final_results$period)), 
-           paste(sort(unique(final_results$period)), collapse=", ")))
-cat(sprintf("📊 Total rows: %s\n", format(nrow(final_results), big.mark=",")))
-cat(sprintf("🎯 Columns: osm_id, highway, name, period, TV, HGV, LV, truck_pct, speed\n\n"))
+cat(sprintf("🗺️  Area: Roads within 1300m of noise sensors\n"))
+cat(sprintf("🎤 Sensors: %d total from 13 sources\n", nrow(all_sensors)))
+cat(sprintf("   • BRUITPARIF: %d sensors\n", nrow(sensors_bruitparif_full)))
+cat(sprintf("   • ACOUCITE: %d sensors\n", nrow(sensors_acoucite_full)))
+cat(sprintf("   • CHILD (11 sources): %d sensors\n", sum(sapply(child_sensors_list, nrow))))
+cat(sprintf("📍 Roads: %s segments\n", format(nrow(final_results_export), big.mark=",")))
+cat(sprintf("⏰ Periods: D, E, N (wide format)\n"))
+cat(sprintf("📊 Total output rows: %s\n", format(nrow(final_results_export), big.mark=",")))
+cat(sprintf("🎯 Columns: OSM_ID, PVMT, LV_SPD_D/E/N, HGV_SPD_D/E/N, LV_D/E/N, HGV_D/E/N\n\n"))
 
 # Statistics by period (using long format)
 library(dplyr)
