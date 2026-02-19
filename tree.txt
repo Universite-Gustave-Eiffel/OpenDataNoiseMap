@@ -1,0 +1,90 @@
+.
+├── NoiseMapProcess
+│   └── README.md
+├── README.md
+├── renv
+│   ├── activate.R
+│   ├── library
+│   │   ├── linux-ubuntu-noble
+│   │   │   └── R-4.5
+│   │   │       └── x86_64-pc-linux-gnu
+│   │   │           ├── ...
+│   │   └── R-4.5
+│   │       └── x86_64-pc-linux-gnu
+│   ├── settings.json
+│   └── staging
+├── renv.lock
+├── RoadTrafficEstimation
+│   ├── 03_avatar_download_minimal.R
+│   ├── 05_feature_engineering_minimal.R
+│   ├── bootstrap.R
+│   ├── config_pipeline.R
+│   ├── data
+│   │   ├── input
+│   │   └── output
+│   │       ├── avatar
+│   │       │   ├── csv
+│   │       │   ├── gpkg
+│   │       │   ├── json
+│   │       │   └── rds
+│   │       ├── forecast
+│   │       ├── osm
+│   │       └── training
+│   │           ├── gpkg
+│   │           └── rds
+│   ├── figures
+│   ├── main.R
+│   ├── NoiseModellingEmission
+│   │   ├── CnossosEmissionBatch.class
+│   │   ├── CnossosEmissionBatch.java
+│   │   ├── jackson-annotations-2.16.1.jar
+│   │   ├── jackson-core-2.16.1.jar
+│   │   ├── jackson-databind-2.16.1.jar
+│   │   ├── noisemodelling-emission-5.0.2-SNAPSHOT.jar
+│   │   ├── noisemodelling-emission-5.0.2-SNAPSHOT-javadoc.jar
+│   │   └── noisemodelling-emission-5.0.2-SNAPSHOT-sources.jar
+│   ├── R
+│   │   ├── data_preparation
+│   │   │   ├── 01_setup_environment.R
+│   │   │   ├── 02_osm_processing.R
+│   │   │   ├── 03_osm_feature_engineering.R
+│   │   │   ├── 04_avatar_download.R
+│   │   │   ├── 05_avatar_aggregation.R
+│   │   │   └── 06_training_dataset_merge.R
+│   │   ├── model_training
+│   │   │   └── train_xgboost_models.R
+│   │   ├── prediction
+│   │   │   ├── predict_france.R
+│   │   │   ├── predict_nantes.R
+│   │   │   ├── predict_paris.R
+│   │   │   ├── predict_pemb.R
+│   │   │   └── predict_sensors.R
+│   │   ├── tests
+│   │   │   ├── test_data_preparation.R
+│   │   │   ├── test_model_training.R
+│   │   │   └── test_prediction.R
+│   │   ├── utils_avatar.R
+│   │   ├── utils_data_preparation.R
+│   │   ├── utils_io.R
+│   │   ├── utils_model_training.R
+│   │   ├── utils_osm.R
+│   │   ├── utils_plots.R
+│   │   ├── utils_prediction.R
+│   │   └── utils_sf.R
+│   ├── README.md
+│   ├── run_correlation_analysis.R
+│   ├── run_db_comparison.R
+│   ├── run_emission_analysis.R
+│   ├── run_flow_augmented_comparison.R
+│   ├── run_flow_comparison.R
+│   ├── run_osm_speed_comparison.R
+│   ├── run_pipeline.R
+│   ├── scripts
+│   │   ├── run_avatar_download.sh
+│   │   ├── run_local.sh
+│   │   ├── run_on_hpc_cerema.sh
+│   │   ├── run_on_hpc_public.sh
+│   │   └── run_tests.sh
+│   ├── TEST_CONFIG.R
+│   ├── train_xgboost_db_aware.R
+└── └── train_xgboost_flow_augmented.R

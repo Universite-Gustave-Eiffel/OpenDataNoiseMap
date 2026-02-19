@@ -1,0 +1,58 @@
+.
+├── bootstrap
+│   ├── bootstrap.R
+│   └── README.md
+├── config
+│   ├── config_data_preparation.R
+│   ├── config_data_prep.R
+│   ├── config_forecast.R
+│   ├── config_global.R
+│   ├── config_training.R
+│   ├── mode_registry.R
+│   └── README.md
+├── data
+│   ├── avatar
+│   │   ├── csv
+│   │   ├── gpkg
+│   │   ├── json
+│   │   └── rds
+│   ├── forecast
+│   ├── osm
+│   │   ├── gpkg
+│   │   ├── pbf
+│   │   └── shp
+│   └── training
+│       ├── gpkg
+│       └── rds
+├── figures
+├── logs
+├── main.R
+├── pipelines
+│   ├── data_preparation
+│   │   ├── 01_osm_download.R
+│   │   ├── 02_osm_processing.R
+│   │   ├── 03_avatar_download.R
+│   │   ├── 04_data_integration.R
+│   │   ├── 05_feature_engineering.R
+│   │   ├── README.md
+│   │   └── run_data_preparation.R
+│   ├── forecast
+│   │   ├── predict_forecast.R
+│   │   ├── predict_nantes_southeast.R
+│   │   ├── predict_paris_area.R
+│   │   └── predict_sensors.R
+│   └── training
+│       └── run_training.R
+├── project_setup.R
+├── R
+│   ├── utils_avatar.R
+│   ├── utils_forecast.R
+│   ├── utils_io.R
+│   ├── utils_osm.R
+│   ├── utils_plots.R
+│   └── utils_sf.R
+├── README.md
+├── scripts
+│   ├── README.md
+│   ├── run_pipeline.sh
+│   └── run_pipeline.slurm

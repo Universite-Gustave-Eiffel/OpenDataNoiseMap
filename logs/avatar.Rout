@@ -1,0 +1,631 @@
+
+R version 4.4.2 (2024-10-31) -- "Pile of Leaves"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu
+
+R est un logiciel libre livré sans AUCUNE GARANTIE.
+Vous pouvez le redistribuer sous certaines conditions.
+Tapez 'license()' ou 'licence()' pour plus de détails.
+
+R est un projet collaboratif avec de nombreux contributeurs.
+Tapez 'contributors()' pour plus d'information et
+'citation()' pour la façon de le citer dans les publications.
+
+Tapez 'demo()' pour des démonstrations, 'help()' pour l'aide
+en ligne ou 'help.start()' pour obtenir l'aide au format HTML.
+Tapez 'q()' pour quitter R.
+
+> # ==============================================================================
+> # MAIN ENTRY POINT
+> # ==============================================================================
+> 
+> # ------------------------------------------------------------------------------
+> # Force working directory to project root
+> # ------------------------------------------------------------------------------
+> if (!exists("PROJECT_ROOT")) {
++   # Option 1: use the path given in the script .sh as environment variable
++   PROJECT_ROOT <- Sys.getenv("PROJECT_ROOT")
++   if (PROJECT_ROOT == "") {
++     # Option 2: fallback -> current repository
++     PROJECT_ROOT <- getwd()
++   }
++ }
+> setwd(PROJECT_ROOT)
+> 
+> message(sprintf("📁 Current working directory: %s", PROJECT_ROOT))
+📁 Current working directory: /home2020/home/cerema/gguillau/OpenDataNoiseMap
+> 
+> # ------------------------------------------------------------------------------
+> # Pipeline mode (CLI argument)
+> # ------------------------------------------------------------------------------
+> 
+> args <- commandArgs(trailingOnly = TRUE)
+> MODE <- if (length(args) >= 1) {
++   args[1]
++ } else {
++   "data_prep"
++ }
+> assign("MODE", MODE, envir = .GlobalEnv)
+> 
+> message(sprintf("🚦 Pipeline mode: %s", 
++                 ifelse(test = MODE=="avatar", 
++                        yes = paste(MODE, "download"), 
++                        no = MODE)))
+🚦 Pipeline mode: avatar download
+> 
+> # ------------------------------------------------------------------------------
+> # Run successive steps
+> # ------------------------------------------------------------------------------
+> 
+> # Bootstrap configuration
+> source("bootstrap/bootstrap.R")
+
+=== Bootstrapping environment ===
+
+	 💻 Obtaining the computing environment information
+		 ℹ️ Avatar token: DETECTED
+		 ✓ Running environment:  local in 0.0 s
+		 ℹ️ R_LIBS_USER detected: /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2
+	 💻 Using HPC user library
+		 ✓ Active R library: /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2 in 0.0 s
+		 ℹ️ Automatic graphics device disabled
+	 🏁 Bootstrap completed
+
+> source("config/config_global.R")
+
+=== Definition of the global configuration ===
+
+	 🏁 Global configuration successfully defined
+
+> source("config/config_data_prep.R")
+
+=== Definition of the data preparation pipeline configuration ===
+
+	 🏁 Data preparation configuration loaded
+
+> source("config/config_training.R")
+> source("config/config_forecast.R")
+> 
+> # Complete configuration list
+> CFG <- list(
++   global    = CONFIG_GLOBAL, 
++   data_prep = CONFIG_DATA_PREP, 
++   training  = CONFIG_TRAINING, 
++   forecast  = CONFIG_FORECAST)
+> assign("CFG", CFG, envir = .GlobalEnv)
+> 
+> # --------------------------------------------------
+> # Register pipeline modes (depends on CFG)
+> # --------------------------------------------------
+> source("./config/mode_registry.R")
+> if (!MODE %in% names(MODE_REGISTRY)) {
++   stop("Unknown MODE: ", MODE)
++ }
+> # Logs
+> LOG_FILE <- MODE_REGISTRY[[MODE]]$log_file
+> assign("LOG_FILE", LOG_FILE, envir = .GlobalEnv)
+> 
+> # Setup
+> source("project_setup.R")
+
+=== Setup configuration ===
+
+	 📥 Loading packages
+		 ℹ️ Active lib paths: /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2 | /usr/local/R/R-4.4.2/lib64/R/library
+		 ✓ Packages loaded successfully in 4.5 s
+	 💻 Creating required directories
+		 ✓ Required directories created in 0.0 s
+	 🏁 Setup stage completed
+
+> 
+> # Run selected pipeline
+> source(MODE_REGISTRY[[MODE]]$script)
+
+=== Matching Avatar traffic count points to OSM road segments ===
+
+	 📥 Loading road network data from ./data/osm/osm_roads_france_including_connectivity_and_communes.gpkg
+		 ℹ️ Data.frame 'osm_full_network' [nrows: 3960671 | ncols: 29] contains 'osm_id, name, highway, waterway, aerialway, barrier, ...'
+		 ✓ OSM full road network loaded in successfully loaded in 186.6 s
+	 📥 Loading previously downloaded count points data from ./data/avatar/json/count_points.json
+		 ✓ Count points successfully loaded in 9.4 s
+	 ⬇️ Formatting Avatar count points data
+		 ℹ️ Data.frame 'count_points' [nrows: 9702 | ncols: 31] contains 'id, count_point_name, lane_number, station_name, channel_code, lanes_channel_codes, ...'
+		 ✓ Avatar data successfully formatted in 0.2 s
+	 🔗 Spatial joining of Avatar count points and OSM roads
+		 🔍 Search for the OSM routes closest to the Avatar count points
+		 ℹ️ Data.frame 'pointsId_with_roads' [nrows: 9702 | ncols: 59] contains 'id, count_point_name, lane_number, station_name, channel_code, lanes_channel_codes, ...'
+			 ✓ Closest OSM roads to buffered count points evaluated in 89.5 s
+		 🔍 Filtering OSM road network data with Avatar count points
+		 ℹ️ Reproject into CRS 2154
+			 ✓ OSM road network successfully merged with count point data and saved into file ./data/avatar/gpkg/avatar_merged_with_osm.gpkg in 0.9 s
+	 ⬇️ Download Avatar traffic data for count point
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_001.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_002.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_003.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_004.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_005.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_006.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_007.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_008.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_009.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_010.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_011.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_012.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_013.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_014.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_015.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_016.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_017.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_018.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_019.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_020.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_021.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_022.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_023.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_024.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_025.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_026.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_027.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_028.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_029.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_030.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_031.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_032.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_033.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_034.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_035.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_036.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_037.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_038.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_039.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_040.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_041.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_042.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_043.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_044.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_045.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_046.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_047.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_048.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_049.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_050.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_051.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_052.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_053.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_054.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_055.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_056.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_057.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_058.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_059.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_060.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_061.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_062.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_063.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_064.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_065.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_066.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_067.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_068.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_069.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_070.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_071.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_072.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_073.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_074.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_075.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_076.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_077.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_078.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_079.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_080.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_081.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_082.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_083.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_084.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_085.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_086.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_087.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_088.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_089.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_090.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_091.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_092.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_093.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_094.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_095.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_096.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_097.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_098.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_099.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_100.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_101.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_102.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_103.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_104.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_105.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_106.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_107.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_108.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_109.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_110.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_111.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_112.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_113.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_114.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_115.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_116.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_117.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_118.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_119.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_120.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_121.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_122.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_123.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_124.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_125.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_126.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_127.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_128.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_129.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_130.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_131.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_132.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_133.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_134.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_135.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_136.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_137.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_138.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_139.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_140.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_141.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_142.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_143.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_144.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_145.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_146.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_147.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_148.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_149.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_150.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_151.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_152.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_153.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_154.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_155.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_156.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_157.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_158.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_159.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_160.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_161.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_162.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_163.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_164.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_165.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_166.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_167.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_168.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_169.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_170.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_171.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_172.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_173.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_174.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_175.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_176.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_177.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_178.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_179.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_180.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_181.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_182.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_183.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_184.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_185.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_186.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_187.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_188.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_189.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_190.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_191.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_192.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_193.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_194.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_195.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_196.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_197.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_198.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_199.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_200.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_201.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_202.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_203.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_204.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_205.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_206.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_207.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_208.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_209.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_210.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_211.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_212.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_213.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_214.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_215.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_216.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_217.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_218.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_219.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_220.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_221.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_222.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_223.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_224.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_225.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_226.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_227.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_228.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_229.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_230.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_231.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_232.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_233.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_234.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_235.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_236.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_237.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_238.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_239.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_240.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_241.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_242.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_243.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_244.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_245.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_246.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_247.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_248.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_249.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_250.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_251.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_252.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_253.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_254.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_255.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_256.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_257.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_258.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_259.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_260.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_261.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_262.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_263.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_264.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_265.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_266.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_267.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_268.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_269.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_270.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_271.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_272.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_273.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_274.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_275.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_276.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_277.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_278.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_279.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_280.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_281.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_282.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_283.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_284.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_285.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_286.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_287.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_288.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_289.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_290.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_291.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_292.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_293.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_294.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_295.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_296.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_297.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_298.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_299.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_300.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_301.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_302.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_303.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_304.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_305.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_306.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_307.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_308.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_309.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_310.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_311.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_312.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_313.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_314.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_315.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_316.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_317.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_318.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_319.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_320.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_321.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_322.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_323.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_324.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_325.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_326.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_327.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_328.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_329.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_330.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_331.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_332.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_333.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_334.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_335.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_336.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_337.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_338.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_339.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_340.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_341.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_342.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_343.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_344.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_345.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_346.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_347.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_348.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_349.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_350.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_351.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_352.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_353.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_354.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_355.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_356.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_357.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_358.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_359.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_360.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_361.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_362.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_363.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_364.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_365.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_366.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_367.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_368.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_369.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_370.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_371.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_372.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_373.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_374.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_375.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_376.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_377.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_378.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_379.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_380.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_381.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_382.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_383.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_384.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_385.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_386.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_387.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_388.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_389.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_390.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_391.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_392.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_393.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_394.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_395.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_396.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_397.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_398.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_399.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_400.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_401.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_402.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_403.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_404.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_405.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_406.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_407.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_408.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_409.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_410.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_411.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_412.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_413.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_414.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_415.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_416.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_417.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_418.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_419.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_420.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_421.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_422.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_423.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_424.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_425.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_426.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_427.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_428.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_429.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_430.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_431.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_432.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_433.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_434.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_435.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_436.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_437.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_438.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_439.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_440.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_441.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_442.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_443.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_444.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_445.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_446.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_447.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_448.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_449.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_450.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_451.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_452.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_453.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_454.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_455.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_456.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_457.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_458.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_459.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_460.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_461.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_462.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_463.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_464.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_465.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_466.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_467.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_468.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_469.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_470.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_471.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_472.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_473.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_474.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_475.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_476.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_477.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_478.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_479.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_480.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_481.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_482.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_483.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_484.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_485.csv
+		 ℹ️ Downloading ./data/avatar/csv/avatar_data_chunk_486.csv
+Erreur : ⛔ No Avatar data files found
+De plus : Message d'avis :
+⚠️ Found 486 chunks to re-download (empty/corrupted/missing) 
+Exécution arrêtée
