@@ -66,6 +66,31 @@ cfg_forecast <- CFG$forecast
 # --------------------------- #
 # Create required directories #
 # --------------------------- #
+setup_directories <- function(cfg) {
+  # Flatten with names
+  all_values <- unlist(x = cfg, recursive = TRUE, use.names = TRUE)
+  # Keep only path-like entries via name
+  path_idx <- grepl(pattern = "(_DIR$|_DIRPATH$|_FILEPATH$)",
+                    x = names(all_values))
+  paths <- all_values[path_idx]
+  # Parent dirs for files
+  parent_dirs <- dirname(path = paths)
+  # Explicit dirs
+  explicit_dirs <- paths[grepl(pattern = "_DIR$|_DIRPATH$",
+                               x = names(paths))]
+  dirs <- unique(x = c(parent_dirs, explicit_dirs))
+  dirs <- dirs[nzchar(x = dirs)]
+  created_dirs <- character(0)
+  for (d in dirs) {
+    if (!dir.exists(paths = d)) {
+      dir.create(path = d, recursive = TRUE, showWarnings = FALSE)
+      created_dirs <- c(created_dirs, d)
+      pipeline_message(sprintf("Created directory: %s", d), process = "info")
+    }
+  }
+  invisible(created_dirs)
+}
+
 setup_directories(c(cfg_g, cfg_data, cfg_train, cfg_forecast))
 
 pipeline_message(text = "Required directories created", 

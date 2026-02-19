@@ -5,6 +5,7 @@
 # ------------------------------------------------------------------------------
 # Force working directory to project root
 # ------------------------------------------------------------------------------
+
 if (!exists("PROJECT_ROOT")) {
   # Option 1: use the path given in the script .sh as environment variable
   PROJECT_ROOT <- Sys.getenv("PROJECT_ROOT")
