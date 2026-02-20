@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------
 # Load utility functions
 # ------------------------------------------------------------------------------
-utils_dir <- file.path(PROJECT_ROOT, "R")
+utils_dir <- file.path(PROJECT_ROOT, "R", "utils")
 utils_files <- list.files(
   path = utils_dir,
   pattern = "\\.R$",
