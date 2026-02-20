@@ -3,6 +3,69 @@
 # ==============================================================================
 # 
 # ------------------------------------------------------------------------------
+# Setup project directory structure from configuration
+# ------------------------------------------------------------------------------
+#' @title Create required project directories from configuration
+#' @description Creates all required directories defined in the pipeline 
+#'              configuration objects. The function scans recursively through 
+#'              the provided configuration list, extracts file paths, derives 
+#'              their parent directories, and ensures that all necessary 
+#'              directories exist.
+#'              This function is designed to centralize directory creation in a 
+#'              single place, avoiding scattered \code{dir.create()} calls 
+#'              across pipeline scripts.
+#' @param cfg A named list of configuration lists (typically \code{CFG}), such 
+#'            as \code{CFG$global}, \code{CFG$data_prep}, \code{CFG$training}, 
+#'            and \code{CFG$forecast}. Each sub-list may contain directory paths 
+#'            and/or file paths.
+#' @details The function operates as follows:
+#'          \enumerate{
+#'            \item Recursively flattens the configuration list to extract all 
+#'                  values, 
+#'            \item Assumes that character values represent filesystem paths, 
+#'            \item Computes parent directories using \code{dirname()}, 
+#'            \item Removes duplicates and ignores directories that already 
+#'                  exist, 
+#'            \item Creates missing directories recursively.
+#'          }
+#'          The function is intentionally conservative: it does not delete 
+#'          directories, overwrite files, or validate path semantics beyond 
+#'          existence checks.
+#' @return Invisibly returns a character vector of directories that were 
+#'         created.
+#' @examples
+#' \dontrun{
+#' setup_directories(CFG)
+#' }
+#' @export
+setup_directories <- function(cfg) {
+  # Flatten WITH NAMES
+  all_values <- unlist(x = cfg, recursive = TRUE, use.names = TRUE)
+  
+  # Keep only path-like entries via name
+  path_idx <- grepl(pattern = "(_DIR$|_DIRPATH$|_FILEPATH$)", 
+                    x = names(all_values))
+  paths <- all_values[path_idx]
+  
+  # Parent directories for files
+  parent_dirs <- dirname(path = paths)
+  
+  # Explicit directories
+  explicit_dirs <- paths[grepl(pattern = "_DIR$|_DIRPATH$", names(paths))]
+  dirs <- unique(x = c(parent_dirs, explicit_dirs))
+  dirs <- dirs[nzchar(x = dirs)]
+  
+  created_dirs <- character(0)
+  for (d in dirs) {
+    if (!dir.exists(paths = d)) {
+      dir.create(path = d, recursive = TRUE, showWarnings = FALSE)
+      created_dirs <- c(created_dirs, d)
+      pipeline_message(sprintf("Created directory: %s", d), process = "info")
+    }
+  }
+  invisible(created_dirs)
+}
+# ------------------------------------------------------------------------------
 # Format numeric values for console output
 # ------------------------------------------------------------------------------
 #' @title Format numeric values for human-readable console output

@@ -1,68 +1,57 @@
 # ==============================================================================
 # STAGE 3: OSM FEATURE ENGINEERING ON FRANCE NETWORK
 # ==============================================================================
-# Ce script applique le feature engineering sur l'ensemble du réseau OSM France
-# (incluant connectivité et DEGRE communes) pour créer une couche pré-calculée
-# utilisable directement pour l'entraînement et la prédiction.
+# This script applies feature engineering to the entire OSM France network
+# (including connectivity and DEGRE) to create a pre-calculated layer
+# that can be used directly for training and prediction.
 # 
-# Entrées:
-#   - 01_osm_network_augmented.gpkg (OSM + connectivité + DEGRE)
-# Sorties:
-#   - 02_osm_network_france_engineered.gpkg (couche France avec features)
-#   - 02_imputation_rules_france.rds (règles d'imputation globales)
+# Inputs:
+#   - 01_osm_network_augmented.gpkg (OSM + connectivity + DEGRE)
+# Outputs:
+#   - 02_osm_network_france_engineered.gpkg (France layer with features)
+#   - 02_imputation_rules_france.rds (global imputation rules)
 #
-# En mode TEST: réduit la région à une bbox de test pour rapidité
+# In TEST mode: reduces the region to a test bbox for speed
+
+
+Translated with DeepL.com (free version)
 # ==============================================================================
 
-pipeline_message(text = "OSM France feature engineering", 
-                 level = 0, progress = "start", process = "calc")
-
-# Check if running in TEST mode
-IS_TEST_MODE <- exists("TEST_REGION") && !is.null(TEST_REGION)
-if (IS_TEST_MODE) {
-  pipeline_message(
-    text = sprintf("TEST MODE: Cropping to region %s (bbox: %s)", 
-                   TEST_REGION$name, 
-                   paste(TEST_REGION$bbox, collapse=", ")),
-    level = 1, process = "info"
-  )
-}
+pipeline_message("Road feature engineering processing", level = 0, 
+                 progress = "start", process = "calc")
 
 # ------------------------------------------------------------------------------
 # Load full OSM France road network with connectivities and communes
 # ------------------------------------------------------------------------------
 
-if (!exists('osm_full_network') || 
-    !is.data.frame(get('osm_full_network'))) {
+if (!exists('osm_full_network') 
+    && isFALSE(is.data.frame(get('osm_full_network')))){
   
-  pipeline_message(
-    text = sprintf("Loading OSM France network from %s", 
-                   rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
-    level = 1, progress = "start", process = "load")
+  pipeline_message(sprintf("Loading OSM full road network from %s", 
+                           rel_path(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
+                   level = 1, progress = "start", process = "load")
   
   osm_full_network <- sf::st_read(
-    dsn = CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
+    dsn = cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH, 
     quiet = TRUE)
   
-  # Ensure correct CRS
-  if (sf::st_crs(osm_full_network) != CONFIG$TARGET_CRS) {
+  # Project data into target CRS if needed
+  if (sf::st_crs(osm_full_network) != cfg_g$TARGET_CRS){
     osm_full_network <- osm_full_network %>% 
-      st_transform(crs = CONFIG$TARGET_CRS)
+      st_transform(crs = cfg_g$TARGET_CRS)
   }
   
-  pipeline_message(
-    text = sprintf("OSM France network loaded: %s roads", 
-                   fmt(nrow(osm_full_network))), 
-    level = 1, progress = "end", process = "valid")
+  pipeline_message("OSM France network successfully loaded", level = 1, 
+                   progress = "end", process = "valid")
 }
 
 # Crop to test region if in TEST mode
 if (IS_TEST_MODE) {
   osm_full_network <- crop_to_test_region(osm_full_network)
   pipeline_message(
-    text = sprintf("Cropped to test region: %s roads remain", 
-                   fmt(nrow(osm_full_network))),
-    level = 1, process = "info"
+    sprintf("Cropped to test region: %s roads remain", 
+            fmt(nrow(osm_full_network))),
+    process = "info"
   )
 }
 
@@ -71,13 +60,14 @@ if (IS_TEST_MODE) {
 # ------------------------------------------------------------------------------
 
 pipeline_message(
-  text = "Computing imputation rules from full France network", 
+  "Computing imputation rules from full France network", 
   level = 1, progress = "start", process = "build")
 
-# Coerce to data.table for efficient processing
+# Coerce OSM data frame to data.table
 setDT(osm_full_network)
 
-pipeline_message(text = describe_df(osm_full_network), process = "info")
+pipeline_message(describe_df(osm_full_network), process = "info")
+pipeline_message(describe_df(full_network_avatar_id), process = "info")
 
 # Clean highway types
 osm_full_network$highway <- as.character(x = osm_full_network$highway)
@@ -85,16 +75,15 @@ osm_full_network$highway[
   is.na(osm_full_network$highway) | 
     osm_full_network$highway == ""] <- "unclassified"
 
-# Determine column names (handle both naming conventions)
-lanes_col <- if ("lanes_osm" %in% names(osm_full_network)) {
+# Imputation rules
+lanes_col <- if ("lanes_osm" %in% names(osm_full_network)){
   "lanes_osm"
 } else if ("lanes" %in% names(osm_full_network)) {
   "lanes"
 } else {
   NULL
 }
-
-maxspeed_col <- if ("maxspeed_osm" %in% names(osm_full_network)) {
+maxspeed_col <- if ("maxspeed_osm" %in% names(osm_full_network)){
   "maxspeed_osm"
 } else if ("maxspeed" %in% names(osm_full_network)) {
   "maxspeed"
@@ -120,37 +109,35 @@ if (!is.null(lanes_col) && !is.null(maxspeed_col)) {
 
 # Apply default values where imputation rules are missing
 imputation_rules[is.na(median_lanes), 
-                 median_lanes := CONFIG$DEFAULT_NUMBER_OF_LANES]
+                 median_lanes := cfg_data$DEFAULT_NUMBER_OF_LANES]
 imputation_rules[is.na(median_speed), 
-                 median_speed := CONFIG$DEFAULT_VEHICLE_SPEED]
+                 median_speed := cfg_data$DEFAULT_VEHICLE_SPEED]
 
 # Add fallback rule for missing highway types
 imputation_rules <- rbind(
   imputation_rules, 
-  data.table(
-    highway = "missing", 
-    median_lanes = CONFIG$DEFAULT_NUMBER_OF_LANES, 
-    median_speed = CONFIG$DEFAULT_VEHICLE_SPEED, 
-    n_roads = CONFIG$DEFAULT_NUMBER_OF_ROADS))
+  data.table(highway = "missing", 
+             median_lanes = cfg_data$DEFAULT_NUMBER_OF_LANES, 
+             median_speed = cfg_data$DEFAULT_VEHICLE_SPEED, 
+             n_roads = cfg_data$DEFAULT_NUMBER_OF_ROADS))
 
 # Save imputation rules
 saveRDS(object = imputation_rules, 
-        file = CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH)
+        file = cfg_data$AVATAR_IMPUTATION_RULES_FILEPATH)
 
-pipeline_message(text = describe_df(imputation_rules), process = "info")
+pipeline_message(describe_df(imputation_rules), process = "info")
 
 pipeline_message(
-  text = sprintf("Imputation rules computed and saved to %s", 
-                 rel_path(CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH)), 
-  level = 1, progress = "end", process = "save")
+  sprintf("Default road traffic imputation rules successfully built and saved ", 
+          "into file ", rel_path(cfg_data$AVATAR_IMPUTATION_RULES_FILEPATH)), 
+  level = 2, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
 # Apply feature engineering to full France network
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Applying feature engineering to France network", 
-  level = 1, progress = "start", process = "calc")
+pipeline_message("Applying feature engineering to France network", 
+                 level = 1, progress = "start", process = "calc")
 
 # Apply feature engineering pipeline
 # This function from utils_osm.R:
@@ -164,17 +151,16 @@ osm_france_engineered <- process_network_features(
   rules = imputation_rules)
 
 pipeline_message(
-  text = sprintf("Feature engineering applied: %s roads processed", 
-                 fmt(nrow(osm_france_engineered))), 
+  sprintf("Feature engineering applied: %s roads processed", 
+          fmt(nrow(osm_france_engineered))), 
   process = "info")
 
 # ------------------------------------------------------------------------------
 # Save engineered France network
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Saving engineered France network", 
-  level = 1, progress = "start", process = "save")
+pipeline_message("Saving engineered France network", 
+                 level = 1, progress = "start", process = "save")
 
 # Convert back to sf object if needed
 if (!"sf" %in% class(osm_france_engineered)) {
@@ -187,37 +173,35 @@ osm_france_engineered <- add_period_datetime_columns(osm_france_engineered)
 # Export to GeoPackage
 sf::st_write(
   obj = osm_france_engineered, 
-  dsn = CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+  dsn = cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
   delete_dsn = TRUE,
   quiet = FALSE)
 
 pipeline_message(
-  text = sprintf("Engineered France network saved to %s", 
-                 rel_path(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
+  sprintf("Engineered France network saved to %s", 
+          rel_path(cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
   level = 1, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
 # Summary statistics
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Feature engineering summary:", 
-  level = 1, process = "info")
+pipeline_message("Feature engineering summary:", process = "info")
 
 pipeline_message(
-  text = sprintf("  - Total roads: %s", 
-                 fmt(nrow(osm_france_engineered))), 
-  level = 1, process = "info")
+  sprintf("  - Total roads: %s", 
+          fmt(nrow(osm_france_engineered))), 
+  process = "info")
 
 pipeline_message(
-  text = sprintf("  - Highway types: %s", 
-                 length(unique(osm_france_engineered$highway))), 
-  level = 1, process = "info")
+  sprintf("  - Highway types: %s", 
+          length(unique(osm_france_engineered$highway))), 
+  process = "info")
 
 pipeline_message(
-  text = sprintf("  - DEGRE classes: %s", 
-                 length(unique(osm_france_engineered$DEGRE))), 
-  level = 1, process = "info")
+  sprintf("  - DEGRE classes: %s", 
+          length(unique(osm_france_engineered$DEGRE))), 
+  process = "info")
 
 # Feature completeness check
 required_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
@@ -230,20 +214,20 @@ available_features <- intersect(required_features,
                                names(osm_france_engineered))
 
 pipeline_message(
-  text = sprintf("  - Features available: %s/%s", 
-                 length(available_features), 
-                 length(required_features)), 
-  level = 1, process = "info")
+  sprintf("  - Features available: %s/%s", 
+          length(available_features), 
+          length(required_features)), 
+  process = "info")
 
 if (length(available_features) < length(required_features)) {
   missing_features <- setdiff(required_features, available_features)
   pipeline_message(
-    text = sprintf("  - Missing features: %s", 
-                   paste(missing_features, collapse = ", ")), 
-    level = 1, process = "warn")
+    sprintf("  - Missing features: %s", 
+            paste(missing_features, collapse = ", ")), 
+    process = "warn")
 }
 
-pipeline_message(text = "OSM France feature engineering completed", 
+pipeline_message("OSM France feature engineering completed", 
                  level = 0, progress = "end", process = "valid")
 
 # Cleanup large objects to free memory for next steps

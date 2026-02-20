@@ -5,7 +5,7 @@
 pipeline_message("Definition of the global configuration",
                  level = 0, progress = "start", process = "install")
 
-ROOT_DIR <- getwd()
+ROOT_DIR <- PROJECT_ROOT
 DATA_DIR <- file.path("data")
 FIGS_DIR <- file.path("figures")
 LOGS_DIR <- file.path("logs")

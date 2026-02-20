@@ -44,7 +44,7 @@ download_geofabrik_pbf <- function(region = "France",
   )
   
   pipeline_message(
-    text = "Verification of the zone name entered", 
+    "Verification of the zone name entered", 
     level = 2, progress = "start", process = "search")
   
   # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ download_geofabrik_pbf <- function(region = "France",
   # ---------------------------------------------------------------------------
   if (region %in% unavailable_regions) {
     pipeline_message(
-      text = sprintf("OSM data for region '%s' are not available on Geofabrik", 
+      sprintf("OSM data for region '%s' are not available on Geofabrik", 
                     region), 
       level = 4, process = "stop")
     stop(call. = FALSE)
@@ -60,7 +60,7 @@ download_geofabrik_pbf <- function(region = "France",
   
   if (!region %in% c(available_regions, unavailable_regions)) {
     pipeline_message(
-      text = sprintf("Unknown region '%s'. Please provide a valid French region 
+      sprintf("Unknown region '%s'. Please provide a valid French region 
                      name.", region), 
       level = 4, process = "stop")
     stop(call. = FALSE)
@@ -89,16 +89,16 @@ download_geofabrik_pbf <- function(region = "France",
   }
   
   pipeline_message(
-    text = paste0("URL: ", url), level = 4, process = "valid")
+    paste0("URL: ", url), level = 4, process = "valid")
   pipeline_message(
-    text = paste0("PBF file name: ", pbf_name), level = 4, process = "valid")
+    paste0("PBF file name: ", pbf_name), level = 4, process = "valid")
   
   # Destination file name
   dest_file <- file.path(dest_dir, pbf_name)
   
   if (file.exists(dest_file) && !overwrite) {
     pipeline_message(
-      text = paste0("File already exists: ", dest_file), 
+      paste0("File already exists: ", dest_file), 
       level = 4, process = "valid")
     return(invisible(dest_file))
   }
@@ -119,19 +119,19 @@ download_geofabrik_pbf <- function(region = "France",
       size_bytes <- as.numeric(gsub(".*: ", "", size_line))
       file_size_mb <- size_bytes / 1024^2
       pipeline_message(
-        text = sprintf("File size: %.1f MB", file_size_mb), 
+        sprintf("File size: %.1f MB", file_size_mb), 
         level = 4, process = "pack")
     }
   }
   
   if (is.na(file_size_mb)) {
     pipeline_message(
-      text = "File size: unavailable (server did not provide Content-Length)", 
+      "File size: unavailable (server did not provide Content-Length)", 
       level = 4, process = "pack")
   }
   
   pipeline_message(
-    text = sprintf("Zone name ok, destination URL ready and directory %s 
+    sprintf("Zone name ok, destination URL ready and directory %s 
                    successfully created", rel_path(dest_file)), 
     level = 2, progress = "end", process = "valid")
   
@@ -139,7 +139,7 @@ download_geofabrik_pbf <- function(region = "France",
   # Download
   # ---------------------------------------------------------------------------
   pipeline_message(
-    text = "Downloading file", 
+    "Downloading file", 
     level = 2, progress = "start", process = "download")
   
   # ---------------------------------------------------------------------------
@@ -156,13 +156,13 @@ download_geofabrik_pbf <- function(region = "France",
   
   if (status != 0) {
     pipeline_message(
-      text = "Download failed (curl returned a non-zero status)", 
+      "Download failed (curl returned a non-zero status)", 
       level = 4, process = "stop")
     stop(call. = FALSE)
   }
   
   pipeline_message(
-    text = sprintf("Download successfully completed. File saved as %s", 
+    sprintf("Download successfully completed. File saved as %s", 
                    rel_path(dest_file)), 
     level = 2, progress = "end", process = "valid")
   
@@ -188,12 +188,12 @@ convert_pbf_to_gpkg <- function(pbf_file,
                                 gpkg_file,
                                 overwrite = FALSE) {
   pipeline_message(
-    text = "Conversion of the OSM PBF file to GeoPackage format",  
+    "Conversion of the OSM PBF file to GeoPackage format",  
     level = 2, progress = "start", process = "calc")
   
   if (!file.exists(pbf_file)) {
     pipeline_message(
-      text = paste0("Input PBF file does not exist: ", pbf_file), 
+      paste0("Input PBF file does not exist: ", pbf_file), 
       level = 4, process = "stop")
     stop(call. = FALSE)
   }
@@ -201,7 +201,7 @@ convert_pbf_to_gpkg <- function(pbf_file,
   if (file.exists(gpkg_file)) {
     if (!overwrite) {
       pipeline_message(
-        text = paste0("Output GPKG file already exists: ", gpkg_file), 
+        paste0("Output GPKG file already exists: ", gpkg_file), 
         level = 4, process = "stop")
       stop(call. = FALSE)
     } else {
@@ -212,7 +212,7 @@ convert_pbf_to_gpkg <- function(pbf_file,
   # Check GDAL availability
   if (system("ogr2ogr --version", intern = TRUE, ignore.stderr = TRUE) |> length() == 0) {
     pipeline_message(
-      text = "GDAL (ogr2ogr) is not available in the system environment", 
+      "GDAL (ogr2ogr) is not available in the system environment", 
       level = 4, process = "stop")
     stop(call. = FALSE)
   }
@@ -298,11 +298,11 @@ extract_osm_other_tags <- function(other_tags_vector,
     pb_width <- 90
     last_printed <- 0
     if (IS_TTY) {
-      pipeline_message(text = "Extracting OSM tags", 
+      pipeline_message("Extracting OSM tags", 
                        level = 4, process = "info")
     } else {
       pipeline_message(
-        text = sprintf("Extracting %d OSM tags (%d columns)", 
+        sprintf("Extracting %d OSM tags (%d columns)", 
                        length(x = keys), n_cols), 
         level = 4, process = "info")
     }
@@ -317,7 +317,7 @@ extract_osm_other_tags <- function(other_tags_vector,
     pattern <- paste0('"', key_escaped, '"=>"([^"]*)"')
     # Vectorized regex extraction
     match_positions <- regexpr(pattern = pattern, 
-                               text = other_tags_vector, 
+                               other_tags_vector, 
                                perl = TRUE)
     # Extract matched strings
     matches <- regmatches(x = other_tags_vector, 
@@ -344,7 +344,7 @@ extract_osm_other_tags <- function(other_tags_vector,
         bar <- paste0(strrep("=", bar_len), 
                       strrep(" ", pb_width - bar_len))
         pipeline_message(
-          text = sprintf("[%s] %3.0f%% (%d/%d)", bar, 100 * pct, i, n_cols), 
+          sprintf("[%s] %3.0f%% (%d/%d)", bar, 100 * pct, i, n_cols), 
           level = 4, process = "wait")
         if (i == n_cols) {
         }
@@ -352,7 +352,7 @@ extract_osm_other_tags <- function(other_tags_vector,
         if (i > last_printed) {
           last_printed <- i
           pipeline_message(
-            text = sprintf("OSM tag %d/%d (%3.0f%%) processed", 
+            sprintf("OSM tag %d/%d (%3.0f%%) processed", 
                            i, n_cols, 100 * pct), 
             level = 4, process = "valid")
         }
@@ -406,12 +406,9 @@ process_network_features <- function(data, rules) {
   # Highway type normalization (ordered factor) #
   # ------------------------------------------- #
   highway_levels <- c(
-    "unclassified", "residential",
-    "tertiary", "tertiary_link",
-    "secondary", "secondary_link",
-    "primary", "primary_link",
-    "trunk", "trunk_link",
-    "motorway", "motorway_link"
+    "residential", "tertiary", "secondary", "primary", "trunk", "motorway",
+    "tertiary_link", "secondary_link", "primary_link", "trunk_link",
+    "motorway_link", "unclassified"
   )
   data[, highway := as.character(x = highway)]
   data[is.na(highway) | highway == "", highway := "unclassified"]
@@ -419,13 +416,13 @@ process_network_features <- function(data, rules) {
                            levels = c(highway_levels, "missing"),
                            ordered = TRUE)]
   # ----------------------------------------- #
-  # Commune density class (DEGRE — INSEE)     #
+  # Commune density class (DEGRE - INSEE)     #
   # ----------------------------------------- #
   data[, DEGRE := as.integer(x = DEGRE)]
   n_missing_degre <- sum(is.na(data$DEGRE))
   if (n_missing_degre > 0) {
     pipeline_message(
-      text = sprintf("Imputing %s missing DEGRE values → %d (urban default)", 
+      sprintf("Imputing %s missing DEGRE values → %d (urban default)", 
                      fmt(x = n_missing_degre), CONFIG$DEFAULT_DEGRE), 
       process = "warning")
     # Set default value when missing DEGRE
@@ -481,7 +478,7 @@ process_network_features <- function(data, rules) {
   n_invalid <- sum(!data$first_word %in% valid_first_words)
   if (n_invalid > 0) {
     pipeline_message(
-      text = sprintf("Setting %s non-standard first_words to 'missing'",
+      sprintf("Setting %s non-standard first_words to 'missing'",
                      fmt(n_invalid)),
       process = "warning")
     data[!first_word %in% valid_first_words, first_word := "missing"]
@@ -523,7 +520,7 @@ process_network_features <- function(data, rules) {
   n_missing_lanes <- sum(missing_lanes)
   if (n_missing_lanes > 0) {
     pipeline_message(
-      text = sprintf("Imputing %s missing lane values using highway-specific medians", 
+      sprintf("Imputing %s missing lane values using highway-specific medians", 
                      fmt(n_missing_lanes)), 
       process = "warning")
     lanes_lookup <- setNames(object = rules$median_lanes, 
@@ -546,7 +543,7 @@ process_network_features <- function(data, rules) {
   n_missing_speed <- sum(missing_speed)
   if (n_missing_speed > 0) {
     pipeline_message(
-      text = sprintf("Imputing %s missing speed values using highway-specific medians", 
+      sprintf("Imputing %s missing speed values using highway-specific medians", 
                      fmt(n_missing_speed)), 
       process = "warning")
     speed_lookup <- setNames(object = rules$median_speed, 
@@ -564,7 +561,7 @@ process_network_features <- function(data, rules) {
     data[is.na(junction_osm) | junction_osm == "", junction_osm := "none"]
     data[, junction_osm := factor(junction_osm)]
     pipeline_message(
-      text = sprintf("Junction types: %s",
+      sprintf("Junction types: %s",
                      paste(levels(data$junction_osm), collapse = ", ")),
       process = "info")
   }

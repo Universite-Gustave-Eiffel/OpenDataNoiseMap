@@ -1,12 +1,27 @@
 # ==============================================================================
-# STAGE 5: ROAD FEATURE ENGINEERING
+# STAGE 3: OSM FEATURE ENGINEERING ON FRANCE NETWORK
+# ==============================================================================
+# This script applies feature engineering to the entire OSM France network
+# (including connectivity and DEGRE) to create a pre-calculated layer
+# that can be used directly for training and prediction.
+# 
+# Inputs:
+#   - 01_osm_network_augmented.gpkg (OSM + connectivity + DEGRE)
+# Outputs:
+#   - 02_osm_network_france_engineered.gpkg (France layer with features)
+#   - 02_imputation_rules_france.rds (global imputation rules)
+#
+# In TEST mode: reduces the region to a test bbox for speed
+
+
+Translated with DeepL.com (free version)
 # ==============================================================================
 
 pipeline_message("Road feature engineering processing", level = 0, 
                  progress = "start", process = "calc")
 
 # ------------------------------------------------------------------------------
-# Load full road network with connectivities and towns
+# Load full OSM France road network with connectivities and communes
 # ------------------------------------------------------------------------------
 
 if (!exists('osm_full_network') 
@@ -26,56 +41,30 @@ if (!exists('osm_full_network')
       st_transform(crs = cfg_g$TARGET_CRS)
   }
   
-  pipeline_message("OSM full road network successfully loaded", level = 1, 
+  pipeline_message("OSM France network successfully loaded", level = 1, 
                    progress = "end", process = "valid")
 }
 
-# ------------------------------------------------------------------------------
-# Load full road network with Avatar count point indexes
-# ------------------------------------------------------------------------------
-
-if (!exists('full_network_avatar_id') 
-    && isFALSE(is.data.frame(get('full_network_avatar_id')))){
-  
-  pipeline_message(sprintf("Loading full road network with count point data ", 
-                           "from %s", 
-                           rel_path(cfg_data$AVATAR_MERGED_WITH_OSM_FILEPATH)), 
-                   level = 1, progress = "start", process = "load")
-  
-  # Load merged OSM/Avatar count points
-  full_network_avatar_id <- sf::st_read(
-    dsn = cfg_data$AVATAR_MERGED_WITH_OSM_FILEPATH, 
-    quiet = TRUE)
-  
-  # Project data into target CRS if needed
-  if (sf::st_crs(full_network_avatar_id) != cfg_g$TARGET_CRS){
-    full_network_avatar_id <- full_network_avatar_id %>% 
-      st_transform(crs = cfg_g$TARGET_CRS)
-  }
-  
+# Crop to test region if in TEST mode
+if (IS_TEST_MODE) {
+  osm_full_network <- crop_to_test_region(osm_full_network)
   pipeline_message(
-    "Full road network with count point data successfully loaded", level = 1, 
-    progress = "end", process = "valid")
+    sprintf("Cropped to test region: %s roads remain", 
+            fmt(nrow(osm_full_network))),
+    process = "info"
+  )
 }
 
 # ------------------------------------------------------------------------------
-# Road network processing
+# Compute global imputation rules from full France network
 # ------------------------------------------------------------------------------
 
-pipeline_message("Assignment of rules to the road network", level = 1, 
-                 progress = "start", process = "join")
-
-# ********************************************** #
-# Compute imputation rules from the full network #
-# ********************************************** #
-
 pipeline_message(
-  "Building of default allocation rules for roads without information", 
-  level = 2, progress = "start", process = "build")
+  "Computing imputation rules from full France network", 
+  level = 1, progress = "start", process = "build")
 
-# Coerce OSM and Avatar data frame to data.table
+# Coerce OSM data frame to data.table
 setDT(osm_full_network)
-setDT(full_network_avatar_id)
 
 pipeline_message(describe_df(osm_full_network), process = "info")
 pipeline_message(describe_df(full_network_avatar_id), process = "info")
@@ -89,28 +78,42 @@ osm_full_network$highway[
 # Imputation rules
 lanes_col <- if ("lanes_osm" %in% names(osm_full_network)){
   "lanes_osm"
-} else {
+} else if ("lanes" %in% names(osm_full_network)) {
   "lanes"
+} else {
+  NULL
 }
 maxspeed_col <- if ("maxspeed_osm" %in% names(osm_full_network)){
   "maxspeed_osm"
+} else if ("maxspeed" %in% names(osm_full_network)) {
+  "maxspeed"
 } else {
-    "maxspeed"
+  NULL
 }
 
-imputation_rules <- osm_full_network[, .(
-  median_lanes = median(x = as.numeric(lanes_col), 
-                        na.rm = TRUE),
-  median_speed = median(x = as.numeric(maxspeed_col), 
-                        na.rm = TRUE),
-  n_roads = .N), 
-  by = highway]
+# Compute imputation rules by highway type
+if (!is.null(lanes_col) && !is.null(maxspeed_col)) {
+  imputation_rules <- osm_full_network[, .(
+    median_lanes = median(x = as.numeric(get(lanes_col)), na.rm = TRUE),
+    median_speed = median(x = as.numeric(get(maxspeed_col)), na.rm = TRUE),
+    n_roads = .N), 
+    by = highway]
+} else {
+  # Fallback if columns missing
+  imputation_rules <- osm_full_network[, .(
+    median_lanes = NA_real_,
+    median_speed = NA_real_,
+    n_roads = .N), 
+    by = highway]
+}
 
-# Default values for imputation rules where information is missing
+# Apply default values where imputation rules are missing
 imputation_rules[is.na(median_lanes), 
                  median_lanes := cfg_data$DEFAULT_NUMBER_OF_LANES]
 imputation_rules[is.na(median_speed), 
                  median_speed := cfg_data$DEFAULT_VEHICLE_SPEED]
+
+# Add fallback rule for missing highway types
 imputation_rules <- rbind(
   imputation_rules, 
   data.table(highway = "missing", 
@@ -118,7 +121,7 @@ imputation_rules <- rbind(
              median_speed = cfg_data$DEFAULT_VEHICLE_SPEED, 
              n_roads = cfg_data$DEFAULT_NUMBER_OF_ROADS))
 
-# Save rules for later use
+# Save imputation rules
 saveRDS(object = imputation_rules, 
         file = cfg_data$AVATAR_IMPUTATION_RULES_FILEPATH)
 
@@ -129,264 +132,105 @@ pipeline_message(
           "into file ", rel_path(cfg_data$AVATAR_IMPUTATION_RULES_FILEPATH)), 
   level = 2, progress = "end", process = "save")
 
-# ************************************************************** #
-# Clean road network and impute filtered network (Avatar subset) #
-# ************************************************************** #
-
-pipeline_message("Assigning default road traffic rules to the road network", 
-                 level = 2, progress = "start", process = "join")
-
-# Apply to filtered network
-network_processed <- process_network_features(data = full_network_avatar_id, 
-                                              rules = imputation_rules)
-# Select network columns
-network_cols <- c("id", "osm_id", "highway", "DEGRE", "ref_letter", 
-                  "first_word", "oneway_osm", "lanes_osm", "speed", 
-                  "connectivity", "betweenness", "closeness", "pagerank")
-
-# Define common columns
-available_network_cols <- intersect(x= network_cols, 
-                                    y=  names(network_processed))
-
-# Clean road network data
-network_clean <- network_processed[, available_network_cols]
-
-pipeline_message(sprintf("Network data cleaned: %s roads, %s attributes", 
-                         fmt(nrow(x = network_clean)), ncol(network_clean)), 
-                 process = "info")
-
-# Save processed network
-saveRDS(object = network_clean, 
-        file = cfg_data$AVATAR_NETWORK_DATA_FILEPATH)
-assign(x = "network_clean", 
-       value = network_clean, 
-       envir = .GlobalEnv)
-
-pipeline_message(
-  sprintf("Default road traffic rules assigned to the road network and saved ", 
-          "into file ", rel_path(cfg_data$AVATAR_NETWORK_DATA_FILEPATH)), 
-  level = 2, progress = "end", process = "save")
-
-pipeline_message("Rules assigned to the road network", level = 1, 
-                 progress = "end", process = "valid")
-
 # ------------------------------------------------------------------------------
-# Avatar data processing
+# Apply feature engineering to full France network
 # ------------------------------------------------------------------------------
 
-pipeline_message("Processing Avatar data", level = 1, 
-                 progress = "start", process = "calc")
+pipeline_message("Applying feature engineering to France network", 
+                 level = 1, progress = "start", process = "calc")
 
-# avatar_data <- aggregated_measures_with_ratios_df
-avatar_data <- readRDS(file = cfg_data$AVATAR_AGGREGATED_FILEPATH)
-
-pipeline_message(describe_df(avatar_data), process = "info")
-  
-setDT(avatar_data)
+# Apply feature engineering pipeline
+# This function from utils_osm.R:
+# - Creates ordered highway factor
+# - Extracts ref_letter (first letter of ref tag)
+# - Extracts first_word from name
+# - Normalizes oneway to binary
+# - Imputes missing lanes and speed using rules
+osm_france_engineered <- process_network_features(
+  data = osm_full_network, 
+  rules = imputation_rules)
 
 pipeline_message(
-  sprintf("Initial observations: %s", fmt(nrow(x = avatar_data))), 
+  sprintf("Feature engineering applied: %s roads processed", 
+          fmt(nrow(osm_france_engineered))), 
   process = "info")
-pipeline_message(
-  sprintf("Unique count_points: %s", 
-          fmt(length(x = unique(avatar_data$count_point_id)))), 
-  process = "info")
-pipeline_message(
-  sprintf("Periods: %s", paste(unique(avatar_data$period), collapse = ", ")), 
-  process = "info")
-
-# ************************ #
-# Data quality diagnostics #
-# ************************ #
-
-n_initial <- nrow(x = avatar_data)
-
-pipeline_message("Applying Avatar data quality rules", level = 1, 
-                 progress = "start", process = "valid")
-
-# Apply quality rules to Avatar data
-apply_avatar_quality_rules(avatar_data)
-
-pipeline_message("Avatar data quality rules applied", level = 1, 
-                 progress = "end", process = "valid")
-
-# Diagnostic: Check problematic cases
-n_truck_exceed <- sum(!is.na(avatar_data$truck_pct) 
-                      & avatar_data$truck_pct > 100, 
-                      na.rm = TRUE)
-n_extreme_ratio_trucks <- sum(!is.na(avatar_data$ratio_flow_trucks) 
-                              & avatar_data$ratio_flow_trucks > 3, 
-                              na.rm = TRUE)
-n_extreme_ratio_truck_pct <- sum(!is.na(avatar_data$ratio_truck_pct) 
-                                 & avatar_data$ratio_truck_pct > 3, 
-                                 na.rm = TRUE)
-
-# *************************** #
-# Filter invalid observations #
-# *************************** #
-
-pipeline_message("Cleaning Avatar data", level = 1, 
-                 progress = "start", process = "calc")
-
-# Filter criteria (STRICT for targets, PERMISSIVE for optional variables)
-avatar_clean <- avatar_data[
-  flow_D > 0 &                                                                  # Must have valid period D baseline flow
-  !is.na(aggregate_flow) &                                                      # Must have flow data
-  aggregate_flow > 0 &                                                          # Must be positive
-  aggregate_flow < 20000 &                                                      # Remove extreme outliers (>20k veh/h reasonable for highways)
-  (is.na(aggregate_speed) | (aggregate_speed > 0 & aggregate_speed < 200))]     # Speed can be missing
-n_removed <- n_initial - nrow(x = avatar_clean)
-
-# ***************** #
-# Add period factor #
-# ***************** #
-
-period_levels <- c("D", "E", "N", paste0("h", 0:23))
-avatar_clean$period <- factor(x = avatar_clean$period, 
-                              levels = period_levels)
-
-# Check period distribution
-period_dist <- avatar_clean[, .N, by = period][order(period)]
-
-# *************************** #
-# Select final avatar columns #
-# *************************** #
-
-avatar_cols <- c("count_point_id", "period", 
-                "aggregate_flow", "aggregate_flow_trucks", 
-                "aggregate_speed", "aggregate_occupancy",
-                "flow_D", "flow_trucks_D", "speed_D", 
-                "occupancy_D", "truck_pct_D",
-                "ratio_flow", "ratio_flow_trucks", 
-                "ratio_speed", "ratio_occupancy", 
-                "truck_pct", "ratio_truck_pct",
-                "perc_flow_predicted", "perc_flow_trucks_predicted", 
-                "perc_speed_predicted", "perc_occupancy_predicted",
-                "n_directions_measured", "n_hours_with_data", 
-                "n_total_observations")
-
-available_avatar_cols <- intersect(x = avatar_cols, 
-                                   y = names(avatar_clean))
-avatar_clean <- avatar_clean[, ..available_avatar_cols]
-
-pipeline_message(
-  sprintf("Cleaned up Avatar data: %s observations, %s attributes", 
-          fmt(nrow(x = avatar_clean)), ncol(avatar_clean)), 
-  process = "info")
-
-# Save processed avatar data
-saveRDS(object = avatar_clean, 
-        file = cfg_data$AVATAR_AGGREGATED_CLEAN_FILEPATH)
-
-pipeline_message(describe_df(avatar_clean), process = "info")
-
-pipeline_message(
-  sprintf("Avatar data successfully cleaned up and saved into file ", 
-          rel_path(cfg_data$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
-  level = 1, progress = "end", process = "valid")
-
 
 # ------------------------------------------------------------------------------
-# Merge Avatar data with road network
+# Save engineered France network
 # ------------------------------------------------------------------------------
 
-pipeline_message("Merging Avatar data with OSM road network", level = 1, 
-                 progress = "start", process = "join")
+pipeline_message("Saving engineered France network", 
+                 level = 1, progress = "start", process = "save")
+
+# Convert back to sf object if needed
+if (!"sf" %in% class(osm_france_engineered)) {
+  osm_france_engineered <- sf::st_as_sf(osm_france_engineered)
+}
+
+# Add QGIS-friendly datetime fields when `period` exists
+osm_france_engineered <- add_period_datetime_columns(osm_france_engineered)
+
+# Export to GeoPackage
+sf::st_write(
+  obj = osm_france_engineered, 
+  dsn = cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+  delete_dsn = TRUE,
+  quiet = FALSE)
 
 pipeline_message(
-  "Merging cleaned up Avatar data with cleaned up OSM road network", 
-  level = 2, progress = "start", process = "join")
+  sprintf("Engineered France network saved to %s", 
+          rel_path(cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
+  level = 1, progress = "end", process = "save")
 
-# Merge avatar data with network attributes (keep only avatar observations that 
-# have matched network data)
-training_data <- merge(
-  x = as.data.frame(avatar_clean), 
-  y = network_clean,
-  by.x = "count_point_id", 
-  by.y = "id",
-  all.x = FALSE,                                                                # Inner join - keep only matched observations
-  all.y = FALSE)
+# ------------------------------------------------------------------------------
+# Summary statistics
+# ------------------------------------------------------------------------------
 
-# Final column order
-final_cols <- c("osm_id", "count_point_id", "period",
-               # Targets
-               "aggregate_flow", "aggregate_flow_trucks", 
-               "aggregate_speed", "aggregate_occupancy",
-               # Baseline values
-               "flow_D", "flow_trucks_D", "speed_D", 
-               "occupancy_D", "truck_pct_D",
-               # Ratios
-               "ratio_flow", "ratio_flow_trucks", 
-               "ratio_speed", "ratio_occupancy",
-               "truck_pct", "ratio_truck_pct",
-               # Network features
-               "highway", "DEGRE", "ref_letter", "first_word", 
-               "oneway_osm", "lanes_osm", "speed", 
-               "connectivity", "betweenness", "closeness", "pagerank",
-               # Quality indicators
-               "perc_flow_predicted", "perc_flow_trucks_predicted",
-               "perc_speed_predicted", "perc_occupancy_predicted",
-               "n_directions_measured", "n_hours_with_data", 
-               "n_total_observations")
-available_final_cols <- intersect(x = final_cols, 
-                                  y = names(training_data))
-training_data <- training_data[, available_final_cols]
-
-# Training data integrity check
-n_na  <- sum(is.na(training_data))
-
-pipeline_message(text = sprintf("Training data integrity check: %s NA detected", 
-                                fmt(n_na)), process = "info")
-
-# Save training data
-saveRDS(object = training_data, 
-        file = cfg_data$TRAINING_RDS_DATA_FILEPATH)
+pipeline_message("Feature engineering summary:", process = "info")
 
 pipeline_message(
-  sprintf("Cleaned up Avatar data and OSM road network successfully merged ", 
-          "and saved into file ", rel_path(cfg_data$AVATAR_RDS_DATA_FILEPATH)),
-  level = 2, progress = "end", process = "valid")
+  sprintf("  - Total roads: %s", 
+          fmt(nrow(osm_france_engineered))), 
+  process = "info")
 
-# Export merged data to GeoPackage files with periods as milliseconds (integers)
-# h0 = 0, h1 = 3600000, h2 = 7200000, ..., h23 = 82800000
-# D = 90000000, E = 93600000, N = 97200000
-training_data_export <- training_data
-training_data_export$period_ms <- sapply(X = training_data_export$period, 
-                                         FUN = function(p) {
-  if (grepl(pattern = "^h", x = p)) {
-    # Extract hour number: h0 -> 0, h1 -> 1, etc.
-    hour <- as.integer(x = sub(pattern = "^h", 
-                               replacement = "", 
-                               x = p))
-    return(as.integer(x = hour * 3600000))
-  } else if (p == "D") {
-    return(as.integer(x = 25 * 3600000))
-  } else if (p == "E") {
-    return(as.integer(x = 26 * 3600000))
-  } else if (p == "N") {
-    return(as.integer(x = 27 * 3600000))
-  } else {
-    return(NA_integer_)
-  }
-})
+pipeline_message(
+  sprintf("  - Highway types: %s", 
+          length(unique(osm_france_engineered$highway))), 
+  process = "info")
 
-# Add geometry from network data
-training_data_sf <- merge(x = training_data_export, 
-                          y = osm_full_network,  
-                          by = "osm_id")
+pipeline_message(
+  sprintf("  - DEGRE classes: %s", 
+          length(unique(osm_france_engineered$DEGRE))), 
+  process = "info")
 
-# Convert to sf object
-training_data_sf <- sf::st_as_sf(x = training_data_sf)
+# Feature completeness check
+required_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
+                      "oneway_osm", "lanes_osm", "lanes_directional",
+                      "speed", "junction_osm",
+                      "connectivity", "betweenness", "closeness", "pagerank",
+                      "coreness", "dead_end_score", "edge_length_m")
 
-# Export to GeoPackage file
-sf::st_write(obj = training_data_sf, 
-             dsn = cfg_data$TRAINING_GPKG_DATA_FILEPATH, 
-             delete_dsn = TRUE)
+available_features <- intersect(required_features, 
+                               names(osm_france_engineered))
 
-pipeline_message(sprintf("Avatar data successfully merged with OSM road ", 
-                         "network and saved into file %s", 
-                         cfg_data$TRAINING_GPKG_DATA_FILEPATH), 
-                 level = 1, progress = "end", process = "valid")
+pipeline_message(
+  sprintf("  - Features available: %s/%s", 
+          length(available_features), 
+          length(required_features)), 
+  process = "info")
 
-pipeline_message("Road feature engineering successfully processed", level = 0, 
-                 progress = "end", process = "valid")
+if (length(available_features) < length(required_features)) {
+  missing_features <- setdiff(required_features, available_features)
+  pipeline_message(
+    sprintf("  - Missing features: %s", 
+            paste(missing_features, collapse = ", ")), 
+    process = "warn")
+}
+
+pipeline_message("OSM France feature engineering completed", 
+                 level = 0, progress = "end", process = "valid")
+
+# Cleanup large objects to free memory for next steps
+rm(list = intersect(ls(), c("osm_france_engineered", "osm_full_network",
+                            "imputation_rules")))
+gc(verbose = FALSE)

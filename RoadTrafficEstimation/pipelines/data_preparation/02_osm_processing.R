@@ -328,6 +328,10 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   node_closeness <- igraph::closeness(graph = g, 
                                       cutoff = cfg_data$CUTOFF_CLOSENESS, 
                                       mode = "all")
+
+  # K-core index (node structural embeddedness)
+  pipeline_message("Computing node coreness", process = "info")
+  node_coreness <- igraph::coreness(graph = g, mode = "all")
   
   pipeline_message("Centrality scores computed", level = 2, 
                    progress = "start", process = "valid")
@@ -360,6 +364,14 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     (node_closeness[from_indices] + node_closeness[to_indices]) / 2
   edge_pagerank <- 
     (node_pagerank[from_indices] + node_pagerank[to_indices]) / 2
+
+  # Additional lightweight and predictive edge features
+  edge_coreness <-
+    (node_coreness[from_indices] + node_coreness[to_indices]) / 2
+  edge_dead_end_score <-
+    (as.numeric(node_connectivity[from_indices] == 1) +
+       as.numeric(node_connectivity[to_indices] == 1)) / 2
+  edge_length_m <- as.numeric(sf::st_length(roads_for_network))
   
   pipeline_message("Edge-level metrics computed", level = 2, 
                    progress = "end", process = "valid")
@@ -376,12 +388,19 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     connectivity = edge_connectivity,
     betweenness = edge_betweenness,
     closeness = edge_closeness,
-    pagerank = edge_pagerank)
+    pagerank = edge_pagerank,
+    coreness = edge_coreness,
+    dead_end_score = edge_dead_end_score,
+    edge_length_m = edge_length_m)
   
   # Memory cleanup
   rm(g, edge_df, node_connectivity, node_betweenness, 
-     node_closeness, node_pagerank, edge_connectivity, edge_betweenness,
-     edge_closeness, edge_pagerank)
+      node_closeness, node_pagerank, node_coreness,
+      edge_connectivity, edge_betweenness,
+      edge_closeness, edge_pagerank, edge_coreness,
+      edge_dead_end_score, edge_length_m,
+     roads_for_network, unique_roads, edge_ends, from_indices, to_indices,
+     coords_dt, start_pts, end_pts)
   gc(verbose = FALSE)
   
   pipeline_message("Feature tables assembled", level = 2, 
@@ -396,6 +415,31 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   pipeline_message("Extracting structured OSM attributes from other_tags", 
                    level = 1, progress = "start", process = "calc")
+  
+  # Reload osm_roads if not in memory (happens when degre_lookup was cached)
+  if (!exists("osm_roads")) {
+    # Force garbage collection to reclaim memory before loading 1.6 Go GPKG
+    gc(verbose = FALSE)
+    
+    pipeline_message(
+      sprintf("Reloading OSM road data from %s", 
+              rel_path(cfg_data$OSM_ROADS_FILEPATH)),
+      level = 2, progress = "start", process = "load")
+    
+    osm_roads <- st_read(dsn = cfg_data$OSM_ROADS_FILEPATH, quiet = TRUE)
+    
+    high_traffic_types <- c(
+      "motorway", "trunk", "primary", "secondary", "tertiary", 
+      "unclassified", "residential", "motorway_link", "trunk_link", 
+      "primary_link", "secondary_link", "tertiary_link")
+    osm_roads <- osm_roads[osm_roads$highway %in% high_traffic_types, ]
+    
+    assign(x = "osm_roads", value = osm_roads, envir = .GlobalEnv)
+    
+    pipeline_message(
+      text = "OSM road data reloaded for attribute extraction",
+      level = 2, progress = "end", process = "valid")
+  }
   
   # Select relevant OSM tags to extract for traffic noise modelling
   osm_tags <- c(
@@ -451,14 +495,25 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   pipeline_message("Merging OSM road network with commune urban density class data", 
                    level = 2, progress = "start", process = "calc")
   
-  # Drop geometries in degre_lookup and network_features
-  degre_lookup <-  degre_lookup %>% st_drop_geometry()
-  network_features <- network_features %>% st_drop_geometry()
+  # Drop geometries in degre_lookup and network_features to save RAM
+  # (geometry is already carried by osm_roads)
+  if (inherits(degre_lookup, "sf")) {
+    degre_lookup <- degre_lookup %>% st_drop_geometry()
+  }
+  if (inherits(network_features, "sf")) {
+    network_features <- network_features %>% st_drop_geometry()
+  }
+  gc(verbose = FALSE)
   
   # Merge osm_roads and degre_lookup
   osm_full_network <- merge(x = osm_roads, 
                             y = degre_lookup, 
                             by = 'osm_id')
+  
+  # Free source objects immediately after merge to reclaim RAM
+  rm(osm_roads, degre_lookup)
+  gc(verbose = FALSE)
+  
   pipeline_message("Road network successfully merged with commune density data", 
                    level = 2, progress = "end", process = "valid")
   
@@ -470,6 +525,13 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
                             by = 'osm_id')
   pipeline_message("Road network successfully merged with with network features", 
                    level = 2, progress = "end", process = "valid")
+  
+  # Free network_features after merge
+  rm(network_features)
+  gc(verbose = FALSE)
+  pipeline_message(
+    text = "Road network successfully merged with with network features", 
+    level = 2, progress = "end", process = "valid")
   
   pipeline_message("Saving final road network", 
                    level = 2, progress = "start", process = "save")
@@ -494,3 +556,9 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
             rel_path(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 2, progress = "end", process = "valid")
 }
+
+# Cleanup large objects to free memory for next steps
+rm(list = intersect(ls(), c("osm_roads", "commune_data", "degre_lookup",
+                            "unique_roads", "edges", "g", "node_data",
+                            "osm_full_network")))
+gc(verbose = FALSE)
