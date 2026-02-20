@@ -21,9 +21,9 @@ pipeline_message(text = "OSM France feature engineering",
 IS_TEST_MODE <- exists("TEST_REGION") && !is.null(TEST_REGION)
 if (IS_TEST_MODE) {
   pipeline_message(
-    text = sprintf("TEST MODE: Cropping to region %s (bbox: %s)",
-                   TEST_REGION$name,
-                   paste(TEST_REGION$bbox, collapse = ", ")),
+    sprintf("TEST MODE: Cropping to region %s (bbox: %s)",
+            TEST_REGION$name,
+            paste(TEST_REGION$bbox, collapse = ", ")),
     level = 1, process = "info"
   )
 }
@@ -57,7 +57,7 @@ if (!exists('osm_full_network') || !is.data.frame(osm_full_network)) {
     pipeline_message(
       sprintf("OSM full network object not found and file %s does not exist!", 
               cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH), 
-              process = "error")
+      process = "stop")
   }
 }
 
@@ -137,13 +137,13 @@ imputation_rules <- rbind(
 
 # Save imputation rules
 saveRDS(object = imputation_rules, 
-        file = cfg_data$AVATAR_IMPUTATION_RULES_FILEPATH)
+        file = cfg_data$IMPUTATION_RULES_FRANCE_FILEPATH)
 
 pipeline_message(describe_df(imputation_rules), process = "info")
 
 pipeline_message(
   sprintf("Default road traffic imputation rules successfully built and saved ", 
-          "into file ", rel_path(cfg_data$AVATAR_IMPUTATION_RULES_FILEPATH)), 
+          "into file ", rel_path(cfg_data$IMPUTATION_RULES_FRANCE_FILEPATH)), 
   level = 2, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
@@ -227,8 +227,8 @@ required_features <- c("highway", "DEGRE", "ref_letter", "first_word",
                       "connectivity", "betweenness", "closeness", "pagerank",
                       "coreness", "dead_end_score", "edge_length_m")
 
-available_features <- intersect(required_features, 
-                               names(osm_france_engineered))
+available_features <- intersect(x =required_features, 
+                                y = names(osm_france_engineered))
 
 pipeline_message(
   sprintf("  - Features available: %s/%s", 
@@ -237,17 +237,19 @@ pipeline_message(
   process = "info")
 
 if (length(available_features) < length(required_features)) {
-  missing_features <- setdiff(required_features, available_features)
+  missing_features <- setdiff(x = required_features, y = available_features)
   pipeline_message(
     sprintf("  - Missing features: %s", 
             paste(missing_features, collapse = ", ")), 
-    process = "warn")
+    process = "warning")
 }
 
 pipeline_message("OSM France feature engineering completed", 
                  level = 0, progress = "end", process = "valid")
 
 # Cleanup large objects to free memory for next steps
-rm(list = intersect(ls(), c("osm_france_engineered", "osm_full_network",
-                            "imputation_rules")))
+rm(list = intersect(x = ls(), 
+                    y = c("osm_france_engineered", 
+                          "osm_full_network",
+                          "imputation_rules")))
 gc(verbose = FALSE)

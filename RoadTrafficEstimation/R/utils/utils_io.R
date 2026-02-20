@@ -275,8 +275,8 @@ describe_df <- function(df) {
 #'                \code{"save"}, \code{"pack"}, \code{"download"}, 
 #'                \code{"wait"}, \code{"configure"}, \code{"search"}, 
 #'                \code{"calc"}, \code{"join"}, \code{"learn"}, \code{"build"}, 
-#'                \code{"plot"}, \code{"info"}, \code{"valid"}, 
-#'                \code{"warning"}, \code{"stop"}.
+#'                \code{"convert"}, \code{"plot"}, \code{"info"}, 
+#'                \code{"valid"}, \code{"warning"}, \code{"stop"}.
 #' @return Invisibly returns \code{NULL}. The function is used for its side 
 #'         effects (console output, warnings, or errors).
 #' @export
@@ -300,6 +300,7 @@ pipeline_message <- function(text,
     join      = "🔗",
     learn     = "🎓",
     build     = "🚧",
+    convert   = "🔄",
     plot      = "📊",
     info      = "ℹ️",
     valid     = "✓",

@@ -43,9 +43,8 @@ download_geofabrik_pbf <- function(region = "France",
     "Martinique", "Mayotte", "Réunion"
   )
   
-  pipeline_message(
-    "Verification of the zone name entered", 
-    level = 2, progress = "start", process = "search")
+  pipeline_message("Verification of the zone name entered", level = 2, 
+                   progress = "start", process = "search")
   
   # ---------------------------------------------------------------------------
   # Validation
@@ -53,17 +52,15 @@ download_geofabrik_pbf <- function(region = "France",
   if (region %in% unavailable_regions) {
     pipeline_message(
       sprintf("OSM data for region '%s' are not available on Geofabrik", 
-                    region), 
-      level = 4, process = "stop")
-    stop(call. = FALSE)
+              region), 
+      process = "stop")
   }
   
   if (!region %in% c(available_regions, unavailable_regions)) {
     pipeline_message(
       sprintf("Unknown region '%s'. Please provide a valid French region 
-                     name.", region), 
-      level = 4, process = "stop")
-    stop(call. = FALSE)
+              name.", region), 
+      process = "stop")
   }
   
   # ---------------------------------------------------------------------------
@@ -88,18 +85,17 @@ download_geofabrik_pbf <- function(region = "France",
     url <- paste0(base_url, "france/", pbf_name)
   }
   
-  pipeline_message(
-    paste0("URL: ", url), level = 4, process = "valid")
-  pipeline_message(
-    paste0("PBF file name: ", pbf_name), level = 4, process = "valid")
+  pipeline_message(sprintf("URL: %s", url), level = 3, 
+                   process = "valid")
+  pipeline_message(sprintf("PBF file name: %s", pbf_name), level = 3, 
+                   process = "valid")
   
   # Destination file name
   dest_file <- file.path(dest_dir, pbf_name)
   
   if (file.exists(dest_file) && !overwrite) {
-    pipeline_message(
-      paste0("File already exists: ", dest_file), 
-      level = 4, process = "valid")
+    pipeline_message(sprintf("File %s already exists", dest_file), 
+                     level = 3, process = "valid")
     return(invisible(dest_file))
   }
   
@@ -118,29 +114,27 @@ download_geofabrik_pbf <- function(region = "France",
     if (length(size_line) == 1) {
       size_bytes <- as.numeric(gsub(".*: ", "", size_line))
       file_size_mb <- size_bytes / 1024^2
-      pipeline_message(
-        sprintf("File size: %.1f MB", file_size_mb), 
-        level = 4, process = "pack")
+      pipeline_message(sprintf("File size: %.1f MB", file_size_mb), 
+                       level = 3, process = "pack")
     }
   }
   
   if (is.na(file_size_mb)) {
     pipeline_message(
       "File size: unavailable (server did not provide Content-Length)", 
-      level = 4, process = "pack")
+      level = 3, process = "pack")
   }
   
   pipeline_message(
     sprintf("Zone name ok, destination URL ready and directory %s 
-                   successfully created", rel_path(dest_file)), 
+            successfully created", rel_path(dest_file)), 
     level = 2, progress = "end", process = "valid")
   
   # ---------------------------------------------------------------------------
   # Download
   # ---------------------------------------------------------------------------
-  pipeline_message(
-    "Downloading file", 
-    level = 2, progress = "start", process = "download")
+  pipeline_message(sprintf("Downloading file %s", rel_path(dest_file)), 
+                   level = 2, progress = "start", process = "download")
   
   # ---------------------------------------------------------------------------
   # Download using curl (robust for large files)
@@ -155,15 +149,13 @@ download_geofabrik_pbf <- function(region = "France",
   status <- system(cmd)
   
   if (status != 0) {
-    pipeline_message(
-      "Download failed (curl returned a non-zero status)", 
-      level = 4, process = "stop")
-    stop(call. = FALSE)
+    pipeline_message("Download failed (curl returned a non-zero status)", 
+                     process = "stop")
   }
   
   pipeline_message(
     sprintf("Download successfully completed. File saved as %s", 
-                   rel_path(dest_file)), 
+            rel_path(dest_file)), 
     level = 2, progress = "end", process = "valid")
   
   invisible(dest_file)
@@ -192,18 +184,16 @@ convert_pbf_to_gpkg <- function(pbf_file,
     level = 2, progress = "start", process = "calc")
   
   if (!file.exists(pbf_file)) {
-    pipeline_message(
-      paste0("Input PBF file does not exist: ", pbf_file), 
-      level = 4, process = "stop")
-    stop(call. = FALSE)
+    pipeline_message(sprintf("Input PBF file %s does not exist", 
+                             pbf_file), 
+                     process = "stop")
   }
   
   if (file.exists(gpkg_file)) {
     if (!overwrite) {
-      pipeline_message(
-        paste0("Output GPKG file already exists: ", gpkg_file), 
-        level = 4, process = "stop")
-      stop(call. = FALSE)
+      pipeline_message(sprintf("Output GPKG file %s already exists", 
+                               gpkg_file), 
+                       process = "stop")
     } else {
       file.remove(gpkg_file)
     }
@@ -213,13 +203,12 @@ convert_pbf_to_gpkg <- function(pbf_file,
   if (system("ogr2ogr --version", intern = TRUE, ignore.stderr = TRUE) |> length() == 0) {
     pipeline_message(
       "GDAL (ogr2ogr) is not available in the system environment", 
-      level = 4, process = "stop")
-    stop(call. = FALSE)
+      process = "stop")
   }
-  
-  message("🔄 Converting PBF to GeoPackage...")
-  message("   Input : ", pbf_file)
-  message("   Output: ", gpkg_file)
+  pipeline_message(sprintf("Converting PBF to GeoPackage :\n
+                           \t\tInput: %s\n
+                           \t\tOutput: %s", pbf_file, gpkg_file), 
+                   level = 3, process = "convert")
   
   cmd <- sprintf(
     'ogr2ogr -f GPKG %s %s',
@@ -230,7 +219,7 @@ convert_pbf_to_gpkg <- function(pbf_file,
   status <- system(cmd)
   
   if (status != 0) {
-    stop("ogr2ogr conversion failed.", call. = FALSE)
+    pipeline_message("ogr2ogr conversion failed", process = "stop")
   }
   
   pipeline_message(
@@ -299,12 +288,12 @@ extract_osm_other_tags <- function(other_tags_vector,
     last_printed <- 0
     if (IS_TTY) {
       pipeline_message("Extracting OSM tags", 
-                       level = 4, process = "info")
+                       process = "info")
     } else {
       pipeline_message(
         sprintf("Extracting %d OSM tags (%d columns)", 
                        length(x = keys), n_cols), 
-        level = 4, process = "info")
+        process = "info")
     }
   }
   # Extract all keys at once
@@ -345,16 +334,15 @@ extract_osm_other_tags <- function(other_tags_vector,
                       strrep(" ", pb_width - bar_len))
         pipeline_message(
           sprintf("[%s] %3.0f%% (%d/%d)", bar, 100 * pct, i, n_cols), 
-          level = 4, process = "wait")
+          level = 3, process = "wait")
         if (i == n_cols) {
         }
       } else if (i %% 5 == 0 || i == n_cols) {
         if (i > last_printed) {
           last_printed <- i
-          pipeline_message(
-            sprintf("OSM tag %d/%d (%3.0f%%) processed", 
+          pipeline_message(sprintf("OSM tag %d/%d (%3.0f%%) processed", 
                            i, n_cols, 100 * pct), 
-            level = 4, process = "valid")
+            level = 3, process = "valid")
         }
       }
     }

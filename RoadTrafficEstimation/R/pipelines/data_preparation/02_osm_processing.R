@@ -470,9 +470,6 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
       col_name <- paste0(tag, "_osm")  # Add _osm suffix to avoid conflicts
       osm_roads[[col_name]] <- extracted_tags[[tag]]
     }
-    pipeline_message(
-      sprintf("Extracted %d OSM attributes \n", length(x = osm_tags)), 
-      level = 1, progress = "end", process = "valid")
   }
   
   # Memory cleanup
