@@ -27,7 +27,7 @@ AVATAR_GPKG_DIRPATH <- file.path(AVATAR_DIR, "gpkg")
 avatar_count_points_filename          <- "03_avatar_count_points.json"
 avatar_hourly_aggregated_filename     <- "avatar_aggregated_hourly_period.rds"
 avatar_data_rds_filename              <- "03_avatar_raw_traffic.rds"
-avatar_ids_full_network_filename      <- "03_osm_network_with_avatar_ids.gpkg"
+avatar_merged_with_osm_filename       <- "03_osm_network_with_avatar_ids.gpkg"
 avatar_aggregated_data_filename       <- "04_avatar_aggregated_with_ratios.rds"
 avatar_aggregated_clean_data_filename <- "05_avatar_traffic_clean.rds"
 avatar_clean_network_filename         <- "05_avatar_clean_network.rds"
@@ -51,12 +51,18 @@ CONFIG_DATA_PREP <- list(
   OSM_PBF_DIR                          = OSM_PBF_DIR,
   OSM_GPKG_DIR                         = OSM_GPKG_DIR,
   OSM_SHP_DIR                          = OSM_SHP_DIR,
-  OSM_ROADS_FILEPATH                   = file.path(OSM_GPKG_DIR, osm_roads_latest_filename),
-  OSM_TYPOLOGIES_FILEPATH              = file.path(OSM_SHP_DIR, osm_typologies_filename),
-  OSM_DEGRE_FILEPATH                   = file.path(OSM_RDS_DIR, osm_degre_filename),
-  OSM_ROADS_CONNECTIVITY_FILEPATH      = file.path(OSM_GPKG_DIR, osm_network_augmented_filename),
-  OSM_ROADS_FRANCE_ENGINEERED_FILEPATH = file.path(OSM_GPKG_DIR, osm_roads_france_engineered_filename),
-  IMPUTATION_RULES_FRANCE_FILEPATH     = file.path(OSM_RDS_DIR, imputation_rules_france_filename),
+  OSM_ROADS_FILEPATH                   = file.path(OSM_GPKG_DIR, 
+                                                   osm_roads_latest_filename),
+  OSM_TYPOLOGIES_FILEPATH              = file.path(OSM_SHP_DIR, 
+                                                   osm_typologies_filename),
+  OSM_DEGRE_FILEPATH                   = file.path(OSM_RDS_DIR, 
+                                                   osm_degre_filename),
+  OSM_ROADS_CONNECTIVITY_FILEPATH      = file.path(OSM_GPKG_DIR, 
+                                                   osm_network_augmented_filename),
+  OSM_ROADS_FRANCE_ENGINEERED_FILEPATH = file.path(OSM_GPKG_DIR, 
+                                                   osm_roads_france_engineered_filename),
+  IMPUTATION_RULES_FRANCE_FILEPATH     = file.path(OSM_RDS_DIR, 
+                                                   imputation_rules_france_filename),
   
   # ****************** #
   # Spatial parameters #
@@ -91,14 +97,22 @@ CONFIG_DATA_PREP <- list(
   AVATAR_DIR                       = AVATAR_DIR, 
   AVATAR_RDS_DATA_DIR              = AVATAR_RDS_DATA_DIR, 
   AVATAR_CSV_DATA_DIR              = AVATAR_CSV_DATA_DIR, 
-  AVATAR_COUNT_POINTS_FILEPATH     = file.path(AVATAR_JSON_DIRPATH, avatar_count_points_filename),
-  AVATAR_RDS_DATA_FILEPATH         = file.path(AVATAR_RDS_DATA_DIR, avatar_data_rds_filename),
-  AVATAR_AGGREGATED_FILEPATH       = file.path(AVATAR_RDS_DATA_DIR, avatar_aggregated_data_filename),
-  AVATAR_AGGREGATED_CLEAN_FILEPATH = file.path(AVATAR_RDS_DATA_DIR, avatar_aggregated_clean_data_filename),
-  AVATAR_IDS_FULL_NETWORK_FILEPATH = file.path(AVATAR_GPKG_DIRPATH, avatar_ids_full_network_filename),
-  AVATAR_AGGREGATED_FILEPATH       = file.path(AVATAR_RDS_DATA_DIR, avatar_aggregated_data_filename),
-  AVATAR_AGGREGATED_CLEAN_FILEPATH = file.path(AVATAR_RDS_DATA_DIR, avatar_aggregated_clean_data_filename),
-  AVATAR_CLEAN_NETWORK_RDS_DATA_FILEPATH = file.path(AVATAR_RDS_DATA_DIR, avatar_clean_network_filename),
+  AVATAR_COUNT_POINTS_FILEPATH     = file.path(AVATAR_JSON_DIRPATH, 
+                                               avatar_count_points_filename),
+  AVATAR_RDS_DATA_FILEPATH         = file.path(AVATAR_RDS_DATA_DIR, 
+                                               avatar_data_rds_filename),
+  AVATAR_AGGREGATED_FILEPATH       = file.path(AVATAR_RDS_DATA_DIR, 
+                                               avatar_aggregated_data_filename),
+  AVATAR_AGGREGATED_CLEAN_FILEPATH = file.path(AVATAR_RDS_DATA_DIR, 
+                                               avatar_aggregated_clean_data_filename),
+  AVATAR_MERGED_WITH_OSM_FILEPATH  = file.path(AVATAR_GPKG_DIRPATH, 
+                                               avatar_merged_with_osm_filename),
+  AVATAR_AGGREGATED_FILEPATH       = file.path(AVATAR_RDS_DATA_DIR, 
+                                               avatar_aggregated_data_filename),
+  AVATAR_AGGREGATED_CLEAN_FILEPATH = file.path(AVATAR_RDS_DATA_DIR, 
+                                               avatar_aggregated_clean_data_filename),
+  AVATAR_CLEAN_NETWORK_RDS_DATA_FILEPATH = file.path(AVATAR_RDS_DATA_DIR, 
+                                                     avatar_clean_network_filename),
   
   # ***************** #
   # Download settings #

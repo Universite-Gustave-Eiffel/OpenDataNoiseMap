@@ -49,6 +49,10 @@ if (!exists('osm_full_network') || !is.data.frame(osm_full_network)) {
     if (sf::st_crs(osm_full_network) != cfg_g$TARGET_CRS){
       osm_full_network <- st_transform(osm_full_network, crs = cfg_g$TARGET_CRS)
     }
+
+    pipeline_message(
+      sprintf("GeoDataframe contains %i features with %i fields and geometry type %s", nrow(osm_full_network), ncol(osm_full_network), sf::st_geometry_type(osm_full_network)[1]), 
+      process = "info")
     
     pipeline_message("OSM France network successfully loaded", level = 1, 
                      progress = "end", process = "valid")
@@ -192,7 +196,12 @@ sf::st_write(
   obj = osm_france_engineered, 
   dsn = cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
   delete_dsn = TRUE,
-  quiet = FALSE)
+  quiet = TRUE)
+
+pipeline_message(
+  sprintf("Writing %i features with %i fields and geometry type %s", 
+          nrow(osm_france_engineered), ncol(osm_france_engineered), sf::st_geometry_type(osm_france_engineered)[1]), 
+  process = "info")
 
 pipeline_message(
   sprintf("Engineered France network saved to %s", 

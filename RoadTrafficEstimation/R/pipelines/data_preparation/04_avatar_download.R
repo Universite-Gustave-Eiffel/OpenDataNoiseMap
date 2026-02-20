@@ -1,5 +1,5 @@
 # ==============================================================================
-# STAGE 3: AVATAR FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS AND MATCHING - MINIMAL 
+# STAGE 4: AVATAR FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS AND MATCHING - MINIMAL 
 #          VERSION
 # ==============================================================================
 
@@ -83,8 +83,9 @@ if (file.exists(cfg_data$AVATAR_COUNT_POINTS_FILEPATH) &&
   }
 } else if (!file.exists(cfg_data$AVATAR_COUNT_POINTS_FILEPATH) && 
            RUN_CONTEXT == "slurm") {
-  pipeline_message("Avatar data can't be downloaded from a Slurm job. Run the script locally", 
-                   process = "stop")
+  pipeline_message(
+    sprintf("Avatar data can't be downloaded from a Slurm job and the file %s is missing. Run the script locally", cfg_data$AVATAR_COUNT_POINTS_FILEPATH), 
+    process = "stop")
 }
 
 # ------------------------------------------------------------------------------
