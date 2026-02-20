@@ -82,7 +82,6 @@ pipeline_message("Computing imputation rules from full France network",
 setDT(osm_full_network)
 
 pipeline_message(describe_df(osm_full_network), process = "info")
-pipeline_message(describe_df(full_network_avatar_id), process = "info")
 
 # Clean highway types
 osm_full_network$highway <- as.character(x = osm_full_network$highway)
