@@ -12,9 +12,6 @@
 #   - 02_imputation_rules_france.rds (global imputation rules)
 #
 # In TEST mode: reduces the region to a test bbox for speed
-
-
-Translated with DeepL.com (free version)
 # ==============================================================================
 
 pipeline_message("Road feature engineering processing", level = 0, 
