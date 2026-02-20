@@ -396,11 +396,22 @@ extract_osm_other_tags <- function(other_tags_vector,
 #' @param rules A data.frame or data.table containing imputation rules per
 #'              highway type. Must include columns:
 #'              \code{highway, median_lanes, median_speed}.
+#' @param default_degre Integer. Default value to impute for missing DEGRE 
+#'                      (commune density class). Default is 1 (urban).
+#' @param default_number_of_lanes Integer. Default value to impute for missing
+#'                                number of lanes. Default is 2.
+#' @param default_vehicle_speed Numeric. Default value to impute for missing
+#'                               vehicle speed (km/h). Default is 50. 
 #' @return A data.frame with cleaned and engineered network features.
 #' @examples
-#' network_clean <- process_network_features(osm_subset, imputation_rules)
+#' network_clean <- process_network_features(osm_subset, imputation_rules, 
+#'                                           default_degre, default_number_of_lanes,
+#'                                           default_vehicle_speed)
 #' @export
-process_network_features <- function(data, rules) {
+process_network_features <- function(data, rules, 
+                                     default_degre = 1, 
+                                     default_number_of_lanes = 2, 
+                                     default_vehicle_speed = 50) {
   data.table::setDT(data)
   # ------------------------------------------- #
   # Highway type normalization (ordered factor) #
@@ -423,10 +434,10 @@ process_network_features <- function(data, rules) {
   if (n_missing_degre > 0) {
     pipeline_message(
       sprintf("Imputing %s missing DEGRE values → %d (urban default)", 
-                     fmt(x = n_missing_degre), CONFIG$DEFAULT_DEGRE), 
+                     fmt(x = n_missing_degre), default_degre), 
       process = "warning")
     # Set default value when missing DEGRE
-    data[is.na(DEGRE), DEGRE := CONFIG$DEFAULT_DEGRE]
+    data[is.na(DEGRE), DEGRE := default_degre]
   }
   data[, DEGRE := factor(DEGRE)]
   # ------------------------------------- #
@@ -527,7 +538,7 @@ process_network_features <- function(data, rules) {
                              rules$highway)
     data[missing_lanes, lanes_osm :=
            ifelse(test = is.na(lanes_lookup[as.character(x = highway)]),
-                  yes = CONFIG$DEFAULT_NUMBER_OF_LANES,
+                  yes = default_number_of_lanes,
                   no = lanes_lookup[as.character(x = highway)])]
   }
   # ---------------------- #
@@ -550,7 +561,7 @@ process_network_features <- function(data, rules) {
                              rules$highway)
     data[missing_speed, speed :=
            ifelse(test = is.na(speed_lookup[as.character(x = highway)]),
-                  yes = CONFIG$DEFAULT_VEHICLE_SPEED, 
+                  yes = default_vehicle_speed, 
                   no = speed_lookup[as.character(x = highway)])]
   }
   # -------------------------------- #

@@ -58,7 +58,7 @@ CONFIG_DATA_PREP <- list(
   # Default allocation values #
   # ************************* #
   DEFAULT_NUMBER_OF_LANES = 2, 
-  DEFAULT_VEHICLE_SPEED   = 2, 
+  DEFAULT_VEHICLE_SPEED   = 50, 
   DEFAULT_NUMBER_OF_ROADS = 0, 
   DEFAULT_DEGRE           = 1, 
   

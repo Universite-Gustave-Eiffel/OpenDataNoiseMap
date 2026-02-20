@@ -162,7 +162,10 @@ pipeline_message("Applying feature engineering to France network",
 # - Imputes missing lanes and speed using rules
 osm_france_engineered <- process_network_features(
   data = osm_full_network, 
-  rules = imputation_rules)
+  rules = imputation_rules, 
+  default_degre = cfg_data$DEFAULT_DEGRE, 
+  default_number_of_lanes = cfg_data$DEFAULT_NUMBER_OF_LANES, 
+  default_vehicle_speed = cfg_data$DEFAULT_VEHICLE_SPEED)
 
 pipeline_message(
   sprintf("Feature engineering applied: %s roads processed", 
