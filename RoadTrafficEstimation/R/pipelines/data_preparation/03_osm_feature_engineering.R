@@ -147,8 +147,8 @@ pipeline_message(describe_df(imputation_rules), process = "info")
 
 pipeline_message(
   sprintf("Default road traffic imputation rules successfully built and saved ", 
-          "into file ", rel_path(cfg_data$IMPUTATION_RULES_FRANCE_FILEPATH)), 
-  level = 2, progress = "end", process = "save")
+          "into file %s", rel_path(cfg_data$IMPUTATION_RULES_FRANCE_FILEPATH)), 
+  level = 1, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
 # Apply feature engineering to full France network

@@ -18,8 +18,8 @@ if (!exists(x= 'avatar_data', inherits = FALSE)){
   avail_gb <- get_available_memory_gb()
   if (!is.na(avail_gb) && avail_gb < 6) {
     pipeline_message(
-      text = sprintf("Low RAM detected (%.1f GB available) - switching to chunk-streaming mode", 
-                     avail_gb),
+      sprintf("Low RAM detected (%.1f GB available) - switching to chunk-streaming mode", 
+              avail_gb),
       process = "warning")
     use_chunk_streaming <- TRUE
   } else {
@@ -29,17 +29,17 @@ if (!exists(x= 'avatar_data', inherits = FALSE)){
     
     avatar_data <- readRDS(file = cfg_data$AVATAR_DATA_FILEPATH)
     
-    pipeline_message(text = describe_df(avatar_data), process = "info")
+    pipeline_message(describe_df(avatar_data), process = "info")
     
     pipeline_message(
-      text = "Avatar data successfully loaded", 
+      "Avatar data successfully loaded", 
       level = 1, progress = "end", process = "valid")
   }
 }
 
 if (isTRUE(use_chunk_streaming)) {
   pipeline_message(
-    text = "Chunk-streaming mode: hourly aggregation directly from CSV chunks", 
+    "Chunk-streaming mode: hourly aggregation directly from CSV chunks", 
     level = 1, progress = "start", process = "calc")
   
   files <- list.files(path = cfg_data$AVATAR_CSV_DATA_DIRPATH, 
@@ -47,7 +47,8 @@ if (isTRUE(use_chunk_streaming)) {
                       full.names = TRUE)
   
   if (length(files) == 0) {
-    stop("No Avatar CSV chunk files found for low-memory streaming mode")
+    pipeline_message("No Avatar CSV chunk files found for chunk-streaming mode", 
+                     process = "stop")
   }
   
   temp_hourly_csv <- file.path(cfg_data$AVATAR_CSV_DATA_DIRPATH, 
@@ -87,7 +88,7 @@ if (isTRUE(use_chunk_streaming)) {
     
     if (i %% 25 == 0 || i == n_files) {
       pipeline_message(
-        text = sprintf("Chunk-streaming progress: %d/%d files", i, n_files),
+        sprintf("Chunk-streaming progress: %d/%d files", i, n_files),
         process = "info")
     }
   }
@@ -100,17 +101,12 @@ if (isTRUE(use_chunk_streaming)) {
   unlink(temp_hourly_csv)
   
   pipeline_message(
-    text = "Hourly aggregation successfully completed in chunk-streaming mode", 
+    "Hourly aggregation successfully completed in chunk-streaming mode", 
     level = 1, progress = "end", process = "valid")
 } else {
   pipeline_message(
-    text = "Conversion of Avatar data into a data table and creation of period and 
-          hour columns", 
+    "Conversion of Avatar data into a data table and creation of period and hour columns", 
     level = 1, progress = "start", process = "configure")
-
-pipeline_message("Conversion of Avatar data into a data table and creation of ", 
-                 "period and hour columns", 
-                 level = 1, progress = "start", process = "configure")
 
   # Coerce Avatar data frame to data.table
   setDT(avatar_data)
@@ -118,30 +114,31 @@ pipeline_message("Conversion of Avatar data into a data table and creation of ",
   # Sanitize column names (CSV via fread keeps special chars like flow[veh/h])
   setnames(avatar_data, make.names(names(avatar_data), unique = TRUE))
 
-# Create periods and hours
-if (!inherits(avatar_data$measure_datetime, "POSIXct")) {
-  avatar_data[, measure_datetime := as.POSIXct(measure_datetime, 
-                                               format="%Y-%m-%dT%H:%M:%S")]
+  # Create periods and hours
+  if (!inherits(avatar_data$measure_datetime, "POSIXct")) {
+    avatar_data[, measure_datetime := as.POSIXct(measure_datetime, 
+                                                format="%Y-%m-%dT%H:%M:%S")]
+  }
+  avatar_data[, hour := hour(measure_datetime)]
+  avatar_data[, period := ifelse(test = hour >= 6 & hour < 18, 
+                                yes = "D", 
+                                no = ifelse(test = hour >= 18 & hour < 22, 
+                                            yes = "E", 
+                                            no = "N"))]
+
+  pipeline_message("Avatar data successfully converted and columns created", 
+                  level = 1, progress = "end", process = "valid")
+
+  # Hourly aggregation
+  pipeline_message("Hourly aggregating Avatar data", level = 1, 
+                  progress = "start", process = "calc")
+
+  # Intermediate hourly data
+  hourly_aggregated <- aggregate_avatar_hourly(dt = avatar_data)
+
+  pipeline_message("Hourly aggregation successfully done", level = 1, 
+                  progress = "end", process = "valid")
 }
-avatar_data[, hour := hour(measure_datetime)]
-avatar_data[, period := ifelse(test = hour >= 6 & hour < 18, 
-                               yes = "D", 
-                               no = ifelse(test = hour >= 18 & hour < 22, 
-                                           yes = "E", 
-                                           no = "N"))]
-
-pipeline_message("Avatar data successfully converted and columns created", 
-                 level = 1, progress = "end", process = "valid")
-
-# Hourly aggregation
-pipeline_message("Hourly aggregating Avatar data", level = 1, 
-                 progress = "start", process = "calc")
-
-# Intermediate hourly data
-hourly_aggregated <- aggregate_avatar_hourly(dt = avatar_data)
-
-pipeline_message("Hourly aggregation successfully done", level = 1, 
-                 progress = "end", process = "valid")
 
 # Aggregate by period (D/E/N)
 pipeline_message("Aggregating Avatar data by period", level = 1, 
@@ -176,9 +173,8 @@ pipeline_message("Traffic flow metrics successfully calculated", level = 1,
 pipeline_message("Traffic flow metrics successfully calculated", level = 1, 
                  progress = "end", process = "valid")
 
-pipeline_message(
-  text = "Calculating weekday/weekend hourly traffic flow metrics", 
-  level = 1, progress = "start", process = "calc")
+pipeline_message("Calculating weekday/weekend hourly traffic flow metrics", 
+                 level = 1, progress = "start", process = "calc")
 
 # Weekday hourly aggregation
 hourly_wd <- hourly_aggregated[day_type == "wd"]
@@ -197,9 +193,9 @@ aggregated_measures_hourly_we[, period := paste0("h", hour, "_we")]
 aggregated_measures_hourly_we[, hour := NULL]
 
 pipeline_message(
-  text = sprintf("Weekday/weekend hourly metrics: %s wd rows, %s we rows", 
-                 fmt(nrow(aggregated_measures_hourly_wd)), 
-                 fmt(nrow(aggregated_measures_hourly_we))), 
+  sprintf("Weekday/weekend hourly metrics: %s wd rows, %s we rows", 
+          fmt(nrow(aggregated_measures_hourly_wd)), 
+          fmt(nrow(aggregated_measures_hourly_we))), 
   level = 1, progress = "end", process = "valid")
 
 # Union of all aggregated data
@@ -316,8 +312,7 @@ p4 <- plot_flow_distribution_and_quality(
   fig_name = cfg_data$FIG_TRAFFIC_FLOW_DISTRIB_AND_DATA_QUALITY)
 
 pipeline_message(
-  sprintf("Traffic flow distribution and data quality successfully plotted and ", 
-          "saved into file %s", 
+  sprintf("Traffic flow distribution and data quality successfully plotted and saved into file %s", 
           paste(rel_path(cfg_g$FIGS_DIR), 
                 cfg_data$FIG_TRAFFIC_FLOW_DISTRIB_AND_DATA_QUALITY, 
                 sep = .Platform$file.sep)), 
