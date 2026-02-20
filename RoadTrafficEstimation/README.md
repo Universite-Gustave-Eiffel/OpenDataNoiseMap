@@ -43,7 +43,7 @@ Phase 3: Prediction (Green)
   - Network connectivity metrics (betweenness, closeness, pagerank)
   - Urban density indicator (DEGRE communes)
   - Engineered features (highway factor, ref_letter, first_word, oneway, lanes, speed)
-- **Used by**: `06_training_dataset_merge.R`, `predict_nantes.R`, `predict_paris.R`, `predict_sensors.R`
+- **Used by**: `06_training_dataset_merge.R`, `predict_nantes.R`, `predict_paris.R`, `predict_sensors.R`, `predict_pemb.R`, `predict_france.R`
 - **Benefit**: Features computed once, not redundantly in each prediction script
 
 ## Project Structure

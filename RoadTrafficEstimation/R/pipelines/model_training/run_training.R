@@ -48,8 +48,7 @@ if (!exists(x= 'training_data', inherits = FALSE) &&
     !file.exists(cfg_train$TRAINING_RDS_DATA_FILEPATH)){
   
   pipeline_message(
-    sprintf("File %s doesn't exists. Training data is required to train the ", 
-            "model. Run the data preparation scripts to generate the dataset.", 
+    sprintf("File %s doesn't exists. Training data is required to train the model. Run the data preparation scripts to generate the dataset.", 
             cfg_train$TRAINING_RDS_DATA_FILEPATH), 
     process = "stop")
 }
@@ -59,16 +58,19 @@ training_data <- readRDS(cfg_train$TRAINING_RDS_DATA_FILEPATH)
 if (!"ratio_speed_to_osm" %in% names(training_data)) {
   if (all(c("aggregate_speed", "speed") %in% names(training_data))) {
     pipeline_message(
-      text = "ratio_speed_to_osm missing in training dataset: computing fallback from aggregate_speed/speed",
+      "ratio_speed_to_osm missing in training dataset: computing fallback from aggregate_speed/speed",
       process = "warning")
     training_data$ratio_speed_to_osm <- ifelse(
-      !is.na(training_data$aggregate_speed) & training_data$aggregate_speed >= 0 &
-        !is.na(training_data$speed) & training_data$speed > 0,
-      training_data$aggregate_speed / training_data$speed,
-      NA_real_
-    )
+      test = !is.na(training_data$aggregate_speed) & 
+             training_data$aggregate_speed >= 0 & 
+             !is.na(training_data$speed) & 
+             training_data$speed > 0, 
+      yes = training_data$aggregate_speed / training_data$speed,
+      no = NA_real_)
   } else {
-    stop("Missing required target ratio_speed_to_osm and cannot compute fallback (aggregate_speed/speed unavailable)")
+    pipeline_message(
+      "Missing required target ratio_speed_to_osm and cannot compute fallback (aggregate_speed/speed unavailable). Please ensure the training dataset contains the column ratio_speed_to_osm or the necessary columns to compute it", 
+      process = "stop")
   }
 }
 
@@ -101,19 +103,19 @@ missing_road_features <- setdiff(candidate_road_features, available_road_feature
 
 if (length(missing_road_features) > 0) {
   pipeline_message(
-    text = sprintf("Some candidate features are missing and will be skipped: %s",
-                   paste(missing_road_features, collapse = ", ")),
+    sprintf("Some candidate features are missing and will be skipped: %s",
+            paste(missing_road_features, collapse = ", ")),
     process = "warning")
 }
 
 if (length(available_road_features) == 0) {
-  stop("No road/network features available in training data")
-}
+  pipeline_message("No candidate road/network features are available in the training dataset. The model will not be able to learn meaningful patterns and predictions will be unreliable. Please ensure the training dataset contains relevant OSM/network features for the model to train on.", 
+  process = "stop")}
 
 pipeline_message(
-  text = sprintf("Using %d road/network features: %s",
-                 length(available_road_features),
-                 paste(available_road_features, collapse = ", ")),
+  sprintf("Using %d road/network features: %s",
+          length(available_road_features),
+          paste(available_road_features, collapse = ", ")),
   process = "info")
 
 # Build formula with existing features + interaction terms
@@ -139,9 +141,9 @@ road_feature_formula <- as.formula(
 
 if (length(interaction_terms) > 0) {
   pipeline_message(
-    text = sprintf("Added %d interaction terms: %s",
-                   length(interaction_terms),
-                   paste(interaction_terms, collapse = ", ")),
+    sprintf("Added %d interaction terms: %s",
+            length(interaction_terms),
+            paste(interaction_terms, collapse = ", ")),
     process = "info")
 }
 
@@ -237,8 +239,8 @@ if (isTRUE(cfg_train$USE_GROUPED_SENSOR_SPLIT)) {
     shared_base_train_sensors <- sample(all_d_sensors, size = n_train)
     shared_base_test_sensors <- setdiff(all_d_sensors, shared_base_train_sensors)
     pipeline_message(
-      text = sprintf("Shared base-model sensor split: %d train / %d test sensors",
-                     length(shared_base_train_sensors), length(shared_base_test_sensors)),
+      sprintf("Shared base-model sensor split: %d train / %d test sensors",
+              length(shared_base_train_sensors), length(shared_base_test_sensors)),
       process = "info")
   }
 }
@@ -535,8 +537,8 @@ for (model_name in names(all_configs)) {
     dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train, weight = weight_train)
     dtest <- xgboost::xgb.DMatrix(data = X_test, label = y_test)
     pipeline_message(
-      text = sprintf("Using Avatar quality weights: min=%.2f, mean=%.2f, max=%.2f", 
-                     min(weight_train), mean(weight_train), max(weight_train)),
+      sprintf("Using Avatar quality weights: min=%.2f, mean=%.2f, max=%.2f", 
+              min(weight_train), mean(weight_train), max(weight_train)),
       process = "info")
   } else {
     dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train)
@@ -560,8 +562,8 @@ for (model_name in names(all_configs)) {
           verbose = 0,
           showsd = FALSE)
         best_rounds <- cv_result$best_iteration
-        pipeline_message(text = sprintf("CV selected %d rounds (from max %d)", 
-                                        best_rounds, cfg_train$NROUNDS), 
+        pipeline_message(sprintf("CV selected %d rounds (from max %d)", 
+                                 best_rounds, cfg_train$NROUNDS), 
                          process = "clip")
       } else {
         best_rounds <- cfg_train$NROUNDS
@@ -685,11 +687,11 @@ for (model_name in names(all_configs)) {
     top_hw <- top_hw_pool[1:min(nrow(top_hw_pool), 5)]
     if (nrow(top_hw) > 0) {
       pipeline_message(
-        text = paste0(
-          "Top highway diagnostics: ",
-          paste(sprintf("%s(n=%d,R²=%.3f,MAPE=%.1f%%)", 
-                        top_hw$highway, top_hw$n, top_hw$r2, top_hw$mape),
-                collapse = " | ")),
+        paste0("Top highway diagnostics: ",
+               paste(sprintf("%s(n=%d,R²=%.3f,MAPE=%.1f%%)", 
+                             top_hw$highway, top_hw$n, 
+                             top_hw$r2, top_hw$mape), 
+                     collapse = " | ")),
         process = "info")
     }
   } else {
@@ -993,7 +995,7 @@ pipeline_message("Successfully trained learning model", level = 0,
 # Acoustic emission error analysis (dB) on test dataset
 # ------------------------------------------------------------------------------
 
-pipeline_message(text = "Acoustic emission error analysis (dB)", 
+pipeline_message("Acoustic emission error analysis (dB)", 
                  level = 1, progress = "start", process = "plot")
 
 emission_test <- data.frame()
@@ -1182,18 +1184,18 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(models_list)) &&
       rm(emission_parts, emission_D)
 
       pipeline_message(
-        text = sprintf("Emission dB eval: %s rows across %d periods (%s test sensors)",
-                       fmt(nrow(emission_test)),
-                       n_periods_done + 1,  # +1 for D
-                       fmt(length(test_sensor_ids))),
+        sprintf("Emission dB eval: %s rows across %d periods (%s test sensors)",
+                fmt(nrow(emission_test)),
+                n_periods_done + 1,  # +1 for D
+                fmt(length(test_sensor_ids))),
         process = "info")
       pipeline_message(
-        text = sprintf("  Period breakdown: D=%s, E/N=%s, hourly=%s, wd=%s, we=%s",
-                       fmt(sum(emission_test$period == "D")),
-                       fmt(sum(emission_test$period %in% c("E", "N"))),
-                       fmt(sum(grepl("^h[0-9]+$", emission_test$period))),
-                       fmt(sum(grepl("_wd$", emission_test$period))),
-                       fmt(sum(grepl("_we$", emission_test$period)))),
+        sprintf("Period breakdown: D=%s, E/N=%s, hourly=%s, wd=%s, we=%s",
+                fmt(sum(emission_test$period == "D")),
+                fmt(sum(emission_test$period %in% c("E", "N"))),
+                fmt(sum(grepl("^h[0-9]+$", emission_test$period))),
+                fmt(sum(grepl("_wd$", emission_test$period))),
+                fmt(sum(grepl("_we$", emission_test$period)))),
         process = "info")
     }
   }
@@ -1235,15 +1237,15 @@ if (nrow(emission_test) == 0 &&
 
   if (nrow(emission_test) > 0) {
     pipeline_message(
-      text = sprintf("Emission dB legacy path: %s rows from base_test_predictions merge",
-                     fmt(nrow(emission_test))),
+      sprintf("Emission dB legacy path: %s rows from base_test_predictions merge", fmt(nrow(emission_test))),
       process = "info")
   }
 }
 
 if (nrow(emission_test) > 0) {
-  pipeline_message(text = sprintf("Computing CNOSSOS-EU emission for %s test samples...",
-                   fmt(nrow(emission_test))), process = "calc")
+  pipeline_message(sprintf("Computing CNOSSOS-EU emission for %s test samples", 
+                           fmt(nrow(emission_test))), 
+                   process = "calc")
   # Emission with XGBoost predicted speed (real traffic speed)
   emission_test$pred_db <- compute_emission_cnossos(
     flow = emission_test$pred_flow,
@@ -1295,8 +1297,8 @@ if (nrow(emission_test) > 0) {
   }
 
   pipeline_message(
-    text = sprintf("Emission dB (test): N=%s | Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB | MedAE=%.2f dB | P90AE=%.2f dB",
-                   fmt(nrow(emission_test)), db_bias, db_mae, db_rmse, db_q50, db_q90),
+    sprintf("Emission dB (test): N=%s | Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB | MedAE=%.2f dB | P90AE=%.2f dB", 
+            fmt(nrow(emission_test)), db_bias, db_mae, db_rmse, db_q50, db_q90),
     process = "info")
 
   if ("has_measured_speed" %in% names(emission_test)) {
@@ -1308,14 +1310,14 @@ if (nrow(emission_test) > 0) {
 
     if (stats_measured$n > 0) {
       pipeline_message(
-        text = sprintf("Emission dB (measured speed): N=%s | Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB",
-                       fmt(stats_measured$n), stats_measured$bias, stats_measured$mae, stats_measured$rmse),
+        sprintf("Emission dB (measured speed): N=%s | Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB", 
+                fmt(stats_measured$n), stats_measured$bias, stats_measured$mae, stats_measured$rmse),
         process = "info")
     }
     if (stats_osm$n > 0) {
       pipeline_message(
-        text = sprintf("Emission dB (OSM speed fallback): N=%s | Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB",
-                       fmt(stats_osm$n), stats_osm$bias, stats_osm$mae, stats_osm$rmse),
+        sprintf("Emission dB (OSM speed fallback): N=%s | Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB", 
+                fmt(stats_osm$n), stats_osm$bias, stats_osm$mae, stats_osm$rmse),
         process = "info")
     }
   }
@@ -1339,16 +1341,16 @@ if (nrow(emission_test) > 0) {
     db_rmse_osm <- sqrt(mean(emission_test$db_error_osm^2, na.rm = TRUE))
 
     pipeline_message(
-      text = sprintf("Emission dB with XGBoost speed: Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB",
-                     db_bias, db_mae, db_rmse),
+      sprintf("Emission dB with XGBoost speed: Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB", 
+              db_bias, db_mae, db_rmse),
       process = "info")
     pipeline_message(
-      text = sprintf("Emission dB with OSM maxspeed:   Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB",
-                     db_bias_osm, db_mae_osm, db_rmse_osm),
+      sprintf("Emission dB with OSM maxspeed:   Bias=%+.2f dB | MAE=%.2f dB | RMSE=%.2f dB", 
+              db_bias_osm, db_mae_osm, db_rmse_osm),
       process = "info")
     pipeline_message(
-      text = sprintf("Speed choice impact: \u0394Bias=%.2f dB | \u0394MAE=%.2f dB (OSM - XGBoost)",
-                     db_bias_osm - db_bias, db_mae_osm - db_mae),
+      sprintf("Speed choice impact: \u0394Bias=%.2f dB | \u0394MAE=%.2f dB (OSM - XGBoost)", 
+              db_bias_osm - db_bias, db_mae_osm - db_mae),
       process = "info")
   }
 
@@ -1401,9 +1403,9 @@ if (nrow(emission_test) > 0) {
                    Speed = mean(abs(contrib_speed), na.rm = TRUE))
 
   pipeline_message(
-    text = sprintf("Bias decomposition: Flow=%+.2f dB | Truck%%=%+.2f dB (N=%s) | Speed=%+.2f dB",
-                   mean_contrib["Flow"], mean_contrib["Truck %"],
-                   fmt(length(contrib_truck_eval)), mean_contrib["Speed"]),
+    sprintf("Bias decomposition: Flow=%+.2f dB | Truck%%=%+.2f dB (N=%s) | Speed=%+.2f dB",
+            mean_contrib["Flow"], mean_contrib["Truck %"], 
+            fmt(length(contrib_truck_eval)), mean_contrib["Speed"]),
     process = "info")
 
   # Helper: summarize metrics by group
@@ -2416,18 +2418,19 @@ if (nrow(emission_test) > 0) {
   grDevices::dev.off()
 
   pipeline_message(
-    text = sprintf("Emission dB error report saved to %s", rel_path(emission_pdf_path)),
+    sprintf("Emission dB error report saved to %s", 
+            rel_path(emission_pdf_path)),
     process = "save")
 } else {
   pipeline_message(
-    text = "Emission dB analysis skipped: no usable rows for emission comparison",
+    "Emission dB analysis skipped: no usable rows for emission comparison",
     process = "warning")
 }
 
-pipeline_message(text = "Acoustic emission error analysis completed", 
+pipeline_message("Acoustic emission error analysis completed", 
                  level = 1, progress = "end", process = "valid")
 
-assign("xgb_models_with_ratios", models_list, envir = .GlobalEnv)
+assign(x = "xgb_models_with_ratios", value = models_list, envir = .GlobalEnv)
 
-pipeline_message(text = "Successfully trained learning model", 
+pipeline_message("Successfully trained learning model", 
                  level = 0, progress = "end", process = "valid")

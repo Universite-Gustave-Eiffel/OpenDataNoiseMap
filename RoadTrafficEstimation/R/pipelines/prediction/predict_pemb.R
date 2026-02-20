@@ -1,7 +1,7 @@
 # ==============================================================================
 # PREDICTION: PEMB (PARIS EST MARNE & BOIS)
 # ==============================================================================
-# Zone couverte: Est parisien — Vincennes, Nogent-sur-Marne, Champigny,
+# Covered area: Eastern Paris - Vincennes, Nogent-sur-Marne, Champigny,
 #   Fontenay-sous-Bois, Créteil, Maisons-Alfort, Joinville, Saint-Mandé,
 #   Bois de Vincennes, vallée de la Marne.
 # Bounds in Lambert93 (EPSG:2154)

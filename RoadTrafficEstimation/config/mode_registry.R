@@ -29,11 +29,11 @@ MODE_REGISTRY <- list(
     log_key     = "training", 
     log_file    = file.path(logs_dir, "train_model.log"),
     script      = file.path(pipelines_dir, 
-                            "training", "run_training.R")), 
+                            "model_training", "run_training.R")), 
   
   # Prediction for the city of Nantes
   nantes = list(
-    description = "Prediction – Nantes southeast", 
+    description = "Prediction - Nantes southeast", 
     log_key     = "nantes", 
     log_file    = file.path(logs_dir, "nantes_prediction.log"),
     script      = file.path(pipelines_dir, 
@@ -41,7 +41,7 @@ MODE_REGISTRY <- list(
   
   # Prediction for the city of Paris
   paris = list(
-    description = "Prediction – Paris area", 
+    description = "Prediction - Paris area", 
     log_key     = "paris", 
     log_file    = file.path(logs_dir, "paris_prediction.log"),
     script      = file.path(pipelines_dir, 
@@ -49,10 +49,27 @@ MODE_REGISTRY <- list(
   
   # Prediction on a sensor network
   sensors = list(
-    description = "Prediction – sensor-based", 
+    description = "Prediction - sensor-based", 
     log_key     = "sensors", 
     log_file    = file.path(logs_dir, "sensors_prediction.log"),
     script      = file.path(pipelines_dir, 
-                            "prediction", "predict_sensors.R"))
+                            "prediction", "predict_sensors.R")), 
+  
+  # Prediction on a PEMB (PARIS EST MARNE & BOIS)
+  pemb = list(
+    description = "Prediction - pemb (Paris Est Marne & Bois)", 
+    log_key     = "pemb", 
+    log_file    = file.path(logs_dir, "pemb_prediction.log"),
+    script      = file.path(pipelines_dir, 
+                            "prediction", "predict_pemb.R")), 
+  
+  # Prediction for all of France
+  france = list(
+    description = "Prediction - France-wide", 
+    log_key     = "france", 
+    log_file    = file.path(logs_dir, "france_prediction.log"),
+    script      = file.path(pipelines_dir, 
+                            "prediction", "predict_france.R"))
 )
+
 assign(x = "MODE_REGISTRY", value = MODE_REGISTRY, envir = .GlobalEnv)

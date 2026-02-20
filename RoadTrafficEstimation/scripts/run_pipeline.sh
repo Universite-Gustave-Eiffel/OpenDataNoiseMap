@@ -83,7 +83,7 @@ case "$MODE" in
     ;;
   *)
     echo "❌ Unknown MODE: $MODE"
-    echo "⚠️ Allowed values: data_prep | avatar | training | nantes | paris | sensors"
+    echo "⚠️ Allowed values: data_prep | avatar | training | nantes | paris | sensors | pemb | france"
     exit 1
     ;;
 esac

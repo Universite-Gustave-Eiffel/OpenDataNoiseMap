@@ -432,7 +432,7 @@ if (length(files) > 0) {
     min_gb = 4, warn_gb = 8)
 
   # Disk-streamed concatenation to avoid keeping all batches in RAM
-  temp_combined_csv <- file.path(cfg_data$AVATAR_CSV_DATA_DIRPATH,
+  temp_combined_csv <- file.path(cfg_data$AVATAR_CSV_DATA_DIR,
                                  "avatar_data_combined_tmp.csv")
   if (file.exists(temp_combined_csv)) {
     file.remove(temp_combined_csv)
