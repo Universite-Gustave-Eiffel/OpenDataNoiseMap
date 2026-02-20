@@ -13,7 +13,7 @@ MODE_REGISTRY <- list(
     log_key     = "data_prep", 
     log_file    = file.path(logs_dir, "data_preparation.log"),
     script      = file.path(pipelines_dir, 
-                            "data_preparation", "run_data_preparation.R"), 
+                            "data_preparation", "run_data_preparation.R")), 
   
   # Avatar data download
   avatar = list(
@@ -53,7 +53,6 @@ MODE_REGISTRY <- list(
     log_key     = "sensors", 
     log_file    = file.path(logs_dir, "sensors_prediction.log"),
     script      = file.path(pipelines_dir, 
-                            "prediction", "predict_sensors.R")
+                            "prediction", "predict_sensors.R"))
 )
-
-assign("MODE_REGISTRY", MODE_REGISTRY, envir = .GlobalEnv)
+assign(x = "MODE_REGISTRY", value = MODE_REGISTRY, envir = .GlobalEnv)
