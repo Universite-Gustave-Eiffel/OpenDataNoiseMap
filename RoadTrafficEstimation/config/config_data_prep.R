@@ -10,6 +10,7 @@ OSM_DIR      <- file.path(DATA_DIR, "osm")
 OSM_PBF_DIR  <- file.path(OSM_DIR, "pbf")
 OSM_GPKG_DIR <- file.path(OSM_DIR, "gpkg")
 OSM_SHP_DIR  <- file.path(OSM_DIR, "shp")
+OSM_RDS_DIR  <- file.path(OSM_DIR, "rds")
 
 # Avatar paths
 AVATAR_DIR          <- file.path(DATA_DIR, "avatar")
@@ -28,21 +29,21 @@ CONFIG_DATA_PREP <- list(
   # *************** #
   # Process forcing #
   # *************** #
-  FORCE_REJOIN_OSM_AND_COMMUNES = FALSE, 
+  FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
   
   # ********************* #
   # Directories and files #
   # ********************* #
-  OSM_DIR                         = OSM_DIR, 
-  OSM_PBF_DIR                     = OSM_PBF_DIR, 
-  OSM_GPKG_DIR                    = OSM_GPKG_DIR, 
-  OSM_SHP_DIR                     = OSM_SHP_DIR, 
-  OSM_ROADS_FILEPATH              = file.path(OSM_GPKG_DIR, 
-                                              "france-latest.osm.gpkg"), 
-  OSM_TYPOLOGIES_FILEPATH         = file.path(OSM_SHP_DIR, 
-                                              "COMMUNE_TYPO_DENSITE.shp"), 
-  OSM_DEGRE_FILEPATH              = file.path(OSM_DIR, "degre.rds"), 
-  OSM_ROADS_CONNECTIVITY_FILEPATH = file.path(OSM_DIR, 
+  OSM_DIR                         = OSM_DIR,
+  OSM_PBF_DIR                     = OSM_PBF_DIR,
+  OSM_GPKG_DIR                    = OSM_GPKG_DIR,
+  OSM_SHP_DIR                     = OSM_SHP_DIR,
+  OSM_ROADS_FILEPATH              = file.path(OSM_GPKG_DIR,
+                                              "france-latest.osm.gpkg"),
+  OSM_TYPOLOGIES_FILEPATH         = file.path(OSM_SHP_DIR,
+                                              "COMMUNE_TYPO_DENSITE.shp"),
+  OSM_DEGRE_FILEPATH              = file.path(OSM_RDS_DIR, "degre.rds"),
+  OSM_ROADS_CONNECTIVITY_FILEPATH = file.path(OSM_GPKG_DIR,
                    "osm_roads_france_including_connectivity_and_communes.gpkg"), 
   
   # ****************** #

@@ -14,8 +14,19 @@
 # In TEST mode: reduces the region to a test bbox for speed
 # ==============================================================================
 
-pipeline_message("Road feature engineering processing", level = 0, 
-                 progress = "start", process = "calc")
+pipeline_message(text = "OSM France feature engineering",
+                 level = 0, progress = "start", process = "calc")
+
+# Check if running in TEST mode
+IS_TEST_MODE <- exists("TEST_REGION") && !is.null(TEST_REGION)
+if (IS_TEST_MODE) {
+  pipeline_message(
+    text = sprintf("TEST MODE: Cropping to region %s (bbox: %s)",
+                   TEST_REGION$name,
+                   paste(TEST_REGION$bbox, collapse = ", ")),
+    level = 1, process = "info"
+  )
+}
 
 # ------------------------------------------------------------------------------
 # Load full OSM France road network with connectivities and communes
