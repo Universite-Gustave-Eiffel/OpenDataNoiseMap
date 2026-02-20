@@ -20,14 +20,24 @@ CONFIG_PREDICT <- list(
   # ----------------------------------------------------------------------------
   # Directories and files
   # ----------------------------------------------------------------------------
+  
   PREDICTION_DIR                    = PREDICTION_DIR, 
-  SENSORS_ALL_PREDICTION_FILEPATH   = file.path(PREDICTION_DIR, "sensor_roads_dt.rds"), 
-  PARIS_PREDICTION_FILEPATH         = file.path(PREDICTION_DIR, "paris_roads_dt.rds"), 
-  NANTES_PREDICTION_FILEPATH        = file.path(PREDICTION_DIR, nantes_predictions_filename), 
-  PEMB_PREDICTION_FILEPATH          = file.path(PREDICTION_DIR, pemb_predictions_filename), 
-  FRANCE_GEOMETRY_FILEPATH          = file.path(FRANCE_OUTPUT_DIR, france_network_filename), 
-  FRANCE_TRAFFIC_DEN_FILEPATH       = file.path(FRANCE_OUTPUT_DIR, france_traffic_den_filename), 
-  FRANCE_TRAFFIC_HOURLY_FILEPATH    = file.path(FRANCE_OUTPUT_DIR, france_traffic_hourly_filename), 
-  FRANCE_TRAFFIC_HOURLY_WD_FILEPATH = file.path(FRANCE_OUTPUT_DIR, france_traffic_hourly_wd_filename), 
-  FRANCE_TRAFFIC_HOURLY_WE_FILEPATH = file.path(FRANCE_OUTPUT_DIR, france_traffic_hourly_we_filename)
+  SENSORS_ALL_PREDICTION_FILEPATH   = file.path(PREDICTION_DIR, 
+                                                "sensor_roads_dt.rds"), 
+  PARIS_PREDICTION_FILEPATH         = file.path(PREDICTION_DIR, 
+                                                "paris_roads_dt.rds"), 
+  NANTES_PREDICTION_FILEPATH        = file.path(PREDICTION_DIR, 
+                                                nantes_predictions_filename), 
+  PEMB_PREDICTION_FILEPATH          = file.path(PREDICTION_DIR, 
+                                                pemb_predictions_filename), 
+  FRANCE_GEOMETRY_FILEPATH          = file.path(FRANCE_OUTPUT_DIR, 
+                                                france_network_filename), 
+  FRANCE_TRAFFIC_DEN_FILEPATH       = file.path(FRANCE_OUTPUT_DIR, 
+                                                france_traffic_den_filename), 
+  FRANCE_TRAFFIC_HOURLY_FILEPATH    = file.path(FRANCE_OUTPUT_DIR, 
+                                                france_traffic_hourly_filename), 
+  FRANCE_TRAFFIC_HOURLY_WD_FILEPATH = file.path(FRANCE_OUTPUT_DIR, 
+                                                france_traffic_hourly_wd_filename), 
+  FRANCE_TRAFFIC_HOURLY_WE_FILEPATH = file.path(FRANCE_OUTPUT_DIR, 
+                                                france_traffic_hourly_we_filename)
 )

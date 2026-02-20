@@ -18,6 +18,7 @@ CONFIG_TRAINING <- list(
   # ----------------------------------------------------------------------------
   # Directories and files
   # ----------------------------------------------------------------------------
+  
   TRAINING_DATA_DIR               = TRAINING_DATA_DIR, 
   TRAINING_RDS_DATA_DIR           = TRAINING_RDS_DATA_DIR, 
   TRAINING_RDS_DATA_FILEPATH      = file.path(TRAINING_RDS_DATA_DIR, 

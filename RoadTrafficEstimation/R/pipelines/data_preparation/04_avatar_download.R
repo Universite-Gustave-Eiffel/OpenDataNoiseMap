@@ -305,9 +305,7 @@ if (length(chunks_to_redownload) > 0) {
       process = "warning")
   } else {
     pipeline_message(
-      sprintf("Found %d chunks to re-download (empty/corrupted/missing), but ",
-              "the computing environment does not allow it. Please run the ", 
-              "shell script run_avatar_download.sh to re-download these chunks", 
+      sprintf("Found %s chunks to re-download (empty/corrupted/missing), but the computing environment does not allow it. Please run the shell script run_avatar_download.sh to re-download these chunks", 
               length(chunks_to_redownload)), 
       process = "warning")
   }
@@ -377,8 +375,9 @@ if (length(chunks_to_redownload) > 0 && RUN_CONTEXT == "local") {
                          process = "warning")
       }
     }, error = function(e) {
-      pipeline_message(sprintf("Failed to download chunk %d: %s", chunk_id, e$message), 
-                       process = "stop")
+      pipeline_message(
+        sprintf("Failed to download chunk %d: %s", chunk_id, e$message), 
+                process = "stop")
     })
   }
   

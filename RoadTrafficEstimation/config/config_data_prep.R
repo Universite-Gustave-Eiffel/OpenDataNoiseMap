@@ -42,11 +42,13 @@ CONFIG_DATA_PREP <- list(
   # *************** #
   # Process forcing #
   # *************** #
+  
   FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
   
   # ********************* #
   # Directories and files #
   # ********************* #
+
   OSM_DIR                              = OSM_DIR,
   OSM_PBF_DIR                          = OSM_PBF_DIR,
   OSM_GPKG_DIR                         = OSM_GPKG_DIR,
@@ -67,6 +69,7 @@ CONFIG_DATA_PREP <- list(
   # ****************** #
   # Spatial parameters #
   # ****************** #
+
   # Maximum path length to consider when calculating the betweenness
   CUTOFF_BETWEENNESS = 100, 
   # Maximum path length to consider when calculating the closeness
@@ -75,6 +78,7 @@ CONFIG_DATA_PREP <- list(
   # ************************* #
   # Default allocation values #
   # ************************* #
+
   DEFAULT_NUMBER_OF_LANES = 2, 
   DEFAULT_VEHICLE_SPEED   = 50, 
   DEFAULT_NUMBER_OF_ROADS = 0, 
@@ -87,6 +91,7 @@ CONFIG_DATA_PREP <- list(
   # *************** #
   # Process forcing #
   # *************** #
+
   FORCE_REDOWNLOAD_COUNT_POINTS           = FALSE, 
   FORCE_REDOWNLOAD_CHUNKS                 = FALSE, 
   FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS = FALSE, 
@@ -94,6 +99,7 @@ CONFIG_DATA_PREP <- list(
   # ********************* #
   # Directories and files #
   # ********************* #
+
   AVATAR_DIR                       = AVATAR_DIR, 
   AVATAR_RDS_DATA_DIR              = AVATAR_RDS_DATA_DIR, 
   AVATAR_CSV_DATA_DIR              = AVATAR_CSV_DATA_DIR, 
@@ -124,6 +130,7 @@ CONFIG_DATA_PREP <- list(
   # ****************** #
   # Spatial parameters #
   # ****************** #
+
   # Radius (in meters) used to match counting points to nearest OSM roads
   BUFFER_RADIUS = 50, 
 
