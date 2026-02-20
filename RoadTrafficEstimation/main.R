@@ -44,15 +44,15 @@ source("bootstrap/bootstrap.R")
 source("config/config_global.R")
 source("config/config_data_prep.R")
 source("config/config_training.R")
-source("config/config_forecast.R")
+source("config/config_predict.R")
 
 # Complete configuration list
 CFG <- list(
   global    = CONFIG_GLOBAL, 
   data_prep = CONFIG_DATA_PREP, 
   training  = CONFIG_TRAINING, 
-  forecast  = CONFIG_FORECAST)
-assign("CFG", CFG, envir = .GlobalEnv)
+  predict   = CONFIG_PREDICT)
+assign(x = "CFG", value = CFG, envir = .GlobalEnv)
 
 # --------------------------------------------------
 # Register pipeline modes (depends on CFG)
@@ -63,7 +63,7 @@ if (!MODE %in% names(MODE_REGISTRY)) {
 }
 # Logs
 LOG_FILE <- MODE_REGISTRY[[MODE]]$log_file
-assign("LOG_FILE", LOG_FILE, envir = .GlobalEnv)
+assign(x = "LOG_FILE", value = LOG_FILE, envir = .GlobalEnv)
 
 # Setup
 source("project_setup.R")

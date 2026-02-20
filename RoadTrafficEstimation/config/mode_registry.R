@@ -21,24 +21,24 @@ MODE_REGISTRY <- list(
     log_key     = "training", 
     log_file    = file.path(CFG$global$dirs$logs, "train_model.log"),
     script      = "R/pipelines/training/run_training.R"), 
-  # Forecast for the city of Nantes
+  # Prediction for the city of Nantes
   nantes = list(
-    description = "Forecast – Nantes southeast", 
+    description = "Prediction – Nantes southeast", 
     log_key     = "nantes", 
-    log_file    = file.path(CFG$global$dirs$logs, "nantes_forecast.log"),
-    script      = "R/pipelines/forecast/predict_nantes_southeast.R"), 
-  # Forecast for the city of Paris
+    log_file    = file.path(CFG$global$dirs$logs, "nantes_prediction.log"),
+    script      = "R/pipelines/prediction/predict_nantes_southeast.R"), 
+  # Prediction for the city of Paris
   paris = list(
-    description = "Forecast – Paris area", 
+    description = "Prediction – Paris area", 
     log_key     = "paris", 
-    log_file    = file.path(CFG$global$dirs$logs, "paris_forecast.log"),
-    script      = "R/pipelines/forecast/predict_paris_area.R"), 
-  # Forecast on a sensor network
+    log_file    = file.path(CFG$global$dirs$logs, "paris_prediction.log"),
+    script      = "R/pipelines/prediction/predict_paris_area.R"), 
+  # Prediction on a sensor network
   sensors = list(
-    description = "Forecast – sensor-based", 
+    description = "Prediction – sensor-based", 
     log_key     = "sensors", 
-    log_file    = file.path(CFG$global$dirs$logs, "sensors_forecast.log"),
-    script      = "R/pipelines/forecast/predict_sensors.R")
+    log_file    = file.path(CFG$global$dirs$logs, "sensors_prediction.log"),
+    script      = "R/pipelines/prediction/predict_sensors.R")
 )
 
 assign("MODE_REGISTRY", MODE_REGISTRY, envir = .GlobalEnv)

@@ -559,6 +559,5 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
 
 # Cleanup large objects to free memory for next steps
 rm(list = intersect(ls(), c("osm_roads", "commune_data", "degre_lookup",
-                            "unique_roads", "edges", "g", "node_data",
-                            "osm_full_network")))
+                            "unique_roads", "edges", "g", "node_data")))
 gc(verbose = FALSE)

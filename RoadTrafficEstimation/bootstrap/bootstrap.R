@@ -27,7 +27,7 @@ pipeline_message("Obtaining the computing environment information", level = 1,
 
 # Execution context (local / slurm)
 RUN_CONTEXT <- Sys.getenv(x = "RUN_CONTEXT", unset = "local")
-assign("RUN_CONTEXT", RUN_CONTEXT, envir = .GlobalEnv)
+assign(x = "RUN_CONTEXT", value = RUN_CONTEXT, envir = .GlobalEnv)
 
 pipeline_message(sprintf("Avatar token: %s", 
                          ifelse(test = Sys.getenv("AVATAR_API_TOKEN") != "", 
@@ -90,13 +90,13 @@ if (is_hpc_lib) {
 # Token for Avatar data download
 # ------------------------------------------------------------------------------
 AVATAR_API_TOKEN <- Sys.getenv("AVATAR_API_TOKEN")
-assign("AVATAR_API_TOKEN", AVATAR_API_TOKEN, envir = .GlobalEnv)
+assign(x = "AVATAR_API_TOKEN", value = AVATAR_API_TOKEN, envir = .GlobalEnv)
 
 # ------------------------------------------------------------------------------
 # # Project root path
 # ------------------------------------------------------------------------------
-PROJECT_ROOT <- normalizePath(getwd())
-assign("PROJECT_ROOT", PROJECT_ROOT, envir = .GlobalEnv)
+PROJECT_ROOT <- normalizePath(path = getwd())
+assign(x = "PROJECT_ROOT", value = PROJECT_ROOT, envir = .GlobalEnv)
 
 pipeline_message("Bootstrap completed", level = 0, 
                  progress = "end", process = "valid")

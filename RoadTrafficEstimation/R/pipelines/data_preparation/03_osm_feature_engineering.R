@@ -32,25 +32,33 @@ if (IS_TEST_MODE) {
 # Load full OSM France road network with connectivities and communes
 # ------------------------------------------------------------------------------
 
-if (!exists('osm_full_network') 
-    && isFALSE(is.data.frame(get('osm_full_network')))){
+if (!exists('osm_full_network') || !is.data.frame(osm_full_network)) {
   
-  pipeline_message(sprintf("Loading OSM full road network from %s", 
-                           rel_path(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
-                   level = 1, progress = "start", process = "load")
-  
-  osm_full_network <- sf::st_read(
-    dsn = cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH, 
-    quiet = TRUE)
-  
-  # Project data into target CRS if needed
-  if (sf::st_crs(osm_full_network) != cfg_g$TARGET_CRS){
-    osm_full_network <- osm_full_network %>% 
-      st_transform(crs = cfg_g$TARGET_CRS)
+  # Vérifier que le fichier GeoPackage existe
+  if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH)) {
+    
+    pipeline_message(sprintf("Loading OSM full road network from %s", 
+                             rel_path(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
+                     level = 1, progress = "start", process = "load")
+    
+    osm_full_network <- sf::st_read(
+      dsn = cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH, 
+      quiet = TRUE)
+    
+    # Project data into target CRS if needed
+    if (sf::st_crs(osm_full_network) != cfg_g$TARGET_CRS){
+      osm_full_network <- st_transform(osm_full_network, crs = cfg_g$TARGET_CRS)
+    }
+    
+    pipeline_message("OSM France network successfully loaded", level = 1, 
+                     progress = "end", process = "valid")
+    
+  } else {
+    pipeline_message(
+      sprintf("OSM full network object not found and file %s does not exist!", 
+              cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH), 
+              process = "error")
   }
-  
-  pipeline_message("OSM France network successfully loaded", level = 1, 
-                   progress = "end", process = "valid")
 }
 
 # Crop to test region if in TEST mode
@@ -67,9 +75,8 @@ if (IS_TEST_MODE) {
 # Compute global imputation rules from full France network
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  "Computing imputation rules from full France network", 
-  level = 1, progress = "start", process = "build")
+pipeline_message("Computing imputation rules from full France network", 
+                 level = 1, progress = "start", process = "build")
 
 # Coerce OSM data frame to data.table
 setDT(osm_full_network)

@@ -3,15 +3,15 @@
 # ==============================================================================
 
 # Forecast paths
-FORECAST_DIR <- file.path("data", "forecast")
+PREDICTION_DIR <- file.path("data", "forecast")
 
-CONFIG_FORECAST <- list(
+CONFIG_PREDICT <- list(
   
   # ----------------------------------------------------------------------------
   # Directories and files
   # ----------------------------------------------------------------------------
-  FORECAST_DIR = FORECAST_DIR,
-  SENSOR_FORECAST_FILEPATH = file.path(FORECAST_DIR, "sensor_roads_dt.rds"), 
-  PARIS_FORECAST_FILEPATH = file.path(FORECAST_DIR, "paris_roads_dt.rds"), 
-  NANTES_FORECAST_FILEPATH = file.path(FORECAST_DIR, "nantes_roads_dt.rds")
+  PREDICTION_DIR = PREDICTION_DIR,
+  SENSOR_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, "sensor_roads_dt.rds"), 
+  PARIS_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, "paris_roads_dt.rds"), 
+  NANTES_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, "nantes_roads_dt.rds")
 )

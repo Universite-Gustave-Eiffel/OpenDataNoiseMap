@@ -1,6 +1,6 @@
 # 🧩 Data Preparation Pipeline
 
-This pipeline prepares all spatial and traffic data required for training and forecasting road traffic noise models in the **OpenDataNoiseMap** project.
+This pipeline prepares all spatial and traffic data required for training and predicting road traffic noise models in the **OpenDataNoiseMap** project.
 
 It integrates **OpenStreetMap (OSM)** road networks with **AVATAR traffic data**, performs spatial and temporal aggregation, and generates fully enriched datasets ready for machine learning in the context of road traffic noise mapping.
 
@@ -23,7 +23,7 @@ The data preparation pipeline aims to:
 -   build a clean and enriched **road network graph** from OSM,
 -   integrate **traffic measurements** from Avatar data,
 -   compute **topological and traffic features** at road-segment level,
--   produce **model-ready datasets** for training and forecasting pipelines,
+-   produce **model-ready datasets** for training and predictiton pipelines,
 -   ensure **reproducibility** through centralized configuration.
 
 ## ▶️ Entry point
@@ -204,7 +204,7 @@ OSM–AVATAR merged dataset
 
 #### 🎯 Purpose
 
-Generate final features and datasets for model training and forecasting.
+Generate final features and datasets for model training and predictiton.
 
 #### ⚙️️ Main operations
 
@@ -250,7 +250,7 @@ config/
 ├── config_global.R
 ├── config_data_prep.R
 ├── config_training.R
-├── config_forecast.R
+├── config_predict.R
 ├── mode_registry.R
 └── README.md
 ```
@@ -289,8 +289,8 @@ source("bootstrap/bootstrap.R")
 The outputs of this pipeline are consumed by:
 
 -   pipelines/training/,
--   pipelines/forecast/.
+-   pipelines/predict/.
 
-Refer to the corresponding `README.md` files for details on model training and forecast generation.
+Refer to the corresponding `README.md` files for details on model training and prediction generation.
 
 ------------------------------------------------------------------------
