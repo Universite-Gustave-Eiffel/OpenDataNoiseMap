@@ -589,3 +589,45 @@ process_network_features <- function(data, rules,
   )]
   return(as.data.frame(data))
 }
+#' 
+#'@title  Validate OSM network structure
+#' @description Checks whether the provided OSM network data frame contains the 
+#'              required structure and columns for downstream processing. This 
+#'              validation step is crucial to ensure that the data can be 
+#'              correctly processed by the pipeline without errors. The function
+#'              verifies the presence of essential columns such as `osm_id`, 
+#'              `highway`, and `geom`, and checks that the data frame is not empty. 
+#'              If any validation checks fail, informative error messages are 
+#'              printed to guide the user in correcting the input data.
+#' @param osm_network An sf data.frame representing the OSM road network. It is 
+#'                    expected to contain at least the following columns:
+#'                    \itemize{
+#'                      \item `osm_id`: Unique identifier for each OSM way,
+#'                      \item `highway`: OSM highway type (e.g. "res  idential", 
+#'                                       "primary"),
+#'                      \item `geom`: Geometry column containing the spatial 
+#'                                    representation of the roads.
+#'                    }
+#' @return A logical value: `TRUE` if the OSM network is valid and contains the 
+#'         required structure, `FALSE` otherwise. If the function returns `FALSE`, 
+#'         it also prints detailed error messages indicating which validation checks 
+#'         failed (e.g., missing columns, empty data frame).
+#' @export 
+validate_osm_network <- function(osm_network) {
+  required_cols <- c("osm_id", "highway", "geom")
+  missing_cols <- setdiff(x = required_cols, y = names(osm_network))
+  if (length(missing_cols) > 0) {
+    pipeline_message(
+      text = sprintf("Missing required columns: %s", 
+                     paste(missing_cols, collapse = ", ")),
+      process = "error")
+    return(FALSE)
+  }
+  
+  if (nrow(osm_network) == 0) {
+    pipeline_message(text = "OSM network is empty", process = "error")
+    return(FALSE)
+  }
+  
+  return(TRUE)
+}

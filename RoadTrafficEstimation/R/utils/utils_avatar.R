@@ -652,3 +652,38 @@ apply_avatar_quality_rules <- function(dt) {
                                     no = NA_real_)]
   invisible(dt)
 }
+#' 
+#' @title Validate Avatar data structure
+#' @description Checks whether the Avatar data contains the required columns for 
+#'              downstream processing and whether it is non-empty. This function is 
+#'              intended to be used as a preliminary validation step after loading 
+#'              or downloading Avatar data, before performing any aggregation or 
+#'              analysis.
+#' @param avatar_data A data.frame or data.table containing Avatar aggregated metrics. 
+#'                    Expected to have at least the following columns:
+#'                    \itemize{
+#'                      \item count_point_id
+#'                      \item period
+#'                      \item aggregate_flow
+#'                    }
+#' @return A logical value: `TRUE` if the data is valid, `FALSE` otherwise. If the data is invalid, an error message is printed to the console indicating the reason (e.g. missing columns, empty data).
+#' @export 
+validate_avatar_data <- function(avatar_data) {
+  required_cols <- c("count_point_id", "period", "aggregate_flow")
+  missing_cols <- setdiff(x = required_cols, y = names(avatar_data))
+  
+  if (length(missing_cols) > 0) {
+    pipeline_message(
+      text = sprintf("Missing required columns: %s", 
+                     paste(missing_cols, collapse = ", ")),
+      process = "error")
+    return(FALSE)
+  }
+  
+  if (nrow(avatar_data) == 0) {
+    pipeline_message(text = "Avatar data is empty", process = "error")
+    return(FALSE)
+  }
+  
+  return(TRUE)
+}
