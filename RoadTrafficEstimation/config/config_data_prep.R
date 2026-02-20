@@ -55,8 +55,8 @@ CONFIG_DATA_PREP <- list(
   OSM_TYPOLOGIES_FILEPATH              = file.path(OSM_SHP_DIR, osm_typologies_filename),
   OSM_DEGRE_FILEPATH                   = file.path(OSM_RDS_DIR, osm_degre_filename),
   OSM_ROADS_CONNECTIVITY_FILEPATH      = file.path(OSM_GPKG_DIR, osm_network_augmented_filename),
-  OSM_ROADS_FRANCE_ENGINEERED_FILEPATH = file.path(OSM_GPKG_DIR, osm_roads_france_engineered_filename)
-  IMPUTATION_RULES_FRANCE_FILEPATH     = file.path(OSM_RDS_DIR, imputation_rules_france_filename)
+  OSM_ROADS_FRANCE_ENGINEERED_FILEPATH = file.path(OSM_GPKG_DIR, osm_roads_france_engineered_filename),
+  IMPUTATION_RULES_FRANCE_FILEPATH     = file.path(OSM_RDS_DIR, imputation_rules_france_filename),
   
   # ****************** #
   # Spatial parameters #
