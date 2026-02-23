@@ -1,0 +1,162 @@
+
+R version 4.4.2 (2024-10-31) -- "Pile of Leaves"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu
+
+R est un logiciel libre livré sans AUCUNE GARANTIE.
+Vous pouvez le redistribuer sous certaines conditions.
+Tapez 'license()' ou 'licence()' pour plus de détails.
+
+R est un projet collaboratif avec de nombreux contributeurs.
+Tapez 'contributors()' pour plus d'information et
+'citation()' pour la façon de le citer dans les publications.
+
+Tapez 'demo()' pour des démonstrations, 'help()' pour l'aide
+en ligne ou 'help.start()' pour obtenir l'aide au format HTML.
+Tapez 'q()' pour quitter R.
+
+> # ==============================================================================
+> # MAIN ENTRY POINT
+> # ==============================================================================
+> 
+> # ------------------------------------------------------------------------------
+> # Force working directory to project root
+> # ------------------------------------------------------------------------------
+> 
+> if (!exists("PROJECT_ROOT")) {
++   # Option 1: use the path given in the script .sh as environment variable
++   PROJECT_ROOT <- Sys.getenv("PROJECT_ROOT")
++   if (PROJECT_ROOT == "") {
++     # Option 2: fallback -> current repository
++     PROJECT_ROOT <- getwd()
++   }
++ }
+> setwd(PROJECT_ROOT)
+> 
+> message(sprintf("📁 Current working directory: %s", PROJECT_ROOT))
+📁 Current working directory: /home2020/home/cerema/gguillau/OpenDataNoiseMap/RoadTrafficEstimation
+> 
+> # ------------------------------------------------------------------------------
+> # Pipeline mode (CLI argument)
+> # ------------------------------------------------------------------------------
+> 
+> args <- commandArgs(trailingOnly = TRUE)
+> MODE <- if (length(args) >= 1) {
++   args[1]
++ } else {
++   "data_prep"
++ }
+> assign("MODE", MODE, envir = .GlobalEnv)
+> 
+> message(sprintf("🚦 Pipeline mode: %s", 
++                 ifelse(test = MODE=="avatar", 
++                        yes = paste(MODE, "download"), 
++                        no = MODE)))
+🚦 Pipeline mode: france
+> 
+> # ------------------------------------------------------------------------------
+> # Run successive steps
+> # ------------------------------------------------------------------------------
+> 
+> # Bootstrap configuration
+> source("bootstrap/bootstrap.R")
+
+=== Bootstrapping environment ===
+
+	 💻 Obtaining the computing environment information
+		 ℹ️ Avatar token: MISSING
+		 ✓ Running environment:  slurm in 0.0 s
+		 ℹ️ R_LIBS_USER detected: /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2
+	 💻 Using HPC user library
+		 ✓ Active R library: /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2 in 0.0 s
+		 ℹ️ Automatic graphics device disabled
+	 🏁 Bootstrap completed
+
+> source("config/config_global.R")
+
+=== Definition of the global configuration ===
+
+	 🏁 Global configuration successfully defined
+
+> source("config/config_data_prep.R")
+
+=== Definition of the data preparation pipeline configuration ===
+
+	 🏁 Data preparation configuration loaded
+
+> source("config/config_training.R")
+> source("config/config_predict.R")
+> 
+> # Complete configuration list
+> CFG <- list(
++   global    = CONFIG_GLOBAL, 
++   data_prep = CONFIG_DATA_PREP, 
++   training  = CONFIG_TRAINING, 
++   predict   = CONFIG_PREDICT)
+> assign(x = "CFG", value = CFG, envir = .GlobalEnv)
+> 
+> # --------------------------------------------------
+> # Register pipeline modes (depends on CFG)
+> # --------------------------------------------------
+> source("./config/mode_registry.R")
+> if (!MODE %in% names(MODE_REGISTRY)) {
++   stop("Unknown MODE: ", MODE)
++ }
+> # Logs
+> LOG_FILE <- MODE_REGISTRY[[MODE]]$log_file
+> assign(x = "LOG_FILE", value = LOG_FILE, envir = .GlobalEnv)
+> 
+> # Setup
+> source("project_setup.R")
+
+=== Setup configuration ===
+
+	 📥 Loading packages
+		 ℹ️ Active lib paths: /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2 | /usr/local/R/R-4.4.2/lib64/R/library
+		 ✓ Packages loaded successfully in 6.6 s
+	 💻 Creating required directories
+		 ✓ Required directories created in 0.0 s
+	 🏁 Setup stage completed
+
+> 
+> # Run selected pipeline
+> source(MODE_REGISTRY[[MODE]]$script)
+
+=== FRANCE-WIDE tiled prediction ===
+
+	 📥 Loading trained XGBoost models
+		 ✓ Models loaded: 76 models for 75 periods in 0.3 s
+		 ℹ️ Temporal chunks to export: DEN
+		 ℹ️ Tile grid: 36 tiles of 200 km each
+	 ⚙️ Applying XGBoost models to network
+		 ℹ️ lane_number missing in prediction input; derived proxy from OSM lane attributes
+		 ⚙️ Constructing feature matrix for 31,933 roads
+			 ✓ Feature matrix constructed with 31933 rows and 155 features in 1.9 s
+
+================ DEBUG XGBOOST ================
+Model class: xgb.Booster 
+Model num_feature: 
+Feature matrix ncol: 155 
+Model feature_names is NULL
+First 10 matrix columns:
+ [1] "(Intercept)"           "highwaymotorway_link"  "highwayprimary"       
+ [4] "highwayprimary_link"   "highwayresidential"    "highwaysecondary"     
+ [7] "highwaysecondary_link" "highwaytertiary"       "highwaytertiary_link" 
+[10] "highwaytrunk"         
+Columns in matrix not in model:
+Columns in model not in matrix:
+================================================
+Erreur dans predict.xgb.Booster(model, dmat) : 
+  [14:48:53] src/learner.cc:1320: Check failed: learner_model_param_.num_feature >= p_fmat->Info().num_col_ (133 vs. 155) : Number of columns does not match number of features in booster.
+Stack trace:
+  [bt] (0) /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2/xgboost/libs/xgboost.so(+0x77199) [0x14b15440e199]
+  [bt] (1) /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2/xgboost/libs/xgboost.so(+0x3d9203) [0x14b154770203]
+  [bt] (2) /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2/xgboost/libs/xgboost.so(+0x3e579a) [0x14b15477c79a]
+  [bt] (3) /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2/xgboost/libs/xgboost.so(XGBoosterPredictFromDMatrix+0x2ad) [0x14b15485517d]
+  [bt] (4) /home2020/home/cerema/gguillau/R/x86_64-pc-linux-gnu-library/4.4.2/xgboost/libs/xgboost.so(+0x708a2) [0x14b1544078a2]
+  [bt] (5) /usr/local/R/R-4.4.2/lib64/R/lib/libR.so(+0x10481e) [0x14b247d4b81e]
+  [bt] (6) /usr/local/R/R-4.4.2/lib64
+Appels : source ... predict_with_alignment -> predict -> predict.xgb.Booster
+De plus : Message d'avis :
+⚠️ Warning: 72 periods not in any temporal chunk: h0, h1, h2, h3, h4, h5, h6, h7, h8, h9 
+Exécution arrêtée

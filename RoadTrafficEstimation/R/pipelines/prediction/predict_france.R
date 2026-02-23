@@ -25,7 +25,7 @@
 # Default: DEN only (~2.7 GB total).
 # For all chunks, use: chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")
 predict_france_tiled(
-  config     = CONFIG,
+  cfg         = CFG,
   tile_size_m = 200000,
-  chunks     = c("DEN")
+  chunks      = c("DEN")
 )

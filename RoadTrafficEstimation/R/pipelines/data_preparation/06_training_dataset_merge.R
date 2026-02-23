@@ -29,16 +29,16 @@ if (!exists('osm_france_engineered') ||
   
   pipeline_message(
     sprintf("Loading OSM France engineered network from %s", 
-            rel_path(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
+            rel_path(cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   osm_france_engineered <- sf::st_read(
-    dsn = CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+    dsn = cfg_data$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
     quiet = TRUE)
   
-  if (sf::st_crs(osm_france_engineered) != CONFIG$TARGET_CRS) {
+  if (sf::st_crs(osm_france_engineered) != cfg_g$TARGET_CRS) {
     osm_france_engineered <- osm_france_engineered %>% 
-      st_transform(crs = CONFIG$TARGET_CRS)
+      st_transform(crs = cfg_g$TARGET_CRS)
   }
   
   pipeline_message(
@@ -61,16 +61,16 @@ if (!exists('full_network_avatar_id') ||
   
   pipeline_message(
     sprintf("Loading OSM network with Avatar IDs from %s", 
-            rel_path(CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH)), 
+            rel_path(cfg_data$AVATAR_MERGED_WITH_OSM_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   full_network_avatar_id <- sf::st_read(
-    dsn = CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH, 
+    dsn = cfg_data$AVATAR_MERGED_WITH_OSM_FILEPATH, 
     quiet = TRUE)
   
-  if (sf::st_crs(full_network_avatar_id) != CONFIG$TARGET_CRS) {
+  if (sf::st_crs(full_network_avatar_id) != cfg_g$TARGET_CRS) {
     full_network_avatar_id <- full_network_avatar_id %>% 
-      st_transform(crs = CONFIG$TARGET_CRS)
+      st_transform(crs = cfg_g$TARGET_CRS)
   }
   
   pipeline_message(
@@ -129,7 +129,7 @@ pipeline_message("Processing Avatar data", level = 1,
                  progress = "start", process = "calc")
 
 # avatar_data <- aggregated_measures_with_ratios_df
-avatar_data <- readRDS(file = CONFIG$AVATAR_AGGREGATED_FILEPATH)
+avatar_data <- readRDS(file = cfg_data$AVATAR_AGGREGATED_FILEPATH)
 
 pipeline_message(describe_df(avatar_data), process = "info")
   
@@ -229,7 +229,7 @@ pipeline_message(
 
 # Save processed avatar data
 saveRDS(object = avatar_clean, 
-        file = CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH)
+        file = cfg_data$AVATAR_AGGREGATED_CLEAN_FILEPATH)
 assign(x = "avatar_clean", 
        value = as.data.frame(avatar_clean), 
        envir = .GlobalEnv)
@@ -238,7 +238,7 @@ pipeline_message(describe_df(avatar_clean), process = "info")
 
 pipeline_message(
   sprintf("Avatar data successfully cleaned up and saved into file %s", 
-          rel_path(CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
+          rel_path(cfg_data$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 
@@ -306,11 +306,11 @@ pipeline_message(sprintf("Training data integrity check: %s NA detected",
 
 # Save training data
 saveRDS(object = training_data, 
-        file = CONFIG$TRAINING_RDS_DATA_FILEPATH)
+        file = cfg_train$TRAINING_RDS_DATA_FILEPATH)
 
 pipeline_message(
   sprintf("Training dataset successfully created and saved to %s", 
-          rel_path(CONFIG$TRAINING_RDS_DATA_FILEPATH)),
+          rel_path(cfg_train$TRAINING_RDS_DATA_FILEPATH)),
   level = 2, progress = "end", process = "valid")
 
 # Add geometry from France engineered network
@@ -328,12 +328,19 @@ training_data_sf <- add_period_datetime_columns(training_data_sf)
 # Export to GeoPackage file
 sf::st_write(
   obj = training_data_sf, 
-  dsn = CONFIG$TRAINING_GPKG_DATA_FILEPATH, 
-  delete_dsn = TRUE)
+  dsn = cfg_train$TRAINING_GPKG_DATA_FILEPATH, 
+  delete_dsn = TRUE, 
+  quiet = TRUE)
+
+pipeline_message(
+    sprintf("Writing %i features with %i fields and geometry type %s", 
+            nrow(training_data_sf), ncol(training_data_sf), 
+            sf::st_geometry_type(training_data_sf)[1]), 
+    process = "info")
 
 pipeline_message(
   sprintf("Training dataset saved to %s", 
-          rel_path(CONFIG$TRAINING_GPKG_DATA_FILEPATH)), 
+          rel_path(cfg_train$TRAINING_GPKG_DATA_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 pipeline_message("Training dataset merge completed", level = 0, 

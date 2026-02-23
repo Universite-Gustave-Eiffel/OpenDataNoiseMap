@@ -244,11 +244,7 @@ pipeline_message("Download Avatar traffic data for count point", level = 1,
 # Check API token
 if (nchar(cfg_data$AVATAR_API_TOKEN) == 0) {
   pipeline_message(
-    sprintf("AVATAR_API_TOKEN not set. Add it to ~/.Renviron:\n", 
-            "\t\t $echo 'AVATAR_API_TOKEN=your_token' >> ~/.Renviron\n", 
-            "\t\t Then restart R session.\n", 
-            "\t\t Continuing without authentication ", 
-            "(5 requests/min limit)..."), 
+    sprintf("AVATAR_API_TOKEN not set. Add it to ~/.Renviron:\n\t\t $echo 'AVATAR_API_TOKEN=your_token' >> ~/.Renviron\n\t\t Then restart R session.\n\t\t Continuing without authentication (5 requests/min limit)..."), 
     process = "warning")
 }
 
@@ -279,7 +275,8 @@ for (chunk_id in 1:total_chunks) {
                           paste0("avatar_data_chunk_", 
                                  sprintf("%03d", chunk_id), 
                                  ".csv"))
-  pipeline_message(sprintf("Checking file %s", rel_path(chunk_file)), process = "info")
+  pipeline_message(sprintf("Checking file %s", rel_path(chunk_file)), 
+                   process = "info")
   start_idx <- (chunk_id - 1) * chunk_size + 1
   end_idx <- min(chunk_id * chunk_size, total_points)
   expected_points <- end_idx - start_idx + 1
@@ -518,7 +515,7 @@ if (length(files) > 0) {
 
 } # end else (no cached RDS)
 
-rm(list = intersect(ls(), c("avatar_data", "valid_batches", "files")))
+rm(list = intersect(ls(), c("valid_batches", "files")))
 gc(verbose = FALSE)
 
 pipeline_message("Avatar count points and OSM roads successfully merged", 

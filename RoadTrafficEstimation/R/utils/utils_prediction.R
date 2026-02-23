@@ -15,13 +15,20 @@
 #' Load and crop France engineered network to bounding box
 #'
 #' @param bbox numeric vector c(xmin, ymin, xmax, ymax) in target CRS
-#' @param config CONFIG list with file paths
+#' @param cfg configuration list with file paths
 #' @return sf data.frame with cropped network
-load_network_for_prediction <- function(bbox, config) {
-  pipeline_message(
-    text = sprintf("Loading OSM France engineered network from %s", 
-                   rel_path(config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)),
-    level = 1, progress = "start", process = "load")
+load_network_for_prediction <- function(bbox, cfg) {
+  
+  # Configuration parameters
+  target_crs <- cfg$global$TARGET_CRS
+  osm_roads_path <- cfg$data_prep$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  default_vehicle_speed <- cfg$data_prep$DEFAULT_VEHICLE_SPEED
+  xgb_models_path <- cfg$training$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- cfg$training$XGB_RATIO_FEATURE_INFO_FILEPATH
+
+  pipeline_message(sprintf("Loading OSM France engineered network from %s", 
+                           rel_path(osm_roads_path)), 
+                   level = 1, progress = "start", process = "load")
   
   # Memory check before loading large GPKG
   check_memory_available(
@@ -45,40 +52,38 @@ load_network_for_prediction <- function(bbox, config) {
                         xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax, xmin, ymin)
     
     osm_network <- sf::st_read(
-      dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+      dsn = osm_roads_path,
       wkt_filter = wkt_bbox,
       quiet = TRUE)
     
-    pipeline_message(
-      text = sprintf("Network loaded with spatial filter: %s roads",
-                     fmt(nrow(osm_network))),
-      process = "info")
+    pipeline_message(sprintf("Network loaded with spatial filter: %s roads", 
+                             fmt(nrow(osm_network))), 
+                     process = "info")
   } else {
     # No bbox: load full network (warning: memory-intensive)
     pipeline_message(
-      text = "No bbox provided — loading entire France network (memory-intensive)",
+      "No bbox provided — loading entire France network (memory-intensive)", 
       process = "warning")
     check_memory_available(
       operation_name = "Load entire France network (no bbox)",
       min_gb = 8, warn_gb = 12)
     osm_network <- sf::st_read(
-      dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+      dsn = osm_roads_path,
       quiet = TRUE)
   }
   
   # Ensure correct CRS
-  if (sf::st_crs(osm_network) != config$TARGET_CRS) {
+  if (sf::st_crs(osm_network) != target_crs) {
     osm_network <- osm_network %>% 
-      st_transform(crs = config$TARGET_CRS)
+      st_transform(crs = target_crs)
   }
 
   if (nrow(osm_network) == 0) {
     stop("No roads found for prediction after cropping. Check bbox/CRS.")
   }
   
-  pipeline_message(
-    text = sprintf("Network loaded: %s roads", fmt(nrow(osm_network))),
-    level = 1, progress = "end", process = "valid")
+  pipeline_message(sprintf("Network loaded: %s roads", fmt(nrow(osm_network))), 
+                   level = 1, progress = "end", process = "valid")
   
   return(osm_network)
 }
@@ -90,10 +95,9 @@ load_network_for_prediction <- function(bbox, config) {
 #' @param config CONFIG list with file paths
 #' @return sf data.frame with filtered network
 load_network_around_points <- function(points, buffer_radius, config) {
-  pipeline_message(
-    text = sprintf("Loading network within %sm of %s points", 
-                   buffer_radius, nrow(points)),
-    level = 1, progress = "start", process = "load")
+  pipeline_message(sprintf("Loading network within %sm of %s points", 
+                           buffer_radius, nrow(points)), 
+                   level = 1, progress = "start", process = "load")
   
   # Memory check
   check_memory_available(
@@ -101,9 +105,9 @@ load_network_around_points <- function(points, buffer_radius, config) {
     min_gb = 2, warn_gb = 4)
   
   # Ensure points CRS
-  if (sf::st_crs(points) != config$TARGET_CRS) {
+  if (sf::st_crs(points) != target_crs) {
     points <- points %>% 
-      st_transform(crs = config$TARGET_CRS)
+      st_transform(crs = target_crs)
   }
   
   # Compute bounding box of all points + buffer for efficient GPKG read
@@ -122,14 +126,14 @@ load_network_around_points <- function(points, buffer_radius, config) {
   
   # Read only the bbox region from GPKG (much faster + less memory)
   osm_network <- sf::st_read(
-    dsn = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+    dsn = osm_roads_path,
     wkt_filter = wkt_bbox,
     quiet = TRUE)
   
   # Ensure correct CRS
-  if (sf::st_crs(osm_network) != config$TARGET_CRS) {
+  if (sf::st_crs(osm_network) != target_crs) {
     osm_network <- osm_network %>% 
-      st_transform(crs = config$TARGET_CRS)
+      st_transform(crs = target_crs)
   }
   
   # Create buffers and filter precisely
@@ -137,10 +141,9 @@ load_network_around_points <- function(points, buffer_radius, config) {
   combined_buffer <- sf::st_union(buffers)
   osm_network <- sf::st_filter(osm_network, combined_buffer)
   
-  pipeline_message(
-    text = sprintf("Network filtered: %s roads within buffers", 
-                   fmt(nrow(osm_network))),
-    level = 1, progress = "end", process = "valid")
+  pipeline_message(sprintf("Network filtered: %s roads within buffers", 
+                           fmt(nrow(osm_network))), 
+                   level = 1, progress = "end", process = "valid")
   
   return(osm_network)
 }
@@ -156,9 +159,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
 #' @param feature_info list with feature formula and periods
 #' @return data.frame with predictions for all periods
 apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
-  pipeline_message(
-    text = "Applying XGBoost models to network",
-    level = 1, progress = "start", process = "calc")
+  pipeline_message("Applying XGBoost models to network", 
+                   level = 1, progress = "start", process = "calc")
   
   # Memory check: predictions will create ~n_roads × n_periods × 3 columns
   n_roads <- nrow(network_data)
@@ -181,10 +183,12 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
       network_data$lane_number <- 1
     }
     network_data$lane_number[is.na(network_data$lane_number) | !is.finite(network_data$lane_number)] <- 1
-    pipeline_message(
-      text = "lane_number missing in prediction input; derived proxy from OSM lane attributes",
-      process = "info")
+    pipeline_message("lane_number missing in prediction input; derived proxy from OSM lane attributes", 
+                     process = "info")
   }
+
+  pipeline_message(sprintf("Constructing feature matrix for %s roads", fmt(n_roads)), 
+                   level = 2, progress = "start", process = "calc")
 
   safe_sparse_model_matrix <- function(formula_obj, data_df) {
     vars_in_formula <- intersect(unique(all.vars(formula_obj)), names(data_df))
@@ -238,9 +242,43 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   }
   feature_matrix <- as.data.frame(feature_matrix, stringsAsFactors = FALSE)
   
+  pipeline_message(sprintf("Feature matrix constructed with %d rows and %d features", 
+                           nrow(feature_matrix), ncol(feature_matrix)), 
+                   level = 2, progress = "end", process = "valid")
+
   # Helper: align feature matrix to a model's expected features and predict
   predict_with_alignment <- function(model, feature_matrix_base) {
+
     model_features <- model$feature_names
+
+    cat("\n================ DEBUG XGBOOST ================\n")
+    cat("Model class:", class(model), "\n")
+    cat("Model num_feature:", model$params$num_feature, "\n")
+    cat("Feature matrix ncol:", ncol(feature_matrix_base), "\n")
+
+    if (!is.null(model_features)) {
+      cat("Model feature_names length:", length(model_features), "\n")
+      cat("First 10 model features:\n")
+      print(head(model_features, 10))
+    } else {
+      cat("Model feature_names is NULL\n")
+    }
+
+    cat("First 10 matrix columns:\n")
+    print(head(colnames(feature_matrix_base), 10))
+
+    cat("Columns in matrix not in model:\n")
+    if (!is.null(model_features)) {
+      print(setdiff(colnames(feature_matrix_base), model_features))
+    }
+
+    cat("Columns in model not in matrix:\n")
+    if (!is.null(model_features)) {
+      print(setdiff(model_features, colnames(feature_matrix_base)))
+    }
+
+    cat("================================================\n")
+
     if (!is.null(model_features)) {
       fm <- feature_matrix_base
       missing_cols <- setdiff(model_features, colnames(fm))
@@ -261,9 +299,8 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   }
   flow_D <- predict_with_alignment(models_list$flow_D$model, feature_matrix)
   truck_pct_D <- if (is.null(models_list$truck_pct_D$model)) {
-    pipeline_message(
-      text = "Missing base model truck_pct_D: outputs will be NA",
-      process = "warning")
+    pipeline_message("Missing base model truck_pct_D: outputs will be NA", 
+                     process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
     predict_with_alignment(models_list$truck_pct_D$model, feature_matrix)
@@ -275,9 +312,8 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   }
 
   speed_D_raw <- if (is.null(models_list$speed_D$model)) {
-    pipeline_message(
-      text = "Missing base model speed_D: outputs will be NA",
-      process = "warning")
+    pipeline_message("Missing base model speed_D: outputs will be NA", 
+                     process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
     predict_with_alignment(models_list$speed_D$model, feature_matrix)
@@ -289,7 +325,7 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   if (identical(speed_model_target, "ratio_speed_to_osm")) {
     # New model: speed_D predicts a ratio to OSM speed.
     speed_osm_base <- speed_osm_raw
-    speed_osm_base[speed_osm_missing] <- CONFIG$DEFAULT_VEHICLE_SPEED
+    speed_osm_base[speed_osm_missing] <- default_vehicle_speed
     speed_D <- if (all(is.na(speed_D_raw))) {
       rep(NA_real_, length(speed_D_raw))
     } else {
@@ -306,15 +342,13 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   n_speed_osm_missing <- sum(speed_osm_missing)
   if (n_speed_osm_missing > 0) {
     pipeline_message(
-      text = sprintf(
-        "Prediction-time OSM speed imputation: %s missing values imputed with %s",
-        fmt(n_speed_osm_missing),
-        ifelse(all(is.na(speed_D)), "DEFAULT_VEHICLE_SPEED", "speed_D XGBoost predictions")
-      ),
+      sprintf("Prediction-time OSM speed imputation: %s missing values imputed with %s", 
+              fmt(n_speed_osm_missing), 
+              ifelse(all(is.na(speed_D)), "DEFAULT_VEHICLE_SPEED", "speed_D XGBoost predictions")),
       process = "warning"
     )
     if (all(is.na(speed_D))) {
-      speed_osm[speed_osm_missing] <- CONFIG$DEFAULT_VEHICLE_SPEED
+      speed_osm[speed_osm_missing] <- default_vehicle_speed
     } else {
       speed_osm[speed_osm_missing] <- pmax(5, speed_D[speed_osm_missing])
     }
@@ -428,15 +462,14 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   }
   if (total_nan > 0) {
     pipeline_message(
-      text = sprintf("NaN/Inf detected in predictions: %d values imputed with median by highway type",
-                     total_nan),
+      sprintf("NaN/Inf detected in predictions: %d values imputed with median by highway type",
+              total_nan),
       process = "warning")
   }
   
-  pipeline_message(
-    text = sprintf("Predictions completed for %s roads × %s periods", 
-                   fmt(nrow(results)), length(feature_info$all_periods)),
-    level = 1, progress = "end", process = "valid")
+  pipeline_message(sprintf("Predictions completed for %s roads × %s periods", 
+                           fmt(nrow(results)), length(feature_info$all_periods)), 
+                   level = 1, progress = "end", process = "valid")
   
   return(results)
 }
@@ -634,45 +667,41 @@ add_period_datetime_columns <- function(predictions_long) {
 #' @return Invisible NULL. Side effect: writes GPKG to disk.
 predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) {
 
-  pipeline_message(text = sprintf("%s traffic prediction", region_name),
-                   level = 0, progress = "start", process = "calc")
+  pipeline_message(sprintf("%s traffic prediction", region_name), level = 0, 
+                   progress = "start", process = "calc")
 
   # --- Load models ---
-  pipeline_message(text = "Loading trained XGBoost models",
-                   level = 1, progress = "start", process = "load")
+  pipeline_message("Loading trained XGBoost models", level = 1, 
+                   progress = "start", process = "load")
 
-  if (!file.exists(config$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
-    pipeline_message(
-      text = sprintf("Models not found: %s",
-                     rel_path(config$XGB_MODELS_WITH_RATIOS_FILEPATH)),
-      process = "stop")
+  if (!file.exists(xgb_models_path)) {
+    pipeline_message(sprintf("Models not found: %s", 
+                             rel_path(xgb_models_path)), 
+                     process = "stop")
   }
 
-  models_list <- readRDS(config$XGB_MODELS_WITH_RATIOS_FILEPATH)
-  feature_info <- readRDS(config$XGB_RATIO_FEATURE_INFO_FILEPATH)
+  models_list <- readRDS(xgb_models_path)
+  feature_info <- readRDS(xgb_feature_path)
 
-  pipeline_message(
-    text = sprintf("Models loaded: %s models for %s periods",
-                   length(models_list),
-                   length(feature_info$all_periods)),
-    level = 1, progress = "end", process = "valid")
+  pipeline_message(sprintf("Models loaded: %s models for %s periods", 
+                           length(models_list), 
+                           length(feature_info$all_periods)), 
+                   level = 1, progress = "end", process = "valid")
 
   # --- Bbox ---
-  pipeline_message(
-    text = sprintf("Bbox: [%s, %s, %s, %s]",
-                   bbox[1], bbox[2], bbox[3], bbox[4]),
-    process = "info")
+  pipeline_message(sprintf("Bbox: [%s, %s, %s, %s]", 
+                           bbox[1], bbox[2], bbox[3], bbox[4]), 
+                   process = "info")
 
   # --- Load network ---
   osm_region <- load_network_for_prediction(bbox = bbox, config = config)
 
-  pipeline_message(
-    text = sprintf("Network loaded: %s roads in %s",
-                   fmt(nrow(osm_region)), region_name),
-    process = "info")
+  pipeline_message(sprintf("Network loaded: %s roads in %s", 
+                           fmt(nrow(osm_region)), region_name), 
+                   process = "info")
 
   # --- Apply predictions ---
-  pipeline_message(text = sprintf("Applying XGBoost models to %s network", region_name),
+  pipeline_message(sprintf("Applying XGBoost models to %s network", region_name), 
                    level = 1, progress = "start", process = "calc")
 
   osm_region_dt <- as.data.frame(sf::st_drop_geometry(osm_region))
@@ -682,19 +711,18 @@ predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) 
     models_list = models_list,
     feature_info = feature_info)
 
-  pipeline_message(
-    text = sprintf("Predictions completed: %s roads x %s periods",
-                   fmt(nrow(predictions_wide)),
-                   length(feature_info$all_periods)),
-    level = 1, progress = "end", process = "valid")
+  pipeline_message(sprintf("Predictions completed: %s roads x %s periods", 
+                           fmt(nrow(predictions_wide)), 
+                           length(feature_info$all_periods)), 
+                   level = 1, progress = "end", process = "valid")
 
   all_periods <- feature_info$all_periods
   rm(models_list, feature_info, osm_region_dt)
   gc(verbose = FALSE)
 
   # --- Long format ---
-  pipeline_message(text = "Converting to long format",
-                   level = 1, progress = "start", process = "calc")
+  pipeline_message("Converting to long format", level = 1, 
+                   progress = "start", process = "calc")
 
   check_memory_available(
     operation_name = sprintf("Pivot to long format (%s roads)",
@@ -721,29 +749,26 @@ predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) 
   rm(predictions_wide)
   gc(verbose = FALSE)
 
-  pipeline_message(
-    text = sprintf("Long format: %s rows (roads x periods)",
-                   fmt(nrow(predictions_long))),
-    level = 1, progress = "end", process = "valid")
+  pipeline_message(sprintf("Long format: %s rows (roads x periods)", 
+                           fmt(nrow(predictions_long))), 
+                   level = 1, progress = "end", process = "valid")
 
   # --- Validate ---
   validation <- validate_predictions(predictions_long)
   if (!validation$is_valid) {
-    pipeline_message(
-      text = sprintf("Validation warnings: %s issues detected",
-                     length(validation$issues)),
-      process = "warning")
+    pipeline_message(sprintf("Validation warnings: %s issues detected", 
+                             length(validation$issues)), 
+                             process = "warning")
     for (issue_name in names(validation$issues)) {
-      pipeline_message(
-        text = sprintf("  - %s: %s cases",
-                       issue_name, validation$issues[[issue_name]]),
-        process = "warning")
+      pipeline_message(sprintf("  - %s: %s cases", 
+                               issue_name, validation$issues[[issue_name]]), 
+                       process = "warning")
     }
   }
 
   # --- Export ---
-  pipeline_message(text = "Exporting predictions with geometry",
-                   level = 1, progress = "start", process = "save")
+  pipeline_message("Exporting predictions with geometry", level = 1, 
+                   progress = "start", process = "save")
 
   check_memory_available(
     operation_name = sprintf("Geometry merge (%s rows)",
@@ -757,8 +782,8 @@ predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) 
 
   predictions_sf <- sf::st_as_sf(predictions_sf)
 
-  if (sf::st_crs(predictions_sf) != config$TARGET_CRS) {
-    predictions_sf <- sf::st_transform(predictions_sf, config$TARGET_CRS)
+  if (sf::st_crs(predictions_sf) != target_crs) {
+    predictions_sf <- sf::st_transform(predictions_sf, target_crs)
   }
 
   predictions_sf <- add_period_datetime_columns(predictions_sf)
@@ -899,16 +924,27 @@ pivot_to_long_chunk <- function(predictions_wide, periods, all_periods) {
 #'   1. Geometry layer (GPKG with spatial index)
 #'   2. One GPKG per temporal chunk (attribute-only, keyed by osm_id)
 #'
-#' @param config CONFIG list
+#' @param cfg configuration list
 #' @param tile_size_m Tile side in meters (default 200 km)
 #' @param chunks Character vector of temporal chunks to export.
 #'   Valid values: "DEN", "hourly", "hourly_wd", "hourly_we".
 #'   Default: all chunks. Use c("DEN") for noise mapping (smallest output).
 #'   Disk estimate per chunk: DEN ~1 GB, hourly/wd/we ~8.5 GB each.
 #' @return Invisible NULL
-predict_france_tiled <- function(config = CONFIG, tile_size_m = 200000,
+predict_france_tiled <- function(cfg, tile_size_m = 200000,
                                  chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")) {
-
+  
+  # Configuration parameters
+  osm_roads_path <- cfg$data_prep$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  xgb_models_path <- cfg$training$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- cfg$training$XGB_RATIO_FEATURE_INFO_FILEPATH
+  france_outpath <- cfg$predict$FRANCE_OUTPUT_DIR
+  france_fraffic_den_fpath <- cfg$predict$FRANCE_TRAFFIC_DEN_FILEPATH
+  france_fraffic_hourly_fpath <- cfg$predict$FRANCE_TRAFFIC_HOURLY_FILEPATH
+  france_fraffic_hourly_wd_fpath <- cfg$predict$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH
+  france_fraffic_hourly_we_fpath <- cfg$predict$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
+  france_geom_fpath <- cfg$predict$FRANCE_GEOMETRY_FILEPATH
+  
   pipeline_message(text = "FRANCE-WIDE tiled prediction",
                    level = 0, progress = "start", process = "calc")
 
@@ -916,11 +952,11 @@ predict_france_tiled <- function(config = CONFIG, tile_size_m = 200000,
   pipeline_message(text = "Loading trained XGBoost models",
                    level = 1, progress = "start", process = "load")
 
-  if (!file.exists(config$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
-    stop("Models not found: ", config$XGB_MODELS_WITH_RATIOS_FILEPATH)
+  if (!file.exists(xgb_models_path)) {
+    stop("Models not found: ", xgb_models_path)
   }
-  models_list  <- readRDS(config$XGB_MODELS_WITH_RATIOS_FILEPATH)
-  feature_info <- readRDS(config$XGB_RATIO_FEATURE_INFO_FILEPATH)
+  models_list  <- readRDS(xgb_models_path)
+  feature_info <- readRDS(xgb_feature_path)
   all_periods  <- feature_info$all_periods
 
   pipeline_message(
@@ -953,15 +989,15 @@ predict_france_tiled <- function(config = CONFIG, tile_size_m = 200000,
   }
 
   # --- Output paths ---
-  output_dir <- config$FRANCE_OUTPUT_DIR
+  output_dir <- france_outpath
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
-  geom_path  <- config$FRANCE_GEOMETRY_FILEPATH
+  geom_path  <- france_geom_fpath
   chunk_paths <- list(
-    DEN       = config$FRANCE_TRAFFIC_DEN_FILEPATH,
-    hourly    = config$FRANCE_TRAFFIC_HOURLY_FILEPATH,
-    hourly_wd = config$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH,
-    hourly_we = config$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
+    DEN       = france_fraffic_den_fpath,
+    hourly    = france_fraffic_hourly_fpath,
+    hourly_wd = france_fraffic_hourly_wd_fpath,
+    hourly_we = france_fraffic_hourly_we_fpath
   )
   chunk_paths <- chunk_paths[names(temporal_chunks)]
 
@@ -997,7 +1033,7 @@ predict_france_tiled <- function(config = CONFIG, tile_size_m = 200000,
 
     tile_sf <- tryCatch(
       sf::st_read(
-        dsn   = config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH,
+        dsn   = osm_roads_path,
         wkt_filter = wkt_bbox,
         quiet = TRUE),
       error = function(e) NULL)

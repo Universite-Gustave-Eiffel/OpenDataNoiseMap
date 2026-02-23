@@ -30,6 +30,7 @@ CONFIG_PREDICT <- list(
                                                 nantes_predictions_filename), 
   PEMB_PREDICTION_FILEPATH          = file.path(PREDICTION_DIR, 
                                                 pemb_predictions_filename), 
+  FRANCE_OUTPUT_DIR                 = FRANCE_OUTPUT_DIR, 
   FRANCE_GEOMETRY_FILEPATH          = file.path(FRANCE_OUTPUT_DIR, 
                                                 france_network_filename), 
   FRANCE_TRAFFIC_DEN_FILEPATH       = file.path(FRANCE_OUTPUT_DIR, 

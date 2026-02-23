@@ -426,7 +426,8 @@ if (file.exists(cfg_data$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
               rel_path(cfg_data$OSM_ROADS_FILEPATH)),
       level = 2, progress = "start", process = "load")
     
-    osm_roads <- st_read(dsn = cfg_data$OSM_ROADS_FILEPATH, quiet = TRUE)
+    osm_roads <- st_read(dsn = cfg_data$OSM_ROADS_FILEPATH, 
+                         quiet = TRUE)
     
     high_traffic_types <- c(
       "motorway", "trunk", "primary", "secondary", "tertiary", 

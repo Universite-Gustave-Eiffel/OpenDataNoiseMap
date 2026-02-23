@@ -8,10 +8,14 @@ pipeline_message("Avatar data post-processing", level = 0,
 # ------------------------------------------------------------------------------
 # Clean Avatar data
 # ------------------------------------------------------------------------------
-if (!exists(x= 'avatar_data', inherits = FALSE)){
+
+use_chunk_streaming <- FALSE
+
+if (!exists(x= 'avatar_data', inherits = FALSE && 
+    file.exists(cfg_data$AVATAR_RDS_DATA_FILEPATH))) {
   
   pipeline_message(sprintf("Loading downloaded Avatar data from %s", 
-                           rel_path(cfg_data$AVATAR_DATA_FILEPATH)), 
+                           rel_path(cfg_data$AVATAR_RDS_DATA_FILEPATH)), 
                    level = 1, progress = "start", process = "load")
   
   # Memory check before loading large RDS (~3.8 GB in RAM)
@@ -27,7 +31,7 @@ if (!exists(x= 'avatar_data', inherits = FALSE)){
       operation_name = "Load Avatar raw traffic RDS (~4 GB in RAM)",
       min_gb = 6, warn_gb = 10)
     
-    avatar_data <- readRDS(file = cfg_data$AVATAR_DATA_FILEPATH)
+    avatar_data <- readRDS(file = cfg_data$AVATAR_RDS_DATA_FILEPATH)
     
     pipeline_message(describe_df(avatar_data), process = "info")
     
@@ -226,8 +230,8 @@ saveRDS(object = avatar_aggregated,
 pipeline_message(describe_df(avatar_aggregated), process = "info")
 
 pipeline_message(
-  sprintf("Traffic flow relative metrics sucessfully calculated and saved ", 
-          "into file %s", rel_path(cfg_data$AVATAR_AGGREGATED_FILEPATH)), 
+  sprintf("Traffic flow relative metrics sucessfully calculated and saved into file %s", 
+          rel_path(cfg_data$AVATAR_AGGREGATED_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 # Memory cleanup
@@ -275,10 +279,10 @@ p2 <- plot_speed_and_truck_percentage(
   fig_name = cfg_data$FIG_SPEED_AND_TRUCK_PERCENTAGE)
 
 pipeline_message(
-  sprintf("Hourly speed and truck percentage successfully plotted and saved ", 
-          "into file %s", paste(rel_path(cfg_g$FIGS_DIR), 
-                                cfg_data$FIG_SPEED_AND_TRUCK_PERCENTAGE, 
-                                sep = .Platform$file.sep)), 
+  sprintf("Hourly speed and truck percentage successfully plotted and saved into file %s", 
+          paste(rel_path(cfg_g$FIGS_DIR), 
+                cfg_data$FIG_SPEED_AND_TRUCK_PERCENTAGE, 
+                sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # ******************************************** #
@@ -293,10 +297,10 @@ p3 <- plot_period_comparison(aggregated_traffic_data = avatar_aggregated,
                            fig_name = cfg_data$FIG_TRAFFIC_PERIOD_COMPARISONS)
 
 pipeline_message(
-  sprintf("Period comparison (D/E/N) successfully plotted and saved into ", 
-          "file %s", paste(rel_path(cfg_g$FIGS_DIR), 
-                           cfg_data$FIG_TRAFFIC_PERIOD_COMPARISONS, 
-                           sep = .Platform$file.sep)), 
+  sprintf("Period comparison (D/E/N) successfully plotted and saved into file %s", 
+          paste(rel_path(cfg_g$FIGS_DIR), 
+                cfg_data$FIG_TRAFFIC_PERIOD_COMPARISONS, 
+                sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # ****************************************** #

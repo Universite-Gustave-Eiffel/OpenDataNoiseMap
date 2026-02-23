@@ -26,7 +26,7 @@ CONFIG_TRAINING <- list(
   TRAINING_GPKG_DATA_FILEPATH     = file.path(TRAINING_GPKG_DATA_DIR, 
                                               training_data_gpkg_filename), 
 
-  XGB_MODELS_WITH_RATIOS_FILEPATH = file.path(TRAINING_DATA_DIR, 
+  XGB_MODELS_WITH_RATIOS_FILEPATH = file.path(TRAINING_RDS_DATA_DIR, 
                                               xgb_models_with_ratios_filename), 
   XGB_RATIO_FEATURE_INFO_FILEPATH = file.path(TRAINING_RDS_DATA_DIR, 
                                               xgboost_feature_info_filename), 

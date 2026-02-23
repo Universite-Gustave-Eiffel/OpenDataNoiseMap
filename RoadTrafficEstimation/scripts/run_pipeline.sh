@@ -33,7 +33,7 @@ if [ -n "$SLURM_JOB_ID" ]; then
   PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 else
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fi
 
 export PROJECT_ROOT
@@ -79,7 +79,7 @@ R --version
 MODE="${1:-data_prep}"   # default = sensors
 
 case "$MODE" in
-  data_prep|avatar|training|nantes|paris|sensors)
+  data_prep|avatar|training|nantes|paris|sensors|pemb|france)
     ;;
   *)
     echo "❌ Unknown MODE: $MODE"

@@ -303,7 +303,7 @@ safe_sparse_model_matrix <- function(formula_obj, data_df) {
 for (model_name in names(all_configs)) {
   
   # Current configuration
-  config <- all_configs[[model_name]]
+  model_config <- all_configs[[model_name]]
   
   pipeline_message(
     sprintf("Training step [%d/%d] - Estimation of the variable %s", 
@@ -366,6 +366,13 @@ for (model_name in names(all_configs)) {
     formula_obj = road_feature_formula,
     data_df = clean_training_data_over_period)
   
+  training_feature_names <- colnames(sparse_data_matrix)
+
+  pipeline_message(
+    sprintf("Constructed sparse feature matrix with %d rows and %d features", 
+            nrow(x = sparse_data_matrix), ncol(x = sparse_data_matrix)), 
+    process = "info")
+
   pipeline_message("Sparse feature matrix constructed successfully", level = 2, 
                    progress = "end", process = "valid")
   
@@ -534,15 +541,24 @@ for (model_name in names(all_configs)) {
     weight_train <- 1 - pmin(pmax(quality_train, 0), 100) / 100
     weight_train[is.na(weight_train)] <- 1
     weight_train <- pmax(weight_train, min_weight)
-    dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train, weight = weight_train)
-    dtest <- xgboost::xgb.DMatrix(data = X_test, label = y_test)
+    dtrain <- xgboost::xgb.DMatrix(data = X_train, 
+                                   label = y_train, 
+                                   weight = weight_train, 
+                                   feature_names = training_feature_names)
+    dtest <- xgboost::xgb.DMatrix(data = X_test, 
+                                  label = y_test, 
+                                  feature_names = training_feature_names)
     pipeline_message(
       sprintf("Using Avatar quality weights: min=%.2f, mean=%.2f, max=%.2f", 
               min(weight_train), mean(weight_train), max(weight_train)),
       process = "info")
   } else {
-    dtrain <- xgboost::xgb.DMatrix(data = X_train, label = y_train)
-    dtest <- xgboost::xgb.DMatrix(data = X_test, label = y_test)
+    dtrain <- xgboost::xgb.DMatrix(data = X_train, 
+                                   label = y_train, 
+                                   feature_names = training_feature_names)
+    dtest <- xgboost::xgb.DMatrix(data = X_test, 
+                                  label = y_test, 
+                                  feature_names = training_feature_names)
   }
   
   # Choose parameters and training strategy based on model type
@@ -562,6 +578,9 @@ for (model_name in names(all_configs)) {
           verbose = 0,
           showsd = FALSE)
         best_rounds <- cv_result$best_iteration
+        if (is.null(best_rounds) || is.na(best_rounds) || best_rounds <= 0) {
+          best_rounds <- cfg_train$NROUNDS
+        }
         pipeline_message(sprintf("CV selected %d rounds (from max %d)", 
                                  best_rounds, cfg_train$NROUNDS), 
                          process = "clip")
@@ -585,6 +604,9 @@ for (model_name in names(all_configs)) {
         verbose = 0,
         showsd = FALSE)
       best_rounds <- cv_result$best_iteration
+        if (is.null(best_rounds) || is.na(best_rounds) || best_rounds <= 0) {
+          best_rounds <- cfg_train$NROUNDS
+        }
       pipeline_message(sprintf("CV(%d-fold) selected %d rounds (from max %d)",
                                nfold, best_rounds, cfg_train$NROUNDS), 
                        process = "info")
@@ -615,11 +637,17 @@ for (model_name in names(all_configs)) {
   }
   
   # Training
+  eval_list <- if (use_watchlist) {
+    list(train = dtrain, test = dtest)
+  } else {
+    NULL
+  }
+
   xgb_model <- xgboost::xgb.train(
     params = params,
     data = dtrain,
     nrounds = best_rounds,
-    watchlist = if (use_watchlist) list(train = dtrain, test = dtest) else NULL,
+    evals = eval_list,
     early_stopping_rounds = if (use_watchlist) 50 else NULL,
     maximize = FALSE,
     verbose = 0)
@@ -643,7 +671,7 @@ for (model_name in names(all_configs)) {
     actual_original <- y_test
   }
 
-  if (model_name == "speed_D" && config$target == "ratio_speed_to_osm") {
+  if (model_name == "speed_D" && model_config$target == "ratio_speed_to_osm") {
     speed_osm_test <- suppressWarnings(as.numeric(test_meta$speed))
     speed_osm_test[is.na(speed_osm_test) | speed_osm_test <= 0] <- cfg_data$DEFAULT_VEHICLE_SPEED
     pred_eval <- pmax(0, pred_original * speed_osm_test)
@@ -720,7 +748,7 @@ for (model_name in names(all_configs)) {
   # Store model
   models_list[[model_name]] <- list(
     model = xgb_model,
-    config = config,
+    config = model_config,
     metrics = list(mae = mae, rmse = rmse, r2 = r2, mape = mape, medape = medape),
     feature_names = colnames(X_train),
     feature_importance = importance,  # Full importance table
@@ -778,8 +806,9 @@ pipeline_message(sprintf("Save training models and features in files %s and %s "
 # Save list of models and road feature formula
 saveRDS(object = models_list, 
         file = cfg_train$XGB_MODELS_WITH_RATIOS_FILEPATH)
-saveRDS(object =  list(road_feature_formula = road_feature_formula, 
-                       all_periods = all_periods), 
+saveRDS(object = list(road_feature_formula = road_feature_formula, 
+                      all_periods = all_periods, 
+                      training_feature_names = training_feature_names), 
         file = cfg_train$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 pipeline_message("Training models and features successfully saved ", level = 1, 

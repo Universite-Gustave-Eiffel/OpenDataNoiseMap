@@ -44,6 +44,7 @@ CONFIG_DATA_PREP <- list(
   # *************** #
   
   FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
+  FORCE_REENGINEER_OSM_FRANCE   = FALSE,
   
   # ********************* #
   # Directories and files #
@@ -123,6 +124,7 @@ CONFIG_DATA_PREP <- list(
   # ***************** #
   # Download settings #
   # ***************** #
+
   START_TIME       = "2023-01-01T00:00:00", 
   END_TIME         = "2023-12-31T00:00:00", 
   AVATAR_API_TOKEN = Sys.getenv("AVATAR_API_TOKEN"), 

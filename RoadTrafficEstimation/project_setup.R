@@ -13,15 +13,17 @@ Sys.getenv("LD_LIBRARY_PATH")
 pkgs_needed <- c(
   "Rcpp", "dplyr", "tidyr", "sf", "lwgeom", "httr", "jsonlite", "lubridate", 
   "randomForest", "data.table", "stringr", "sfnetworks", "igraph", "tidygraph", 
-  "progress", "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix", "tools")
+  "progress", "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix", 
+  "unix", "tools")
 
 installed <- rownames(installed.packages(lib.loc = .libPaths()))
 missing <- setdiff(pkgs_needed, installed)
 
 if (length(missing) > 0) {
   if (RUN_CONTEXT == "local") {
-    pipeline_message("Installing missing packages", level = 1, 
-                     progress = "start", process = "install")
+    pipeline_message(sprintf("Installing missing packages: %s", 
+                             paste(missing, collapse = ", ")), 
+                     level = 1, progress = "start", process = "install")
     install.packages(missing)
   }
   if (RUN_CONTEXT == "slurm") {
@@ -49,6 +51,11 @@ pipeline_message(text = "Packages loaded successfully",
                  level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
+# Memory limit
+# ------------------------------------------------------------------------------
+rlimit_as(1e12)  #increases to ~30GB
+
+# ------------------------------------------------------------------------------
 # Directories
 # ------------------------------------------------------------------------------
 
@@ -61,7 +68,7 @@ pipeline_message(text = "Creating required directories",
 cfg_g <- CFG$global
 cfg_data <- CFG$data_prep
 cfg_train <- CFG$training
-cfg_forecast <- CFG$forecast
+cfg_predict <- CFG$predict
 
 # --------------------------- #
 # Create required directories #
@@ -91,7 +98,7 @@ setup_directories <- function(cfg) {
   invisible(created_dirs)
 }
 
-setup_directories(c(cfg_g, cfg_data, cfg_train, cfg_forecast))
+setup_directories(c(cfg_g, cfg_data, cfg_train, cfg_predict))
 
 pipeline_message(text = "Required directories created", 
                  level = 1, progress = "end", process = "valid")
