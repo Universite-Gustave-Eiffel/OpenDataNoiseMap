@@ -11,13 +11,10 @@
 *.qmd
 
 # ==== Output directories ====
-RoadTrafficEstimation/data/output/
-RoadTrafficEstimation/data/osm/
-RoadTrafficEstimation/data/insee/
-data/output/
+RoadTrafficEstimation/data/
 
 # ==== Logs ====
-*.log
+RoadTrafficEstimation/logs/
 
 # ==== R artifacts ====
 .Rhistory
@@ -43,3 +40,6 @@ renv/cellar/
 
 # ==== Environment ====
 .Renviron
+
+# ==== Temporary R scripts ====
+RoadTrafficEstimation/check.R
