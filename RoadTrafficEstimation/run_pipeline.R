@@ -26,7 +26,7 @@ phases_to_run <- if (PHASE == "all") {
 
 # Define modes to run
 modes_to_run <- if (MODE == "all") {
-  c("preparation", "training", "nantes", "paris", "pemb", "sensors", "France")
+  c("preparation", "training", "nantes", "paris", "pemb", "sensors", "france")
 } else if (MODE %in% c("nantes", "paris", "pemb", "sensors")) {
   c("preparation", "training", MODE)
 } else {

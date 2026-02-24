@@ -2,6 +2,61 @@
 # GLOBAL UTILITIES FOR DISPLAYING LOG MESSAGES
 # ==============================================================================
 #' 
+# -------------------------------------------------------------------------------
+# Extract a command-line argument value
+# -------------------------------------------------------------------------------
+#' @title Extract a command-line argument value
+#' @description Retrieves the value associated with a specific command-line flag 
+#'              from a character vector of arguments (typically obtained via 
+#'              \code{commandArgs(trailingOnly = TRUE)}).
+#'              The function searches for a flag (e.g., \code{"--phase"}) and, if 
+#'              found, returns the element immediately following it. If the flag 
+#'              is not present or does not have an associated value, a default 
+#'              value is returned instead.
+#' @param flag A character string representing the command-line flag to search 
+#'             for (e.g., \code{"--phase"}, \code{"--mode"}, \code{"--region"}, 
+#'             \code{"--test"}).
+#' @param default A default value returned if the flag is not found or if no value 
+#'                follows the flag. Defaults to \code{NULL}.
+#' @param args A character vector of command-line arguments. Typically obtained 
+#'             via \code{commandArgs(trailingOnly = TRUE)}.
+#' @return A character string corresponding to the value following the specified 
+#'         flag, or the provided \code{default} value if the flag is absent or 
+#'         invalid.
+#' @details The function:
+#'          \enumerate{
+#'            \item Searches for the position of the specified flag in 
+#'                  \code{args},
+#'            \item Ensures exactly one occurrence is found,
+#'            \item Checks that the flag is not the last element,
+#'            \item Returns the subsequent value if valid,
+#'            \item Otherwise returns the default value.
+#'          }
+#'          The function does not validate the semantic correctness of argument 
+#'          values.
+#' @examples
+#' \dontrun{
+#' args <- c("--phase", "training", "--mode", "paris")
+#' get_arg_value("--phase", default = "all", args)
+#' # Returns "training"
+#' get_arg_value("--region", default = "full", args)
+#' # Returns "full"
+#' }
+#' @export
+get_arg_value <- function(flag, default = NULL, args) {
+  
+  # Identify the position of the requested flag
+  idx <- which(args == flag)
+  
+  # Return the value following the flag if it exists
+  if (length(idx) == 1 && idx < length(args)) {
+    return(args[idx + 1])
+  }
+  
+  # Otherwise return the default value
+  return(default)
+}
+#'
 # ------------------------------------------------------------------------------
 # Setup project directory structure from configuration
 # ------------------------------------------------------------------------------
