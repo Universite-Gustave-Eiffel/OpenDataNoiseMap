@@ -74,13 +74,79 @@ echo "🔎 R path: $(which R)"
 R --version
 
 # ------------------------------------------------------------------------------
-# Pipeline mode (argument or default)
+# Pipeline parameters (arguments or defaults)
 # ------------------------------------------------------------------------------
 
-PHASE="all"        # preparation | training | prediction | all
-MODE="paris"       # nantes | paris | pemb | sensors | all
-REGION="full"      # full | small | test
-TEST_FLAG=""       # add "--test" to enable tests
+PHASE="${1:-all}"        # preparation | training | prediction | all
+MODE="${2:-paris}"       # nantes | paris | pemb | sensors | all
+REGION="${3:-full}"      # full | small | test
+TEST_FLAG="${4:-}"       # use "--test" to enable tests
 
-# Single R session with new parameter structure
-Rscript --vanilla "${PROJECT_ROOT}/main.R" --phase "$PHASE" --mode "$MODE" --region "$REGION" $TEST_FLAG
+# ------------------------------------------------------------------------------
+# Validate PHASE
+# ------------------------------------------------------------------------------
+case "$PHASE" in
+  preparation|training|prediction|all)
+    ;;
+  *)
+    echo "❌ Unknown PHASE: $PHASE"
+    echo "⚠️ Allowed values: preparation | training | prediction | all"
+    exit 1
+    ;;
+esac
+
+# ------------------------------------------------------------------------------
+# Validate MODE
+# ------------------------------------------------------------------------------
+case "$MODE" in
+  nantes|paris|pemb|sensors|all)
+    ;;
+  *)
+    echo "❌ Unknown MODE: $MODE"
+    echo "⚠️ Allowed values: nantes | paris | pemb | sensors | all"
+    exit 1
+    ;;
+esac
+
+# ------------------------------------------------------------------------------
+# Validate REGION
+# ------------------------------------------------------------------------------
+case "$REGION" in
+  full|small|test)
+    ;;
+  *)
+    echo "❌ Unknown REGION: $REGION"
+    echo "⚠️ Allowed values: full | small | test"
+    exit 1
+    ;;
+esac
+
+# ------------------------------------------------------------------------------
+# Info summary
+# ------------------------------------------------------------------------------
+echo "🎯 PIPELINE PARAMETERS"
+echo "   MODE   : ${MODE}"
+echo "   PHASE  : ${PHASE}"
+echo "   REGION : ${REGION}"
+echo "   TEST   : ${TEST_FLAG}"
+
+# ------------------------------------------------------------------------------
+# Run pipeline
+# ------------------------------------------------------------------------------
+MAIN_R="${PROJECT_ROOT}/main.R"
+LOG_DIR="${PROJECT_ROOT}/logs"
+OUT_LOG="${LOG_DIR}/${MODE}_${PHASE}_${REGION}.Rout"
+
+mkdir -p "${LOG_DIR}"
+
+[ -f "$OUT_LOG" ] && rm "$OUT_LOG"
+
+echo "🚀 RUN PIPELINE: ${MAIN_R}"
+echo "📜 R LOG: ${OUT_LOG}"
+
+Rscript --vanilla "${MAIN_R}" \
+  --phase "$PHASE" \
+  --mode "$MODE" \
+  --region "$REGION" \
+  $TEST_FLAG \
+  > "${OUT_LOG}" 2>&1
