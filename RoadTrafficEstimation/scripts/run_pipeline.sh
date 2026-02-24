@@ -33,7 +33,7 @@ if [ -n "$SLURM_JOB_ID" ]; then
   PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 else
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 
 export PROJECT_ROOT
@@ -125,8 +125,8 @@ esac
 # Info summary
 # ------------------------------------------------------------------------------
 echo "🎯 PIPELINE PARAMETERS"
-echo "   MODE   : ${MODE}"
 echo "   PHASE  : ${PHASE}"
+echo "   MODE   : ${MODE}"
 echo "   REGION : ${REGION}"
 echo "   TEST   : ${TEST_FLAG}"
 
@@ -134,8 +134,8 @@ echo "   TEST   : ${TEST_FLAG}"
 # Run pipeline
 # ------------------------------------------------------------------------------
 MAIN_R="${PROJECT_ROOT}/main.R"
-LOG_DIR="${PROJECT_ROOT}/logs"
-OUT_LOG="${LOG_DIR}/${MODE}_${PHASE}_${REGION}.Rout"
+LOG_DIR="${PROJECT_ROOT}/logs/${PHASE}_${MODE}_${REGION}.Rout"
+OUT_LOG="${LOG_DIR}/${PHASE}_${MODE}_${REGION}.Rout"
 
 mkdir -p "${LOG_DIR}"
 

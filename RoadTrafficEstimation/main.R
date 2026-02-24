@@ -7,10 +7,10 @@
 # ------------------------------------------------------------------------------
 
 if (!exists("PROJECT_ROOT")) {
-  # Option 1: use the path given in the script .sh as environment variable
+  # Option 1: use the path given in the batch script as environment variable
   PROJECT_ROOT <- Sys.getenv("PROJECT_ROOT")
   if (PROJECT_ROOT == "") {
-    # Option 2: fallback -> current repository
+    # Option 2: fallback -> use the current repository as project root
     PROJECT_ROOT <- getwd()
   }
 }
