@@ -50,8 +50,13 @@ message(sprintf("🧪 Test flag     : %s", ifelse(TEST_FLAG=="--test", "ON", "OF
 # Run successive steps
 # ------------------------------------------------------------------------------
 
-# Bootstrap configuration
+# Setup
+source("project_setup.R")
+
+# Bootstrap
 source("bootstrap/bootstrap.R")
+
+# Configuration
 source("config/config_global.R")
 source("config/config_data_prep.R")
 source("config/config_training.R")
