@@ -144,9 +144,4 @@ mkdir -p "${LOG_DIR}"
 echo "🚀 RUN PIPELINE: ${MAIN_R}"
 echo "📜 R LOG: ${OUT_LOG}"
 
-Rscript --vanilla "${MAIN_R}" \
-  --phase "$PHASE" \
-  --mode "$MODE" \
-  --region "$REGION" \
-  $TEST_FLAG \
-  > "${OUT_LOG}" 2>&1
+Rscript --vanilla "${MAIN_R}" "$@" > "${OUT_LOG}" 2>&1
