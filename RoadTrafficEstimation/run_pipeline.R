@@ -125,7 +125,7 @@ if ("preparation" %in% phases_to_run) {
   pipeline_message("PHASE 1: DATA PREPARATION", level = 0, 
                    progress = "start", process = "calc")
   
-  source("R/data_preparation/01_setup_environment.R")
+  # source("R/data_preparation/01_setup_environment.R")
   source("R/data_preparation/02_osm_processing.R")
   source("R/data_preparation/03_osm_feature_engineering.R")
   source("R/data_preparation/04_avatar_download.R")

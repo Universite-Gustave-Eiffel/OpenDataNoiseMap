@@ -78,7 +78,7 @@ R --version
 # ------------------------------------------------------------------------------
 
 PHASE="${1:-all}"        # preparation | training | prediction | all
-MODE="${2:-paris}"       # nantes | paris | pemb | sensors | france
+MODE="${2:-france}"      # nantes | paris | pemb | sensors | france
 REGION="${3:-full}"      # full | small | test
 TEST_FLAG="${4:-}"       # use "--test" to enable tests
 
@@ -99,7 +99,7 @@ esac
 # Validate MODE
 # ------------------------------------------------------------------------------
 case "$MODE" in
-  nantes|paris|pemb|sensors|all)
+  nantes|paris|pemb|sensors|france)
     ;;
   *)
     echo "❌ Unknown MODE: $MODE"
