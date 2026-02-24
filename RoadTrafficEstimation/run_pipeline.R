@@ -9,23 +9,22 @@
 #                          [--region <full|small|test>] [--test]
 # ==============================================================================
 
-pipeline_message(text = "Run pipeline", 
-                 level = 0, progress = "start", process = "calc")
+pipeline_message("Run pipeline", level = 0, progress = "start", process = "calc")
 
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# LOAD CONFIGURATION
+# ==============================================================================
+
+pipeline_message("Parsing arguments", level = 1, progress = "start", process = "install")
+
 # Parse command-line arguments
-# ------------------------------------------------------------------------------
-
-pipeline_message(text = "Parsing arguments", 
-                 level = 1, progress = "start", process = "install")
-
 args <- commandArgs(trailingOnly = TRUE)
 
 # Default values
-PHASE_ARG <- "all"      # preparation | training | prediction | all
-MODE_ARG <- "all"       # nantes | paris | sensors | all
+PHASE_ARG  <- "all"     # preparation | training | prediction | all
+MODE_ARG   <- "all"     # nantes | paris | sensors | all
 REGION_ARG <- "full"    # full | small | test
-RUN_TESTS <- FALSE
+RUN_TESTS  <- FALSE     # --test flag  | "" (default)
 
 # Parse arguments
 i <- 1
@@ -50,29 +49,26 @@ while (i <= length(args)) {
 }
 
 # Validate arguments
-valid_phases <- c("preparation", "training", "prediction", "all")
-valid_modes <- c("nantes", "paris", "pemb", "sensors", "france", "all")
+valid_phases  <- c("preparation", "training", "prediction", "all")
+valid_modes   <- c("nantes", "paris", "pemb", "sensors", "all")
 valid_regions <- c("full", "small", "test")
 
 if (!PHASE_ARG %in% valid_phases) {
-  pipeline_message(
-    text = sprintf("Invalid phase: %s. Valid: %s", 
-                   PHASE_ARG, paste(valid_phases, collapse = ", ")),
-    process = "stop")
+  pipeline_message(sprintf("Invalid phase: %s. Valid: %s", 
+                           PHASE_ARG, paste(valid_phases, collapse = ", ")), 
+  process = "stop")
 }
 
 if (!MODE_ARG %in% valid_modes) {
-  pipeline_message(
-    text = sprintf("Invalid mode: %s. Valid: %s", 
-                   MODE_ARG, paste(valid_modes, collapse = ", ")),
-    process = "stop")
+  pipeline_message(sprintf("Invalid mode: %s. Valid: %s", 
+                   MODE_ARG, paste(valid_modes, collapse = ", ")), 
+  process = "stop")
 }
 
 if (!REGION_ARG %in% valid_regions) {
-  pipeline_message(
-    text = sprintf("Invalid region: %s. Valid: %s", 
-                   REGION_ARG, paste(valid_regions, collapse = ", ")),
-    process = "stop")
+  pipeline_message(sprintf("Invalid region: %s. Valid: %s", 
+                           REGION_ARG, paste(valid_regions, collapse = ", ")), 
+  process = "stop")
 }
 
 # Load TEST_CONFIG if small or test region requested
@@ -81,22 +77,20 @@ if (REGION_ARG %in% c("small", "test")) {
     source("TEST_CONFIG.R")
     REGION_ARG <- "test"  # Normalize to 'test'
   } else {
-    pipeline_message(
-      text = "TEST_CONFIG.R not found. Falling back to full region.",
-      process = "warning")
+    pipeline_message("TEST_CONFIG.R not found. Falling back to full region.", 
+                     process = "warning")
     REGION_ARG <- "full"
   }
 }
 
-pipeline_message(
-  text = sprintf("Phase: %s | Mode: %s | Region: %s | Tests: %s", 
-                 PHASE_ARG, MODE_ARG, REGION_ARG, if (RUN_TESTS) "ON" else "OFF"),
-  level = 1, progress = "end", process = "install")
+pipeline_message(sprintf("Phase: %s | Mode: %s | Region: %s | Tests: %s", 
+                         PHASE_ARG, MODE_ARG, REGION_ARG, if (RUN_TESTS) "ON" else "OFF"), 
+                 level = 1, progress = "end", process = "install")
 
 # Define modes to run
 modes_to_run <- if (MODE_ARG == "all") {
   c("preparation", "training", "nantes", "paris", "pemb", "sensors")
-} else if (MODE_ARG %in% c("nantes", "paris", "pemb", "sensors", "france")) {
+} else if (MODE_ARG %in% c("nantes", "paris", "pemb", "sensors")) {
   c("preparation", "training", MODE_ARG)
 } else {
   MODE_ARG
@@ -114,22 +108,22 @@ if (PHASE_ARG == "prediction" && MODE_ARG != "all") {
   if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH) ||
       !file.exists(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)) {
     phases_to_run <- unique(c("preparation", "training", phases_to_run))
-    pipeline_message(
-      text = "Models not found — adding preparation and training phases",
-      process = "warning")
+    pipeline_message("Models not found — adding preparation and training phases", 
+                     process = "warning")
   }
 }
 
-# Filter modes and phases
+# ==============================================================================
+# FILTER MODES AND PHASES
+# ==============================================================================
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 # PHASE 1: DATA PREPARATION
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 if ("preparation" %in% phases_to_run) {
-  pipeline_message(
-    text = "PHASE 1: DATA PREPARATION",
-    level = 0, progress = "start", process = "calc")
+  pipeline_message("PHASE 1: DATA PREPARATION", level = 0, 
+                   progress = "start", process = "calc")
   
   source("R/data_preparation/01_setup_environment.R")
   source("R/data_preparation/02_osm_processing.R")
@@ -142,19 +136,17 @@ if ("preparation" %in% phases_to_run) {
     source("R/tests/test_data_preparation.R")
   }
   
-  pipeline_message(
-    text = "Data preparation phase completed",
-    level = 0, progress = "end", process = "valid")
+  pipeline_message("Data preparation phase completed", level = 0, 
+                   progress = "end", process = "valid")
 }
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 # PHASE 2: MODEL TRAINING
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 if ("training" %in% phases_to_run) {
-  pipeline_message(
-    text = "PHASE 2: MODEL TRAINING",
-    level = 0, progress = "start", process = "calc")
+  pipeline_message("PHASE 2: MODEL TRAINING", level = 0, 
+                   progress = "start", process = "calc")
   
   source("R/model_training/train_xgboost_models.R")
   
@@ -162,19 +154,17 @@ if ("training" %in% phases_to_run) {
     source("R/tests/test_model_training.R")
   }
   
-  pipeline_message(
-    text = "Model training phase completed",
-    level = 0, progress = "end", process = "valid")
+  pipeline_message("Model training phase completed", level = 0, 
+                   progress = "end", process = "valid")
 }
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 # PHASE 3: PREDICTION
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 if ("prediction" %in% phases_to_run) {
-  pipeline_message(
-    text = "PHASE 3: PREDICTION",
-    level = 0, progress = "start", process = "calc")
+  pipeline_message("PHASE 3: PREDICTION", level = 0, 
+                   progress = "start", process = "calc")
   
   # Prediction for Nantes
   if ("nantes" %in% modes_to_run) {
