@@ -18,9 +18,9 @@ setwd(PROJECT_ROOT)
 
 message(sprintf("📁 Current working directory: %s", PROJECT_ROOT))
 
-# -------------------------------------------
+# ------------------------------------------------------------------------------
 # Parse command line arguments
-# -------------------------------------------
+# ------------------------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
 
 # PHASE (argument 1 / default = "all")
@@ -36,15 +36,19 @@ REGION <- if (length(args) >= 3) args[3] else "full"
 assign(x = "REGION", value = REGION, envir = .GlobalEnv)
 
 # TEST_FLAG (argument 4 / yes = "--test" | no = "" / default = "")
-TEST_FLAG <- if (length(args) >= 4) args[4] else ""
+TEST_FLAG <- (length(args) >= 4) && args[4] == "--test"
 assign(x = "TEST_FLAG", value = TEST_FLAG, envir = .GlobalEnv)
-# -------------------------------------------
+
+# ------------------------------------------------------------------------------
 # Confirmation messages
-# -------------------------------------------
+# ------------------------------------------------------------------------------
 message(sprintf("⚡ Phase          : %s", PHASE))
-message(sprintf("🚦 Pipeline mode : %s", ifelse(MODE=="avatar", paste(MODE,"download"), MODE)))
+message(sprintf("🚦 Pipeline mode : %s", ifelse(test = MODE=="avatar", 
+                                                yes = paste(MODE,"download"), 
+                                                no = MODE)))
 message(sprintf("🌍 Region        : %s", REGION))
-message(sprintf("🧪 Test flag     : %s", ifelse(TEST_FLAG=="--test", "ON", "OFF")))
+message(sprintf("🧪 Test flag     : %s", ifelse(test = TEST_FLAG, 
+                                                yes = "ON", no = "OFF")))
 
 # ------------------------------------------------------------------------------
 # Run successive steps
