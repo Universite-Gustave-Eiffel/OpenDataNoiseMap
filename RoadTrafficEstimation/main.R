@@ -24,15 +24,15 @@ message(sprintf("📁 Current working directory: %s", PROJECT_ROOT))
 args <- commandArgs(trailingOnly = TRUE)
 
 # PHASE (argument 1 / default = "all")
-PHASE  <- get_arg_value("--phase",  "all")
+PHASE  <- get_arg_value("--phase", default = "all", args = args)
 assign(x = "PHASE", value = PHASE, envir = .GlobalEnv)
 
 # MODE (argument 2 / default = "paris")
-MODE   <- get_arg_value("--mode",   "paris")
+MODE   <- get_arg_value("--mode",   default = "paris", args = args)
 assign(x = "MODE", value = MODE, envir = .GlobalEnv)
 
 # REGION (argument 3 / default = "full")
-REGION <- get_arg_value("--region", "full")
+REGION <- get_arg_value("--region", default = "full", args = args)
 assign(x = "REGION", value = REGION, envir = .GlobalEnv)
 
 # TEST_FLAG (argument 4 / yes = "--test" | no = "" / default = "")
