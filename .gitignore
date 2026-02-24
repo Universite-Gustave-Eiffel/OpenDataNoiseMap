@@ -17,6 +17,7 @@ RoadTrafficEstimation/data/
 RoadTrafficEstimation/logs/
 
 # ==== R artifacts ====
+.Rproj
 .Rhistory
 .RData
 .Rproj.user
@@ -41,5 +42,6 @@ renv/cellar/
 # ==== Environment ====
 .Renviron
 
-# ==== Temporary R scripts ====
+# ==== Temporary R scripts and files ====
 RoadTrafficEstimation/check.R
+

@@ -297,6 +297,9 @@ available_final_cols <- intersect(x = final_cols,
                                   y = names(training_data))
 training_data <- training_data[, available_final_cols]
 
+drops <- c("waterway","aerialway", "barrier", "man_made", "railway", "z_order")
+training_data[ , !(names(training_data) %in% drops)]
+
 # Training data integrity check
 n_na  <- sum(is.na(training_data))
 
