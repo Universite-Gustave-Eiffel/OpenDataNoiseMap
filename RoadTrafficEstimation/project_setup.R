@@ -62,14 +62,6 @@ rlimit_as(1e12)  #increases to ~30GB
 pipeline_message(text = "Creating required directories", 
                  level = 1, progress = "start", process = "install")
 
-# ------------- #
-# Configuration #
-# ------------- #
-cfg_g <- CFG$global
-cfg_data <- CFG$data_prep
-cfg_train <- CFG$training
-cfg_predict <- CFG$predict
-
 # --------------------------- #
 # Create required directories #
 # --------------------------- #

@@ -1,7 +1,71 @@
 # ==============================================================================
 # GLOBAL UTILITIES FOR DISPLAYING LOG MESSAGES
 # ==============================================================================
-# 
+#' 
+# ------------------------------------------------------------------------------
+# Setup project directory structure from configuration
+# ------------------------------------------------------------------------------
+#' @title Create required project directories from configuration
+#' @description Creates all required directories defined in the pipeline 
+#'              configuration objects. The function scans recursively through 
+#'              the provided configuration list, extracts file paths, derives 
+#'              their parent directories, and ensures that all necessary 
+#'              directories exist.
+#'              This function is designed to centralize directory creation in a 
+#'              single place, avoiding scattered \code{dir.create()} calls 
+#'              across pipeline scripts.
+#' @param cfg A named list of configuration lists (typically \code{CFG}), such 
+#'            as \code{CFG$global}, \code{CFG$data_prep}, \code{CFG$training}, 
+#'            and \code{CFG$forecast}. Each sub-list may contain directory paths 
+#'            and/or file paths.
+#' @details The function operates as follows:
+#'          \enumerate{
+#'            \item Recursively flattens the configuration list to extract all 
+#'                  values, 
+#'            \item Assumes that character values represent filesystem paths, 
+#'            \item Computes parent directories using \code{dirname()}, 
+#'            \item Removes duplicates and ignores directories that already 
+#'                  exist, 
+#'            \item Creates missing directories recursively.
+#'          }
+#'          The function is intentionally conservative: it does not delete 
+#'          directories, overwrite files, or validate path semantics beyond 
+#'          existence checks.
+#' @return Invisibly returns a character vector of directories that were 
+#'         created.
+#' @examples
+#' \dontrun{
+#' setup_directories(CFG)
+#' }
+#' @export
+setup_directories <- function(cfg) {
+  # Flatten WITH NAMES
+  all_values <- unlist(x = cfg, recursive = TRUE, use.names = TRUE)
+  
+  # Keep only path-like entries via name
+  path_idx <- grepl(pattern = "(_DIR$|_DIRPATH$|_FILEPATH$)", 
+                    x = names(all_values))
+  paths <- all_values[path_idx]
+  
+  # Parent directories for files
+  parent_dirs <- dirname(path = paths)
+  
+  # Explicit directories
+  explicit_dirs <- paths[grepl(pattern = "_DIR$|_DIRPATH$", names(paths))]
+  dirs <- unique(x = c(parent_dirs, explicit_dirs))
+  dirs <- dirs[nzchar(x = dirs)]
+  
+  created_dirs <- character(0)
+  for (d in dirs) {
+    if (!dir.exists(paths = d)) {
+      dir.create(path = d, recursive = TRUE, showWarnings = FALSE)
+      created_dirs <- c(created_dirs, d)
+      pipeline_message(sprintf("Created directory: %s", d), process = "info")
+    }
+  }
+  invisible(created_dirs)
+}
+#'
 # ------------------------------------------------------------------------------
 # Format numeric values for console output
 # ------------------------------------------------------------------------------
@@ -22,6 +86,7 @@
 fmt <- function(x){
   format(x, scientific = FALSE, big.mark = ",") 
 }
+#'
 # ------------------------------------------------------------------------------
 # Internal environment for pipeline timing
 # ------------------------------------------------------------------------------
@@ -35,7 +100,7 @@ fmt <- function(x){
 .pipeline_env <- new.env(parent = emptyenv())
 # Active timers indexed by level (character)
 .pipeline_env$timers <- list()
-#' 
+#'
 # ------------------------------------------------------------------------------
 # Start a pipeline timer for a given hierarchy level
 # ------------------------------------------------------------------------------
@@ -52,6 +117,7 @@ pipeline_timer_start <- function(level) {
   .pipeline_env$timers[[as.character(level)]] <- Sys.time()
   invisible(NULL)
 }
+#'
 # ------------------------------------------------------------------------------
 # Stop a pipeline timer and return elapsed time
 # ------------------------------------------------------------------------------
@@ -78,7 +144,10 @@ pipeline_timer_stop <- function(level) {
   .pipeline_env$timers[[key]] <- NULL
   elapsed
 }
-#' 
+#'
+# -------------------------------------------------------------------------------
+# Calculation start timer utility for pipeline messages
+# -------------------------------------------------------------------------------
 #' @title Start a calculation timer
 #' @description Starts a timer to measure elapsed execution time.
 #' @return Invisibly returns the start time.
@@ -88,6 +157,9 @@ start_timer <- function() {
   invisible(NULL)
 }
 #' 
+# -------------------------------------------------------------------------------
+# Calculation stop timer utility for pipeline messages
+# -------------------------------------------------------------------------------
 #' @title Stop the calculation timer
 #' @description Stops the timer and returns the elapsed time in seconds.
 #' @return Numeric. Elapsed time in seconds.
@@ -105,6 +177,9 @@ stop_timer <- function() {
   return(as.numeric(elapsed))
 }
 #'
+# -------------------------------------------------------------------------------
+# Describe a data.frame or data.table structure for logging
+# -------------------------------------------------------------------------------
 #' @title Describe a data.frame or data.table structure
 #' @description Returns a compact textual description of a data.frame or 
 #'              data.table, including:
@@ -123,9 +198,8 @@ stop_timer <- function() {
 #' @export
 describe_df <- function(df) {
   if (!inherits(x = df, what = c("data.frame", "data.table"))) {
-    pipeline_message(
-      text = "Function describe_df() expects a data.frame or data.table", 
-      process = "stop")
+    pipeline_message("Function describe_df() expects a data.frame or data.table", 
+                     process = "stop")
   }
   # Object name as passed by the caller
   obj_name <- deparse(expr = substitute(df))
@@ -160,6 +234,9 @@ describe_df <- function(df) {
          "contains '", col_display, "'", key_info)
 }
 #'
+# --------------------------------------------------------------------------------
+# Pipeline progress message utility for structured logging
+# --------------------------------------------------------------------------------
 #' @title Display structured pipeline progress messages
 #' @description Displays standardized progress messages for pipeline execution 
 #'              with:
@@ -212,8 +289,8 @@ describe_df <- function(df) {
 #'                \code{"save"}, \code{"pack"}, \code{"download"}, 
 #'                \code{"wait"}, \code{"configure"}, \code{"search"}, 
 #'                \code{"calc"}, \code{"join"}, \code{"learn"}, \code{"build"}, 
-#'                \code{"plot"}, \code{"info"}, \code{"valid"}, 
-#'                \code{"warning"}, \code{"stop"}.
+#'                \code{"convert"}, \code{"plot"}, \code{"info"}, 
+#'                \code{"valid"}, \code{"warning"}, \code{"stop"}.
 #' @return Invisibly returns \code{NULL}. The function is used for its side 
 #'         effects (console output, warnings, or errors).
 #' @export
@@ -237,6 +314,7 @@ pipeline_message <- function(text,
     join      = "🔗",
     learn     = "🎓",
     build     = "🚧",
+    convert   = "🔄",
     plot      = "📊",
     info      = "ℹ️",
     valid     = "✓",
@@ -312,6 +390,9 @@ pipeline_message <- function(text,
   invisible(NULL)
 }
 #'
+# -------------------------------------------------------------------------------
+# Relative path to project root utility
+# -------------------------------------------------------------------------------
 #' @title Get project-relative path
 #' @description Returns a path relative to the project root directory. Useful 
 #'              for readable logs and portable messages.
@@ -326,10 +407,9 @@ rel_path <- function(path) {
   rel_path <- fs::path_rel(path = path, start = PROJECT_ROOT)
   paste0("./", rel_path)
 }
-
 #'
 # ------------------------------------------------------------------------------
-# Get available memory in GB
+# Get available memory
 # ------------------------------------------------------------------------------
 #' @title Get available system memory in GB
 #' @description Reads /proc/meminfo on Linux to get available RAM.
@@ -339,6 +419,7 @@ get_available_memory_gb <- function() {
   if (file.exists("/proc/meminfo")) {
     meminfo <- readLines("/proc/meminfo", warn = FALSE)
     mem_line <- meminfo[grepl("^MemAvailable:", meminfo)]
+    pipeline_message(sprintf("Available memory: %s", mem_line), process = "info")
     if (length(mem_line) == 1) {
       mem_kb <- suppressWarnings(as.numeric(gsub("[^0-9]", "", mem_line)))
       if (is.finite(mem_kb)) {
@@ -349,6 +430,9 @@ get_available_memory_gb <- function() {
   NA_real_
 }
 #'
+# -------------------------------------------------------------------------------
+# Check available memory and optionally stop/warn if below thresholds
+# -------------------------------------------------------------------------------
 #' @title Check available system memory
 #' @description Estimates currently available RAM and optionally stops/warns
 #'              when below a threshold.
@@ -364,30 +448,21 @@ check_memory_available <- function(operation_name = "Operation",
   available_gb <- get_available_memory_gb()
 
   if (!is.finite(available_gb)) {
-    pipeline_message(
-      text = sprintf("Memory check unavailable for: %s", operation_name),
-      process = "warning")
+    pipeline_message(sprintf("Memory check unavailable for: %s", operation_name), 
+                     process = "warning")
     return(invisible(NA_real_))
   }
 
   if (available_gb < min_gb) {
-    pipeline_message(
-      text = sprintf(
-        "%s requires at least %.1f GB RAM, but only %.1f GB available",
-        operation_name, min_gb, available_gb
-      ),
-      process = "stop"
-    )
+    pipeline_message(sprintf("%s requires at least %.1f GB RAM, but only %.1f GB available", 
+                             operation_name, min_gb, available_gb), 
+                             process = "stop")
   }
 
   if (available_gb < warn_gb) {
-    pipeline_message(
-      text = sprintf(
-        "Low memory before %s: %.1f GB available (warning threshold: %.1f GB)",
-        operation_name, available_gb, warn_gb
-      ),
-      process = "warning"
-    )
+    pipeline_message(sprintf("Low memory before %s: %.1f GB available (warning threshold: %.1f GB)", 
+                             operation_name, available_gb, warn_gb), 
+                     process = "warning")
   }
 
   invisible(available_gb)
