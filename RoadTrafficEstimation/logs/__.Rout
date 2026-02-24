@@ -1,0 +1,4 @@
+📁 Current working directory: /home2020/home/cerema/gguillau/OpenDataNoiseMap/RoadTrafficEstimation
+Erreur dans get_arg_value("--phase", default = "all", args = args) : 
+  impossible de trouver la fonction "get_arg_value"
+Exécution arrêtée

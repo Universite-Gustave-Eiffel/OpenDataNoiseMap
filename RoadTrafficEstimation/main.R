@@ -19,6 +19,11 @@ setwd(PROJECT_ROOT)
 message(sprintf("📁 Current working directory: %s", PROJECT_ROOT))
 
 # ------------------------------------------------------------------------------
+# Bootstrap
+# ------------------------------------------------------------------------------
+source("bootstrap/bootstrap.R")
+
+# ------------------------------------------------------------------------------
 # Parse command line arguments
 # ------------------------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
@@ -53,9 +58,6 @@ message(sprintf("🧪 Test flag     : %s", ifelse(test = TEST_FLAG,
 # ------------------------------------------------------------------------------
 # Run successive steps
 # ------------------------------------------------------------------------------
-
-# Bootstrap
-source("bootstrap/bootstrap.R")
 
 # Configuration
 source("config/config_global.R")
