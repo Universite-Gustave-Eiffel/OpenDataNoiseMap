@@ -33,8 +33,8 @@ if (length(missing) > 0) {
   }
 } else {
   # All required packages are already installed
-  pipeline_message("Loading packages", 
-                   level = 1, progress = "start", process = "load")
+  pipeline_message("Loading packages", level = 1, 
+                   progress = "start", process = "load")
 }
 
 pipeline_message(sprintf("Active lib paths: %s", 
@@ -47,26 +47,26 @@ for (p in pkgs_needed) {
   )
 }
 
-pipeline_message(text = "Packages loaded successfully", 
-                 level = 1, progress = "end", process = "valid")
+pipeline_message("Packages loaded successfully", level = 1, 
+                 progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Memory limit
 # ------------------------------------------------------------------------------
-rlimit_as(1e12)  #increases to ~30GB
+rlimit_as(5e11)  # increases to ~46GB
 
 # ------------------------------------------------------------------------------
 # Directories
 # ------------------------------------------------------------------------------
 
-pipeline_message(text = "Creating required directories", 
-                 level = 1, progress = "start", process = "install")
+pipeline_message("Creating required directories", level = 1, 
+                 progress = "start", process = "install")
 
 # Create directories based on configuration
 setup_directories(CFG)
 
-pipeline_message(text = "Required directories created", 
-                 level = 1, progress = "end", process = "valid")
+pipeline_message("Required directories created", level = 1, 
+                 progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Options
@@ -74,5 +74,5 @@ pipeline_message(text = "Required directories created",
 op <- options(digits.secs = 1, 
               digits = 2)
 
-pipeline_message(text = "Setup stage completed", 
-                 level = 0, progress = "end", process = "valid")
+pipeline_message("Setup stage completed", level = 0, 
+                 progress = "end", process = "valid")
