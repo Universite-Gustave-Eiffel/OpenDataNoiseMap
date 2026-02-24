@@ -17,101 +17,35 @@ pipeline_message("Run pipeline", level = 0, progress = "start", process = "calc"
 
 pipeline_message("Parsing arguments", level = 1, progress = "start", process = "install")
 
-# Parse command-line arguments
-args <- commandArgs(trailingOnly = TRUE)
-
-# Default values
-PHASE_ARG  <- "all"     # preparation | training | prediction | all
-MODE_ARG   <- "all"     # nantes | paris | sensors | all
-REGION_ARG <- "full"    # full | small | test
-RUN_TESTS  <- FALSE     # --test flag  | "" (default)
-
-# Parse arguments
-i <- 1
-while (i <= length(args)) {
-  arg <- args[i]
-  
-  if (arg == "--phase" && i < length(args)) {
-    PHASE_ARG <- args[i + 1]
-    i <- i + 2
-  } else if (arg == "--mode" && i < length(args)) {
-    MODE_ARG <- args[i + 1]
-    i <- i + 2
-  } else if (arg == "--region" && i < length(args)) {
-    REGION_ARG <- args[i + 1]
-    i <- i + 2
-  } else if (arg == "--test") {
-    RUN_TESTS <- TRUE
-    i <- i + 1
-  } else {
-    i <- i + 1
-  }
-}
-
-# Validate arguments
-valid_phases  <- c("preparation", "training", "prediction", "all")
-valid_modes   <- c("nantes", "paris", "pemb", "sensors", "all")
-valid_regions <- c("full", "small", "test")
-
-if (!PHASE_ARG %in% valid_phases) {
-  pipeline_message(sprintf("Invalid phase: %s. Valid: %s", 
-                           PHASE_ARG, paste(valid_phases, collapse = ", ")), 
-  process = "stop")
-}
-
-if (!MODE_ARG %in% valid_modes) {
-  pipeline_message(sprintf("Invalid mode: %s. Valid: %s", 
-                   MODE_ARG, paste(valid_modes, collapse = ", ")), 
-  process = "stop")
-}
-
-if (!REGION_ARG %in% valid_regions) {
-  pipeline_message(sprintf("Invalid region: %s. Valid: %s", 
-                           REGION_ARG, paste(valid_regions, collapse = ", ")), 
-  process = "stop")
-}
-
-# Load TEST_CONFIG if small or test region requested
-if (REGION_ARG %in% c("small", "test")) {
-  if (file.exists("TEST_CONFIG.R")) {
-    source("TEST_CONFIG.R")
-    REGION_ARG <- "test"  # Normalize to 'test'
-  } else {
-    pipeline_message("TEST_CONFIG.R not found. Falling back to full region.", 
-                     process = "warning")
-    REGION_ARG <- "full"
-  }
-}
-
-pipeline_message(sprintf("Phase: %s | Mode: %s | Region: %s | Tests: %s", 
-                         PHASE_ARG, MODE_ARG, REGION_ARG, if (RUN_TESTS) "ON" else "OFF"), 
-                 level = 1, progress = "end", process = "install")
-
-# Define modes to run
-modes_to_run <- if (MODE_ARG == "all") {
-  c("preparation", "training", "nantes", "paris", "pemb", "sensors")
-} else if (MODE_ARG %in% c("nantes", "paris", "pemb", "sensors")) {
-  c("preparation", "training", MODE_ARG)
-} else {
-  MODE_ARG
-}
-
 # Define phases to run
-phases_to_run <- if (PHASE_ARG == "all") {
+phases_to_run <- if (PHASE == "all") {
   c("preparation", "training", "prediction")
 } else {
-  PHASE_ARG
+  PHASE
 }
 
-if (PHASE_ARG == "prediction" && MODE_ARG != "all") {
+# Define modes to run
+modes_to_run <- if (MODE == "all") {
+  c("preparation", "training", "nantes", "paris", "pemb", "sensors", "France")
+} else if (MODE %in% c("nantes", "paris", "pemb", "sensors")) {
+  c("preparation", "training", MODE)
+} else {
+  MODE
+}
+
+if (PHASE == "prediction" && MODE != "all") {
   # Only add preparation and training if models are not already available
-  if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH) ||
-      !file.exists(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)) {
+  if (!file.exists(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH) ||
+      !file.exists(CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)) {
     phases_to_run <- unique(c("preparation", "training", phases_to_run))
     pipeline_message("Models not found — adding preparation and training phases", 
                      process = "warning")
   }
 }
+
+pipeline_message(sprintf("Phase: %s | Mode: %s | Region: %s | Tests: %s", 
+                         PHASE, MODE, REGION, if (TEST_FLAG) "ON" else "OFF"), 
+                 level = 1, progress = "end", process = "install")
 
 # ==============================================================================
 # FILTER MODES AND PHASES
@@ -132,7 +66,7 @@ if ("preparation" %in% phases_to_run) {
   source("R/data_preparation/05_avatar_aggregation.R")
   source("R/data_preparation/06_training_dataset_merge.R")
   
-  if (RUN_TESTS) {
+  if (TEST_FLAG) {
     source("R/tests/test_data_preparation.R")
   }
   
@@ -150,7 +84,7 @@ if ("training" %in% phases_to_run) {
   
   source("R/model_training/train_xgboost_models.R")
   
-  if (RUN_TESTS) {
+  if (TEST_FLAG) {
     source("R/tests/test_model_training.R")
   }
   
@@ -191,7 +125,7 @@ if ("prediction" %in% phases_to_run) {
     source("R/prediction/predict_france.R")
   }
   
-  if (RUN_TESTS) {
+  if (TEST_FLAG) {
     source("R/tests/test_prediction.R")
   }
   

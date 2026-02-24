@@ -5,15 +5,15 @@
 pipeline_message(text = "Merging OSM road and commune data", 
                  level = 0, progress = "start", process = "join")
 
-if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) && 
-    isFALSE(CONFIG$FORCE_REJOIN_OSM_AND_COMMUNES)){
+if (file.exists(CFG$OSM_DEGRE_FILEPATH) && 
+    isFALSE(CFG$FORCE_REJOIN_OSM_AND_COMMUNES)){
   
   pipeline_message(
     text = sprintf("Loading already merged OSM road and commune data from %s", 
-                   rel_path(CONFIG$OSM_DEGRE_FILEPATH)), 
+                   rel_path(CFG$OSM_DEGRE_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
-  degre_lookup <- readRDS(file = CONFIG$OSM_DEGRE_FILEPATH)
+  degre_lookup <- readRDS(file = CFG$OSM_DEGRE_FILEPATH)
   
   pipeline_message(text = describe_df(degre_lookup), process = "info")
   
@@ -23,8 +23,8 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   # Build unique_roads from degre_lookup (needed by graph construction below)
   if (!exists("unique_roads")) {
     unique_roads <- degre_lookup %>% select(osm_id, geom)
-    if (sf::st_crs(unique_roads) != sf::st_crs(CONFIG$TARGET_CRS)) {
-      unique_roads <- sf::st_transform(unique_roads, crs = CONFIG$TARGET_CRS)
+    if (sf::st_crs(unique_roads) != sf::st_crs(CFG$TARGET_CRS)) {
+      unique_roads <- sf::st_transform(unique_roads, crs = CFG$TARGET_CRS)
     }
   }
   
@@ -33,8 +33,8 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   degre_lookup <- degre_lookup %>% sf::st_drop_geometry()
   gc(verbose = FALSE)
   
-} else if (!file.exists(CONFIG$OSM_DEGRE_FILEPATH) || 
-    isTRUE(CONFIG$FORCE_REJOIN_OSM_AND_COMMUNES)) {
+} else if (!file.exists(CFG$OSM_DEGRE_FILEPATH) || 
+    isTRUE(CFG$FORCE_REJOIN_OSM_AND_COMMUNES)) {
   
   # ----------------------------------------------------------------------------
   # Load full OSM road dataset (GeoPackage)
@@ -42,11 +42,11 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   
   pipeline_message(
     text = sprintf("Loading OSM road data from %s", 
-                   rel_path(CONFIG$OSM_ROADS_FILEPATH)), 
+                   rel_path(CFG$OSM_ROADS_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   # This dataset contains all OSM roads for France with geometry and attributes
-  osm_roads <- st_read(dsn = CONFIG$OSM_ROADS_FILEPATH, 
+  osm_roads <- st_read(dsn = CFG$OSM_ROADS_FILEPATH, 
                        quiet = TRUE)
   
   # ----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   # Keep only unique road geometries and transform CRS
   unique_roads <- osm_roads[unique_osm_ids, ] %>%
     select(osm_id, geom) %>%
-    st_transform(CONFIG$TARGET_CRS)
+    st_transform(CFG$TARGET_CRS)
   
   # ----------------------------------------------------------------------------
   # Load commune polygon data (urban density classification)
@@ -92,14 +92,14 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   
   pipeline_message(
     text = sprintf("Loading commune data from %s", 
-                   rel_path(CONFIG$OSM_TYPOLOGIES_FILEPATH)), 
+                   rel_path(CFG$OSM_TYPOLOGIES_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   commune_data <- st_read(
-    dsn = CONFIG$OSM_TYPOLOGIES_FILEPATH, 
+    dsn = CFG$OSM_TYPOLOGIES_FILEPATH, 
     quiet = TRUE) %>% 
     select(DEGRE) %>%   # Urban density category
-    st_transform(CONFIG$TARGET_CRS)
+    st_transform(CFG$TARGET_CRS)
   
   # Safe simplification (topological)
   commune_data <- st_make_valid(x = commune_data)
@@ -163,13 +163,13 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
   
   # Save DEGREE lookup to disk
   saveRDS(object = degre_lookup, 
-          file = CONFIG$OSM_DEGRE_FILEPATH)
+          file = CFG$OSM_DEGRE_FILEPATH)
   
   pipeline_message(text = describe_df(degre_lookup), process = "info")
   
   pipeline_message(
     text = sprintf("OSM road and commune data successfully joined and saved into 
-                  file %s", rel_path(CONFIG$OSM_DEGRE_FILEPATH)), 
+                  file %s", rel_path(CFG$OSM_DEGRE_FILEPATH)), 
     level = 1, progress = "end", process = "valid")
 }
 
@@ -178,21 +178,21 @@ if (file.exists(CONFIG$OSM_DEGRE_FILEPATH) &&
 # betweenness, closeness, pagerank)
 # ------------------------------------------------------------------------------
 
-if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) && 
-    isFALSE(CONFIG$FORCE_REJOIN_OSM_AND_COMMUNES)){
+if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) && 
+    isFALSE(CFG$FORCE_REJOIN_OSM_AND_COMMUNES)){
   
   pipeline_message(text = "Loading already built road network data",  
                    level = 1, progress = "start", process = "load")
   
   osm_full_network <- sf::st_read(
-    dsn = CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH,
+    dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH,
     quiet = TRUE)
   
   pipeline_message(text = "Road network data loaded",
                    level = 1, progress = "end", process = "valid")
   
-} else if (!file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) || 
-    isTRUE(CONFIG$FORCE_REJOIN_OSM_AND_COMMUNES)) {
+} else if (!file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) || 
+    isTRUE(CFG$FORCE_REJOIN_OSM_AND_COMMUNES)) {
   
   pipeline_message(
     text = "Building road network graph and compute topological metrics", 
@@ -285,14 +285,14 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   # Betweenness centralities of positions on undirected geodesics
   pipeline_message(text = "Computing node betweenness", process = "info")
   node_betweenness <- igraph::betweenness(graph = g,  
-                                  cutoff = CONFIG$CUTOFF_BETWEENNESS, 
+                                  cutoff = CFG$CUTOFF_BETWEENNESS, 
                                   directed = FALSE)
   
   # Closeness centrality measures (how many steps is required to access every 
   # other vertex from a given one)
   pipeline_message(text = "Computing node closeness", process = "info")
   node_closeness <- igraph::closeness(graph = g, 
-                                      cutoff = CONFIG$CUTOFF_CLOSENESS, 
+                                      cutoff = CFG$CUTOFF_CLOSENESS, 
                                       mode = "all")
 
   # K-core index (node structural embeddedness)
@@ -389,10 +389,10 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     
     pipeline_message(
       text = sprintf("Reloading OSM road data from %s", 
-                     rel_path(CONFIG$OSM_ROADS_FILEPATH)),
+                     rel_path(CFG$OSM_ROADS_FILEPATH)),
       level = 2, progress = "start", process = "load")
     
-    osm_roads <- st_read(dsn = CONFIG$OSM_ROADS_FILEPATH, quiet = TRUE)
+    osm_roads <- st_read(dsn = CFG$OSM_ROADS_FILEPATH, quiet = TRUE)
     
     high_traffic_types <- c(
       "motorway", "trunk", "primary", "secondary", "tertiary", 
@@ -506,7 +506,7 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Project data into target CRS
   osm_full_network <- osm_full_network %>% 
-    st_transform(crs = CONFIG$TARGET_CRS)
+    st_transform(crs = CFG$TARGET_CRS)
 
   # Add QGIS-friendly datetime fields when `period` exists
   osm_full_network <- add_period_datetime_columns(osm_full_network)
@@ -515,13 +515,13 @@ if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   start_timer()
   sf::st_write(
     osm_full_network,
-    dsn = CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH,
+    dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH,
     delete_dsn = TRUE,
     quiet = TRUE)
   
   pipeline_message(
     text = sprintf("Final road network saved in file %s", 
-                  rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
+                  rel_path(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 2, progress = "end", process = "valid")
 }
 

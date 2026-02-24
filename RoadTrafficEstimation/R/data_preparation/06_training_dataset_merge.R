@@ -30,16 +30,16 @@ if (!exists('osm_france_engineered') ||
   
   pipeline_message(
     text = sprintf("Loading OSM France engineered network from %s", 
-                   rel_path(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
+                   rel_path(CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   osm_france_engineered <- sf::st_read(
-    dsn = CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+    dsn = CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
     quiet = TRUE)
   
-  if (sf::st_crs(osm_france_engineered) != CONFIG$TARGET_CRS) {
+  if (sf::st_crs(osm_france_engineered) != CFG$TARGET_CRS) {
     osm_france_engineered <- osm_france_engineered %>% 
-      st_transform(crs = CONFIG$TARGET_CRS)
+      st_transform(crs = CFG$TARGET_CRS)
   }
   
   pipeline_message(
@@ -62,16 +62,16 @@ if (!exists('full_network_avatar_id') ||
   
   pipeline_message(
     text = sprintf("Loading OSM network with Avatar IDs from %s", 
-                   rel_path(CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH)), 
+                   rel_path(CFG$AVATAR_IDS_FULL_NETWORK_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   full_network_avatar_id <- sf::st_read(
-    dsn = CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH, 
+    dsn = CFG$AVATAR_IDS_FULL_NETWORK_FILEPATH, 
     quiet = TRUE)
   
-  if (sf::st_crs(full_network_avatar_id) != CONFIG$TARGET_CRS) {
+  if (sf::st_crs(full_network_avatar_id) != CFG$TARGET_CRS) {
     full_network_avatar_id <- full_network_avatar_id %>% 
-      st_transform(crs = CONFIG$TARGET_CRS)
+      st_transform(crs = CFG$TARGET_CRS)
   }
   
   pipeline_message(
@@ -131,7 +131,7 @@ pipeline_message(text = "Processing Avatar data",
                  level = 1, progress = "start", process = "calc")
 
 # avatar_data <- aggregated_measures_with_ratios_df
-avatar_data <- readRDS(file = CONFIG$AVATAR_AGGREGATED_FILEPATH)
+avatar_data <- readRDS(file = CFG$AVATAR_AGGREGATED_FILEPATH)
 
 pipeline_message(text = describe_df(avatar_data), process = "info")
   
@@ -231,7 +231,7 @@ pipeline_message(
 
 # Save processed avatar data
 saveRDS(object = avatar_clean, 
-        file = CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH)
+        file = CFG$AVATAR_AGGREGATED_CLEAN_FILEPATH)
 assign(x = "avatar_clean", 
        value = as.data.frame(avatar_clean), 
        envir = .GlobalEnv)
@@ -240,7 +240,7 @@ pipeline_message(text = describe_df(avatar_clean), process = "info")
 
 pipeline_message(
   text = sprintf("Avatar data successfully cleaned up and saved into file %s", 
-                rel_path(CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
+                rel_path(CFG$AVATAR_AGGREGATED_CLEAN_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 
@@ -307,11 +307,11 @@ pipeline_message(text = sprintf("Training data integrity check: %s NA detected",
 
 # Save training data
 saveRDS(object = training_data, 
-        file = CONFIG$TRAINING_RDS_DATA_FILEPATH)
+        file = CFG$TRAINING_RDS_DATA_FILEPATH)
 
 pipeline_message(
   text = sprintf("Training dataset successfully created and saved to %s", 
-                 rel_path(CONFIG$TRAINING_RDS_DATA_FILEPATH)),
+                 rel_path(CFG$TRAINING_RDS_DATA_FILEPATH)),
   level = 2, progress = "end", process = "valid")
 
 # Add geometry from France engineered network
@@ -329,12 +329,12 @@ training_data_sf <- add_period_datetime_columns(training_data_sf)
 # Export to GeoPackage file
 sf::st_write(
   obj = training_data_sf, 
-  dsn = CONFIG$TRAINING_GPKG_DATA_FILEPATH, 
+  dsn = CFG$TRAINING_GPKG_DATA_FILEPATH, 
   delete_dsn = TRUE)
 
 pipeline_message(
   text = sprintf("Training dataset saved to %s", 
-                 rel_path(CONFIG$TRAINING_GPKG_DATA_FILEPATH)), 
+                 rel_path(CFG$TRAINING_GPKG_DATA_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 pipeline_message(text = "Training dataset merge completed", 

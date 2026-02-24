@@ -14,7 +14,7 @@ if (!exists(x= 'avatar_data', inherits = FALSE)){
   
   pipeline_message(
     text = sprintf("Loading downloaded Avatar data from %s", 
-                   rel_path(CONFIG$AVATAR_RDS_DATA_FILEPATH)), 
+                   rel_path(CFG$AVATAR_RDS_DATA_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   # Memory check before loading large RDS (~3.8 GB in RAM)
@@ -30,7 +30,7 @@ if (!exists(x= 'avatar_data', inherits = FALSE)){
       operation_name = "Load Avatar raw traffic RDS (~4 GB in RAM)",
       min_gb = 6, warn_gb = 10)
     
-    avatar_data <- readRDS(file = CONFIG$AVATAR_RDS_DATA_FILEPATH)
+    avatar_data <- readRDS(file = CFG$AVATAR_RDS_DATA_FILEPATH)
     
     pipeline_message(text = describe_df(avatar_data), process = "info")
     
@@ -45,7 +45,7 @@ if (isTRUE(use_chunk_streaming)) {
     text = "Chunk-streaming mode: hourly aggregation directly from CSV chunks", 
     level = 1, progress = "start", process = "calc")
   
-  files <- list.files(path = CONFIG$AVATAR_CSV_DATA_DIRPATH, 
+  files <- list.files(path = CFG$AVATAR_CSV_DATA_DIRPATH, 
                       pattern = "avatar_data_chunk_.*\\.csv", 
                       full.names = TRUE)
   
@@ -53,7 +53,7 @@ if (isTRUE(use_chunk_streaming)) {
     stop("No Avatar CSV chunk files found for low-memory streaming mode")
   }
   
-  temp_hourly_csv <- file.path(CONFIG$AVATAR_CSV_DATA_DIRPATH, 
+  temp_hourly_csv <- file.path(CFG$AVATAR_CSV_DATA_DIRPATH, 
                                "avatar_hourly_aggregated_tmp.csv")
   if (file.exists(temp_hourly_csv)) {
     file.remove(temp_hourly_csv)
@@ -226,13 +226,13 @@ avatar_aggregated <- compute_avatar_relative_metrics(aggregated_measures)
 
 # Save aggregated measures with ratios data frame to disk
 saveRDS(object = avatar_aggregated, 
-        file = CONFIG$AVATAR_AGGREGATED_FILEPATH)
+        file = CFG$AVATAR_AGGREGATED_FILEPATH)
 
 pipeline_message(text = describe_df(avatar_aggregated), process = "info")
 
 pipeline_message(
   text = sprintf("Traffic flow relative metrics sucessfully calculated and saved 
-                 into file %s", rel_path(CONFIG$AVATAR_AGGREGATED_FILEPATH)), 
+                 into file %s", rel_path(CFG$AVATAR_AGGREGATED_FILEPATH)), 
   level = 1, progress = "end", process = "valid")
 
 # Memory cleanup
@@ -257,13 +257,13 @@ pipeline_message(text = "Plotting hourly traffic patterns",
 
 # Plot 1: hourly traffic patterns (24h profile)
 p1 <- plot_hourly_traffic_profile(traffic_hourly_patterns = hourly_patterns, 
-                                  fig_path = CONFIG$FIGS_DIR, 
-                                  fig_name = CONFIG$FIG_HOURLY_TRAFFIC_FILENAME) 
+                                  fig_path = CFG$FIGS_DIR, 
+                                  fig_name = CFG$FIG_HOURLY_TRAFFIC_FILENAME) 
 
 pipeline_message(
   text = sprintf("Hourly aggregated data successfully plotted and saved into 
-                 file %s", paste(rel_path(CONFIG$FIGS_DIR), 
-                                 CONFIG$FIG_HOURLY_TRAFFIC_FILENAME, 
+                 file %s", paste(rel_path(CFG$FIGS_DIR), 
+                                 CFG$FIG_HOURLY_TRAFFIC_FILENAME, 
                                  sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
@@ -277,13 +277,13 @@ pipeline_message(text = "Plotting speed and truck percentage by hour",
 # Plot 2: speed and truck percentage by hour
 p2 <- plot_speed_and_truck_percentage(
   traffic_hourly_patterns = hourly_patterns, 
-  fig_path = CONFIG$FIGS_DIR, 
-  fig_name = CONFIG$SPEED_AND_TRUCK_PERCENTAGE)
+  fig_path = CFG$FIGS_DIR, 
+  fig_name = CFG$SPEED_AND_TRUCK_PERCENTAGE)
 
 pipeline_message(
   text = sprintf("Hourly speed and truck percentage successfully plotted and 
-                 saved into file %s", paste(rel_path(CONFIG$FIGS_DIR), 
-                                            CONFIG$SPEED_AND_TRUCK_PERCENTAGE, 
+                 saved into file %s", paste(rel_path(CFG$FIGS_DIR), 
+                                            CFG$SPEED_AND_TRUCK_PERCENTAGE, 
                                             sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
@@ -295,13 +295,13 @@ pipeline_message(text = "Plotting period comparison (D/E/N)",
                  level = 1, progress = "start", process = "plot")
 
 p3 <- plot_period_comparison(aggregated_traffic_data = avatar_aggregated, 
-                           fig_path = CONFIG$FIGS_DIR, 
-                           fig_name = CONFIG$TRAFFIC_PERIOD_COMPARISONS)
+                           fig_path = CFG$FIGS_DIR, 
+                           fig_name = CFG$TRAFFIC_PERIOD_COMPARISONS)
 
 pipeline_message(
   text = sprintf("Period comparison (D/E/N) successfully plotted and saved into 
-                 file %s", paste(rel_path(CONFIG$FIGS_DIR), 
-                               CONFIG$TRAFFIC_PERIOD_COMPARISONS, 
+                 file %s", paste(rel_path(CFG$FIGS_DIR), 
+                               CFG$TRAFFIC_PERIOD_COMPARISONS, 
                                sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
@@ -314,19 +314,19 @@ pipeline_message(text = "Plotting traffic flow distribution and data quality",
 
 p4 <- plot_flow_distribution_and_quality(
   aggregated_traffic_data = avatar_aggregated, 
-  fig_path = CONFIG$FIGS_DIR, 
-  fig_name = CONFIG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY)
+  fig_path = CFG$FIGS_DIR, 
+  fig_name = CFG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY)
 
 pipeline_message(
   text = sprintf("Traffic flow distribution and data quality successfully 
                  plotted and saved into file %s", 
-                 paste(rel_path(CONFIG$FIGS_DIR), 
-                       CONFIG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY, 
+                 paste(rel_path(CFG$FIGS_DIR), 
+                       CFG$TRAFFIC_FLOW_DISTRIBUTION_AND_DATA_QUALITY, 
                        sep = .Platform$file.sep)), 
   level = 1, progress = "end", process = "valid")
 
 # Display plots if local run
-if (isTRUE(CONFIG$IS_TTY)) {
+if (isTRUE(CFG$IS_TTY)) {
   p1
   p2
   p3$flow

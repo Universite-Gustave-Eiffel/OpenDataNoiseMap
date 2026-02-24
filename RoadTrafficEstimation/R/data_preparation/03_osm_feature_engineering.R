@@ -37,17 +37,17 @@ if (!exists('osm_full_network') ||
   
   pipeline_message(
     text = sprintf("Loading OSM France network from %s", 
-                   rel_path(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
+                   rel_path(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   osm_full_network <- sf::st_read(
-    dsn = CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
+    dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
     quiet = TRUE)
   
   # Ensure correct CRS
-  if (sf::st_crs(osm_full_network) != CONFIG$TARGET_CRS) {
+  if (sf::st_crs(osm_full_network) != CFG$TARGET_CRS) {
     osm_full_network <- osm_full_network %>% 
-      st_transform(crs = CONFIG$TARGET_CRS)
+      st_transform(crs = CFG$TARGET_CRS)
   }
   
   pipeline_message(
@@ -120,28 +120,28 @@ if (!is.null(lanes_col) && !is.null(maxspeed_col)) {
 
 # Apply default values where imputation rules are missing
 imputation_rules[is.na(median_lanes), 
-                 median_lanes := CONFIG$DEFAULT_NUMBER_OF_LANES]
+                 median_lanes := CFG$DEFAULT_NUMBER_OF_LANES]
 imputation_rules[is.na(median_speed), 
-                 median_speed := CONFIG$DEFAULT_VEHICLE_SPEED]
+                 median_speed := CFG$DEFAULT_VEHICLE_SPEED]
 
 # Add fallback rule for missing highway types
 imputation_rules <- rbind(
   imputation_rules, 
   data.table(
     highway = "missing", 
-    median_lanes = CONFIG$DEFAULT_NUMBER_OF_LANES, 
-    median_speed = CONFIG$DEFAULT_VEHICLE_SPEED, 
-    n_roads = CONFIG$DEFAULT_NUMBER_OF_ROADS))
+    median_lanes = CFG$DEFAULT_NUMBER_OF_LANES, 
+    median_speed = CFG$DEFAULT_VEHICLE_SPEED, 
+    n_roads = CFG$DEFAULT_NUMBER_OF_ROADS))
 
 # Save imputation rules
 saveRDS(object = imputation_rules, 
-        file = CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH)
+        file = CFG$IMPUTATION_RULES_FRANCE_FILEPATH)
 
 pipeline_message(text = describe_df(imputation_rules), process = "info")
 
 pipeline_message(
   text = sprintf("Imputation rules computed and saved to %s", 
-                 rel_path(CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH)), 
+                 rel_path(CFG$IMPUTATION_RULES_FRANCE_FILEPATH)), 
   level = 1, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
@@ -187,13 +187,13 @@ osm_france_engineered <- add_period_datetime_columns(osm_france_engineered)
 # Export to GeoPackage
 sf::st_write(
   obj = osm_france_engineered, 
-  dsn = CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+  dsn = CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
   delete_dsn = TRUE,
   quiet = FALSE)
 
 pipeline_message(
   text = sprintf("Engineered France network saved to %s", 
-                 rel_path(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
+                 rel_path(CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)), 
   level = 1, progress = "end", process = "save")
 
 # ------------------------------------------------------------------------------
