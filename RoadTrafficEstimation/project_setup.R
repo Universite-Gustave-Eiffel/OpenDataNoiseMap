@@ -90,7 +90,8 @@ setup_directories <- function(cfg) {
   invisible(created_dirs)
 }
 
-setup_directories(c(cfg_g, cfg_data, cfg_train, cfg_predict))
+# Create directories based on configuration
+setup_directories(CFG)
 
 pipeline_message(text = "Required directories created", 
                  level = 1, progress = "end", process = "valid")
