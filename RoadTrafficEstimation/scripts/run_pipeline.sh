@@ -134,7 +134,7 @@ echo "   TEST   : ${TEST_FLAG}"
 # Run pipeline
 # ------------------------------------------------------------------------------
 MAIN_R="${PROJECT_ROOT}/main.R"
-LOG_DIR="${PROJECT_ROOT}/logs/${PHASE}_${MODE}_${REGION}.Rout"
+LOG_DIR="${PROJECT_ROOT}/logs"
 OUT_LOG="${LOG_DIR}/${PHASE}_${MODE}_${REGION}.Rout"
 
 mkdir -p "${LOG_DIR}"

@@ -50,6 +50,13 @@ message(sprintf("🧪 Test flag     : %s", ifelse(TEST_FLAG=="--test", "ON", "OF
 # Run successive steps
 # ------------------------------------------------------------------------------
 
-source("bootstrap.R")
-source("config_pipeline.R")
-source("run_pipeline.R")
+# Bootstrap configuration
+source("bootstrap/bootstrap.R")
+source("config/config_global.R")
+source("config/config_data_prep.R")
+source("config/config_training.R")
+source("config/config_predict.R")
+
+# Complete configuration list
+CFG <- c(CONFIG_GLOBAL, CONFIG_DATA_PREP, CONFIG_TRAINING, CONFIG_PREDICT)
+assign(x = "CFG", value = CFG, envir = .GlobalEnv)
