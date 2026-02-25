@@ -73,4 +73,4 @@ assign(x = "CFG", value = CFG, envir = .GlobalEnv)
 source("project_setup.R")
 
 # Run pipeline
-source("pipelines/run_pipeline.R")
+source("R/pipelines/run_pipeline.R")
