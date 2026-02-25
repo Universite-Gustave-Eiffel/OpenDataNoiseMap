@@ -1,5 +1,5 @@
 # ==============================================================================
-# STAGE 2: OSM PROCESSING - MINIMAL VERSION
+# STAGE 1: OSM PROCESSING - MINIMAL VERSION
 # ==============================================================================
 
 pipeline_message("Merging OSM road and commune data", level = 0, 

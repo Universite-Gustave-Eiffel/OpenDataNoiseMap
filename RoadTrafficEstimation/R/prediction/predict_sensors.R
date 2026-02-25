@@ -15,8 +15,8 @@
 #   - 07_predictions_sensors_{SOURCE}.gpkg (x13 fichiers par source)
 # ==============================================================================
 
-pipeline_message(text = "Noise sensors traffic prediction", 
-                 level = 0, progress = "start", process = "calc")
+pipeline_message("Noise sensors traffic prediction", level = 0, 
+                 progress = "start", process = "calc")
 
 # Buffer radius for sensors
 SENSOR_BUFFER_RADIUS <- 800  # meters
@@ -25,51 +25,46 @@ SENSOR_BUFFER_RADIUS <- 800  # meters
 # Load trained models
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Loading trained XGBoost models",
-  level = 1, progress = "start", process = "load")
+pipeline_message("Loading trained XGBoost models", level = 1, 
+                 progress = "start", process = "load")
 
-if (!file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
-  pipeline_message(
-    text = sprintf("Models not found: %s", 
-                   rel_path(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)), 
-    process = "error")
-  stop("Please run R/model_training/train_xgboost_models.R first")
+if (!file.exists(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
+  pipeline_message(sprintf("Models not found: %s\n\t\tPlease run 
+                           R/model_training/train_xgboost_models.R first", 
+                           rel_path(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)), 
+                   process = "stop")
 }
 
-models_list <- readRDS(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
-feature_info <- readRDS(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
+models_list <- readRDS(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+feature_info <- readRDS(CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
-pipeline_message(
-  text = sprintf("Models loaded: %s models for %s periods", 
-                 length(models_list), 
-                 length(feature_info$all_periods)),
-  level = 1, progress = "end", process = "valid")
+pipeline_message(sprintf("Models loaded: %s models for %s periods", 
+                         length(models_list), length(feature_info$all_periods)), 
+                 level = 1, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Load noise sensors from all sources
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Loading noise sensors",
-  level = 1, progress = "start", process = "load")
+pipeline_message("Loading noise sensors", level = 1, 
+                 progress = "start", process = "load")
 
 sensors_list <- list()
 
 # BRUITPARIF sensors
 if (file.exists("data/POINT_NOISE_BRUITPARIF_COMPARE.shp")) {
   sensors_list[["BRUITPARIF"]] <- sf::st_read(
-    "data/POINT_NOISE_BRUITPARIF_COMPARE.shp", 
+    dsn = "data/POINT_NOISE_BRUITPARIF_COMPARE.shp", 
     quiet = TRUE) %>% 
-    st_transform(CONFIG$TARGET_CRS)
+    st_transform(CFG$TARGET_CRS)
 }
 
 # ACOUCITE sensors
 if (file.exists("data/POINT_NOISE_ACOUCITE_COMPARE.shp")) {
   sensors_list[["ACOUCITE"]] <- sf::st_read(
-    "data/POINT_NOISE_ACOUCITE_COMPARE.shp", 
+    dsn = "data/POINT_NOISE_ACOUCITE_COMPARE.shp", 
     quiet = TRUE) %>% 
-    st_transform(CONFIG$TARGET_CRS)
+    st_transform(CFG$TARGET_CRS)
 }
 
 # CHILD sensors (11 sources)
@@ -90,20 +85,19 @@ child_files <- list(
 for (source_name in names(child_files)) {
   if (file.exists(child_files[[source_name]])) {
     sensors_list[[source_name]] <- sf::st_read(
-      child_files[[source_name]], 
+      dsn = child_files[[source_name]], 
       quiet = TRUE) %>% 
-      st_transform(CONFIG$TARGET_CRS)
+      st_transform(CFG$TARGET_CRS)
   }
 }
 
-pipeline_message(
-  text = sprintf("Sensors loaded: %d sources", length(sensors_list)),
-  level = 1, progress = "end", process = "valid")
+pipeline_message(sprintf("Sensors loaded: %d sources", length(sensors_list)), 
+                 level = 1, progress = "end", process = "valid")
 
 for (source_name in names(sensors_list)) {
-  pipeline_message(
-    text = sprintf("  - %s: %s sensors", source_name, nrow(sensors_list[[source_name]])),
-    process = "info")
+  pipeline_message(sprintf("  - %s: %s sensors", 
+                           source_name, nrow(sensors_list[[source_name]])), 
+                   process = "info")
 }
 
 # ------------------------------------------------------------------------------
@@ -111,9 +105,8 @@ for (source_name in names(sensors_list)) {
 # ------------------------------------------------------------------------------
 
 if (length(sensors_list) == 0) {
-  pipeline_message(
-    text = "No sensor files found — skipping sensor predictions",
-    process = "warning")
+  pipeline_message("No sensor files found — skipping sensor predictions", 
+                   process = "warning")
 } else {
 
 # Combine all sensors
@@ -126,22 +119,20 @@ osm_sensors <- load_network_around_points(
   config = CONFIG)
 
 # Apply predictions
-pipeline_message(
-  text = "Applying XGBoost models",
-  level = 1, progress = "start", process = "calc")
+pipeline_message("Applying XGBoost models", level = 1, 
+                 progress = "start", process = "calc")
 
-osm_sensors_dt <- as.data.frame(sf::st_drop_geometry(osm_sensors))
+osm_sensors_dt <- as.data.frame(sf::st_drop_geometry(x = osm_sensors))
 
 predictions_wide <- apply_xgboost_predictions(
   network_data = osm_sensors_dt,
   models_list = models_list,
   feature_info = feature_info)
 
-pipeline_message(
-  text = sprintf("Predictions completed: %s roads × %s periods", 
-                 fmt(nrow(predictions_wide)), 
-                 length(feature_info$all_periods)),
-  level = 1, progress = "end", process = "valid")
+pipeline_message(sprintf("Predictions completed: %s roads × %s periods", 
+                         fmt(nrow(predictions_wide)), 
+                         length(feature_info$all_periods)), 
+                 level = 1, progress = "end", process = "valid")
 
 # Save periods list before freeing models
 all_periods <- feature_info$all_periods
@@ -178,10 +169,11 @@ predictions_sf <- merge(
   by = "osm_id",
   all.x = TRUE)
 
-predictions_sf <- sf::st_as_sf(predictions_sf)
+predictions_sf <- sf::st_as_sf(x = predictions_sf)
 
-if (sf::st_crs(predictions_sf) != CONFIG$TARGET_CRS) {
-  predictions_sf <- sf::st_transform(predictions_sf, CONFIG$TARGET_CRS)
+if (sf::st_crs(x = predictions_sf) != CFG$TARGET_CRS) {
+  predictions_sf <- sf::st_transform(x = predictions_sf, 
+                                     crs = CFG$TARGET_CRS)
 }
 
 # Enforce datetime fields on exported layers
@@ -191,40 +183,36 @@ predictions_sf <- add_period_datetime_columns(predictions_sf)
 validation <- validate_predictions(predictions_long)
 
 if (!validation$is_valid) {
-  pipeline_message(
-    text = sprintf("Validation warnings: %s issues detected", 
-                   length(validation$issues)),
-    process = "warn")
+  pipeline_message(sprintf("Validation warnings: %s issues detected", 
+                           length(validation$issues)), 
+                   process = "warning")
 }
 
 # Export combined predictions (all sensors)
-pipeline_message(
-  text = "Exporting combined predictions",
-  level = 1, progress = "start", process = "save")
+pipeline_message("Exporting combined predictions", level = 1, 
+                 progress = "start", process = "save")
 
-sf::st_write(
-  obj = predictions_sf,
-  dsn = CONFIG$SENSORS_ALL_PREDICTION_FILEPATH,
-  delete_dsn = TRUE,
-  quiet = FALSE)
+sf::st_write(obj = predictions_sf, 
+             dsn = CFG$SENSORS_ALL_PREDICTION_FILEPATH, 
+             delete_dsn = TRUE, 
+             quiet = FALSE)
 
-pipeline_message(
-  text = sprintf("Combined export: %s", 
-                 rel_path(CONFIG$SENSORS_ALL_PREDICTION_FILEPATH)),
-  level = 1, progress = "end", process = "save")
+pipeline_message(sprintf("Combined export: %s", 
+                         rel_path(CFG$SENSORS_ALL_PREDICTION_FILEPATH)), 
+                 level = 1, progress = "end", process = "save")
 
 # Export predictions for each sensor source
-pipeline_message(
-  text = "Exporting per-source predictions",
-  level = 1, progress = "start", process = "save")
+pipeline_message("Exporting per-source predictions", level = 1, 
+                 progress = "start", process = "save")
 
 for (source_name in names(sensors_list)) {
   # Create buffer union for this source
-  source_buffer <- sf::st_buffer(sensors_list[[source_name]], SENSOR_BUFFER_RADIUS)
-  source_union <- sf::st_union(source_buffer)
+  source_buffer <- sf::st_buffer(x = sensors_list[[source_name]], 
+                                 dist =SENSOR_BUFFER_RADIUS)
+  source_union <- sf::st_union(x = source_buffer)
   
   # Filter roads in this source's buffer
-  roads_in_source <- sf::st_filter(osm_sensors, source_union)
+  roads_in_source <- sf::st_filter(x = osm_sensors, y = source_union)
   
   if (nrow(roads_in_source) > 0) {
     # Filter predictions
@@ -234,45 +222,43 @@ for (source_name in names(sensors_list)) {
     
     # Export
     output_file <- file.path(
-      CONFIG$FORECAST_DATA_DIR,
+      CFG$FORECAST_DATA_DIR,
       sprintf("07_predictions_sensors_%s.gpkg", source_name))
     
-    sf::st_write(
-      obj = predictions_source,
-      dsn = output_file,
-      delete_dsn = TRUE,
-      quiet = FALSE)
+    sf::st_write(obj = predictions_source, 
+                 dsn = output_file, 
+                 delete_dsn = TRUE, 
+                 quiet = FALSE)
     
-    pipeline_message(
-      text = sprintf("  - %s: %s roads", 
-                     source_name, 
-                     length(unique(predictions_source$osm_id))),
-      process = "info")
+    pipeline_message(sprintf("  - %s: %s roads", source_name, 
+                             length(unique(predictions_source$osm_id))), 
+                     process = "info")
   }
 }
 
-pipeline_message(
-  text = "Per-source exports completed",
-  level = 1, progress = "end", process = "save")
+pipeline_message("Per-source exports completed", level = 1, 
+                 progress = "end", process = "save")
 
 # Summary statistics
-pipeline_message(
-  text = "Prediction summary for noise sensors:",
-  level = 1, process = "info")
+pipeline_message("Prediction summary for noise sensors:", level = 1, 
+                 progress = "start" process = "search")
 
-pipeline_message(
-  text = sprintf("  - Total sensors: %s (13 sources)", fmt(nrow(all_sensors))),
-  level = 1, process = "info")
+pipeline_message(sprintf("  - Total sensors: %s (13 sources)", 
+                         fmt(nrow(all_sensors))), 
+                 process = "info")
 
-pipeline_message(
-  text = sprintf("  - Roads predicted: %s", fmt(length(unique(predictions_long$osm_id)))),
-  level = 1, process = "info")
+pipeline_message(sprintf("  - Roads predicted: %s", 
+                         fmt(length(unique(predictions_long$osm_id)))), 
+                 process = "info")
 
-pipeline_message(
-  text = sprintf("  - Total predictions: %s", fmt(nrow(predictions_long))),
-  level = 1, process = "info")
+pipeline_message(sprintf("  - Total predictions: %s", 
+                         fmt(nrow(predictions_long))), 
+                 process = "info")
 
-pipeline_message(text = "Noise sensors traffic prediction completed", 
-                 level = 0, progress = "end", process = "valid")
+pipeline_message("End of prediction summary for noise sensors:", level = 1, 
+                 progress = "end" process = "valid")
 
-} # end if (length(sensors_list) > 0)
+pipeline_message("Noise sensors traffic prediction completed", level = 0, 
+                 progress = "end", process = "valid")
+
+}

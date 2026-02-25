@@ -1,5 +1,5 @@
 # ==============================================================================
-# STAGE 6: TRAINING DATASET MERGE
+# STAGE 5: TRAINING DATASET MERGE
 # ==============================================================================
 # This script merges the cleaned Avatar data with the France engineered layer 
 # (already pre-calculated with all features) to create the final training dataset.

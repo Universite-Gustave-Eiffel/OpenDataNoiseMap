@@ -16,8 +16,8 @@ test_model_training <- function() {
   pipeline_message(text = "Test 1: XGBoost models file", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
-    models_list <- readRDS(CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+  if (file.exists(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
+    models_list <- readRDS(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
     
     expected_base <- c("flow_D", "truck_pct_D", "speed_D")
     expected_ratio_prefixes <- c("ratio_flow_", "ratio_truck_pct_", "ratio_speed_")
@@ -36,7 +36,7 @@ test_model_training <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Models file not found: %s",
-                                   CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH),
+                                   CFG$XGB_MODELS_WITH_RATIOS_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -45,8 +45,8 @@ test_model_training <- function() {
   pipeline_message(text = "Test 2: Feature info file", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)) {
-    feature_info <- readRDS(CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH)
+  if (file.exists(CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)) {
+    feature_info <- readRDS(CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
     
     if (!is.null(feature_info$road_feature_formula) && !is.null(feature_info$all_periods)) {
       pipeline_message(text = sprintf("✓ Feature info valid: %s periods", 
@@ -60,7 +60,7 @@ test_model_training <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Feature info file not found: %s",
-                                   CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH),
+                                   CFG$XGB_RATIO_FEATURE_INFO_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }

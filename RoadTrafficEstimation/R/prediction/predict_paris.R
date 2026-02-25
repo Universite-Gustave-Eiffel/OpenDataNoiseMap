@@ -8,5 +8,5 @@
 predict_region(
   region_name = "Paris Metropolitan Area",
   bbox = c(xmin = 625000, ymin = 6832000, xmax = 685000, ymax = 6892000),
-  output_filepath = CONFIG$PARIS_PREDICTION_FILEPATH
+  output_filepath = CFG$PARIS_PREDICTION_FILEPATH
 )

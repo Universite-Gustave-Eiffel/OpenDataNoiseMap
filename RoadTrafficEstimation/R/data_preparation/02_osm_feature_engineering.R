@@ -1,5 +1,5 @@
 # ==============================================================================
-# STAGE 3: OSM FEATURE ENGINEERING ON FRANCE NETWORK
+# STAGE 2: OSM FEATURE ENGINEERING ON FRANCE NETWORK
 # ==============================================================================
 # This script applies feature engineering to the entire OSM France network
 # (including connectivity and DEGRE) to create a pre-calculated layer

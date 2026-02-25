@@ -1,5 +1,5 @@
 # ==============================================================================
-# STAGE 4: AVATAR FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS AND MATCHING - MINIMAL 
+# STAGE 3: AVATAR FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS AND MATCHING - MINIMAL 
 #          VERSION
 # ==============================================================================
 

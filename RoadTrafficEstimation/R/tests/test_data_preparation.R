@@ -6,41 +6,43 @@
 # ==============================================================================
 
 test_data_preparation <- function() {
-  pipeline_message(text = "Testing data preparation phase", 
-                   level = 0, progress = "start", process = "test")
+  pipeline_message("Testing data preparation phase", level = 0, 
+                   progress = "start", process = "calc")
   
   tests_passed <- 0
   tests_failed <- 0
   
   # Test 1: OSM network augmented exists
-  pipeline_message(text = "Test 1: OSM network augmented file", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 1: OSM network augmented file", level = 1, 
+                   progress = "start", process = "search")
   
-  if (file.exists(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH)) {
-    osm_aug <- sf::st_read(CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH, quiet = TRUE)
+  if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH)) {
+    osm_aug <- sf::st_read(dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
+                           quiet = TRUE)
     
     if (nrow(osm_aug) > 0 && all(c("osm_id", "highway", "DEGRE") %in% names(osm_aug))) {
-      pipeline_message(text = sprintf("✓ OSM augmented: %s roads", fmt(nrow(osm_aug))),
-                       level = 1, progress = "end", process = "pass")
+      pipeline_message(sprintf("✓ OSM augmented: %s roads", fmt(nrow(osm_aug))), 
+                       level = 1, progress = "end", process = "valid")
       tests_passed <- tests_passed + 1
     } else {
-      pipeline_message(text = "✗ OSM augmented: missing required columns",
-                       level = 1, progress = "end", process = "fail")
+      pipeline_message("OSM augmented: missing required columns", level = 1, 
+                       progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ OSM augmented file not found: %s",
-                                   CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH),
+    pipeline_message(sprintf("OSM augmented file not found: %s", 
+                             CFG$OSM_ROADS_CONNECTIVITY_FILEPATH), 
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
-  
+
   # Test 2: OSM France engineered exists
-  pipeline_message(text = "Test 2: OSM France engineered file", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 2: OSM France engineered file", level = 1, 
+                   progress = "start", process = "search")
   
-  if (file.exists(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)) {
-    osm_eng <- sf::st_read(CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, quiet = TRUE)
+  if (file.exists(CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)) {
+    osm_eng <- sf::st_read(dsn = CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+                           quiet = TRUE)
     
     required_features <- c("highway", "DEGRE", "ref_letter", "first_word", 
                           "oneway_osm", "lanes_osm", "speed",
@@ -48,20 +50,20 @@ test_data_preparation <- function() {
                           "coreness", "dead_end_score", "edge_length_m")
     
     if (nrow(osm_eng) > 0 && all(required_features %in% names(osm_eng))) {
-      pipeline_message(text = sprintf("✓ OSM engineered: %s roads, %s features", 
-                                     fmt(nrow(osm_eng)), length(required_features)),
-                       level = 1, progress = "end", process = "pass")
+      pipeline_message(sprintf("OSM engineered: %s roads, %s features", 
+                               fmt(nrow(osm_eng)), length(required_features)), 
+                       level = 1, progress = "end", process = "valid")
       tests_passed <- tests_passed + 1
     } else {
       missing <- setdiff(required_features, names(osm_eng))
-      pipeline_message(text = sprintf("✗ OSM engineered: missing %s", 
-                                     paste(missing, collapse = ", ")),
+      pipeline_message(sprintf("OSM engineered: missing %s", 
+                               paste(missing, collapse = ", ")), 
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ OSM engineered file not found: %s",
-                                   CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH),
+    pipeline_message(sprintf("OSM engineered file not found: %s",
+                             CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -70,8 +72,8 @@ test_data_preparation <- function() {
   pipeline_message(text = "Test 3: Avatar traffic data", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$AVATAR_RDS_DATA_FILEPATH)) {
-    avatar <- readRDS(CONFIG$AVATAR_RDS_DATA_FILEPATH)
+  if (file.exists(CFG$AVATAR_RDS_DATA_FILEPATH)) {
+    avatar <- readRDS(CFG$AVATAR_RDS_DATA_FILEPATH)
     
     if (nrow(avatar) > 0 && all(c("count_point_id", "aggregate_flow") %in% names(avatar))) {
       pipeline_message(text = sprintf("✓ Avatar data: %s observations", fmt(nrow(avatar))),
@@ -84,7 +86,7 @@ test_data_preparation <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Avatar data file not found: %s",
-                                   CONFIG$AVATAR_RDS_DATA_FILEPATH),
+                                   CFG$AVATAR_RDS_DATA_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -93,8 +95,8 @@ test_data_preparation <- function() {
   pipeline_message(text = "Test 4: Training dataset", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$TRAINING_RDS_DATA_FILEPATH)) {
-    training <- readRDS(CONFIG$TRAINING_RDS_DATA_FILEPATH)
+  if (file.exists(CFG$TRAINING_RDS_DATA_FILEPATH)) {
+    training <- readRDS(CFG$TRAINING_RDS_DATA_FILEPATH)
     
     if (nrow(training) > 0 && all(c("osm_id", "aggregate_flow", "highway") %in% names(training))) {
       pipeline_message(text = sprintf("✓ Training data: %s observations", fmt(nrow(training))),
@@ -107,7 +109,7 @@ test_data_preparation <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Training data file not found: %s",
-                                   CONFIG$TRAINING_RDS_DATA_FILEPATH),
+                                   CFG$TRAINING_RDS_DATA_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }

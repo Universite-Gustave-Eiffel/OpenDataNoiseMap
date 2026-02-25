@@ -8,5 +8,5 @@
 predict_region(
   region_name = "Nantes Métropole",
   bbox = c(xmin = 332000, ymin = 6674000, xmax = 362000, ymax = 6704000),
-  output_filepath = CONFIG$NANTES_PREDICTION_FILEPATH
+  output_filepath = CFG$NANTES_PREDICTION_FILEPATH
 )

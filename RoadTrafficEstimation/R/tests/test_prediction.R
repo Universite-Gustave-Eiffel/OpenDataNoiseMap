@@ -16,8 +16,8 @@ test_prediction <- function() {
   pipeline_message(text = "Test 1: Nantes predictions file", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$NANTES_PREDICTION_FILEPATH)) {
-    nantes <- sf::st_read(CONFIG$NANTES_PREDICTION_FILEPATH, quiet = TRUE)
+  if (file.exists(CFG$NANTES_PREDICTION_FILEPATH)) {
+    nantes <- sf::st_read(CFG$NANTES_PREDICTION_FILEPATH, quiet = TRUE)
     
     if (nrow(nantes) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(nantes))) {
       # Check data quality
@@ -42,7 +42,7 @@ test_prediction <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Nantes predictions file not found: %s",
-                                   CONFIG$NANTES_PREDICTION_FILEPATH),
+                                   CFG$NANTES_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -51,8 +51,8 @@ test_prediction <- function() {
   pipeline_message(text = "Test 2: Paris predictions file", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$PARIS_PREDICTION_FILEPATH)) {
-    paris <- sf::st_read(CONFIG$PARIS_PREDICTION_FILEPATH, quiet = TRUE)
+  if (file.exists(CFG$PARIS_PREDICTION_FILEPATH)) {
+    paris <- sf::st_read(CFG$PARIS_PREDICTION_FILEPATH, quiet = TRUE)
     
     if (nrow(paris) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(paris))) {
       # Check data quality
@@ -77,7 +77,7 @@ test_prediction <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Paris predictions file not found: %s",
-                                   CONFIG$PARIS_PREDICTION_FILEPATH),
+                                   CFG$PARIS_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -86,8 +86,8 @@ test_prediction <- function() {
   pipeline_message(text = "Test 3: PEMB predictions file", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$PEMB_PREDICTION_FILEPATH)) {
-    pemb <- sf::st_read(CONFIG$PEMB_PREDICTION_FILEPATH, quiet = TRUE)
+  if (file.exists(CFG$PEMB_PREDICTION_FILEPATH)) {
+    pemb <- sf::st_read(CFG$PEMB_PREDICTION_FILEPATH, quiet = TRUE)
     
     if (nrow(pemb) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(pemb))) {
       issues <- 0
@@ -111,7 +111,7 @@ test_prediction <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ PEMB predictions file not found: %s",
-                                   CONFIG$PEMB_PREDICTION_FILEPATH),
+                                   CFG$PEMB_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -120,8 +120,8 @@ test_prediction <- function() {
   pipeline_message(text = "Test 4: Sensors predictions file", 
                    level = 1, progress = "start", process = "test")
   
-  if (file.exists(CONFIG$SENSORS_ALL_PREDICTION_FILEPATH)) {
-    sensors <- sf::st_read(CONFIG$SENSORS_ALL_PREDICTION_FILEPATH, quiet = TRUE)
+  if (file.exists(CFG$SENSORS_ALL_PREDICTION_FILEPATH)) {
+    sensors <- sf::st_read(CFG$SENSORS_ALL_PREDICTION_FILEPATH, quiet = TRUE)
     
     if (nrow(sensors) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(sensors))) {
       # Check data quality
@@ -146,7 +146,7 @@ test_prediction <- function() {
     }
   } else {
     pipeline_message(text = sprintf("✗ Sensors predictions file not found: %s",
-                                   CONFIG$SENSORS_ALL_PREDICTION_FILEPATH),
+                                   CFG$SENSORS_ALL_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
@@ -157,10 +157,10 @@ test_prediction <- function() {
   
   consistency_ok <- TRUE
   
-  for (filepath in c(CONFIG$NANTES_PREDICTION_FILEPATH, 
-                     CONFIG$PARIS_PREDICTION_FILEPATH,
-                     CONFIG$PEMB_PREDICTION_FILEPATH,
-                     CONFIG$SENSORS_ALL_PREDICTION_FILEPATH)) {
+  for (filepath in c(CFG$NANTES_PREDICTION_FILEPATH, 
+                     CFG$PARIS_PREDICTION_FILEPATH,
+                     CFG$PEMB_PREDICTION_FILEPATH,
+                     CFG$SENSORS_ALL_PREDICTION_FILEPATH)) {
     if (file.exists(filepath)) {
       pred <- sf::st_read(filepath, quiet = TRUE)
       
