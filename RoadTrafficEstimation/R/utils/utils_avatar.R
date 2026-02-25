@@ -95,23 +95,44 @@ download_with_retry <- function(
     use_auth = FALSE) {
   for (i in 1:max_retries) {
     tryCatch({
+      # ---------------------- #
+      # Download attempt       #
+      # ---------------------- #
       download_file(url = url, 
                     target = target, 
                     use_auth = use_auth)
+      # ---------------------- #
+      # Success check          #
+      # ---------------------- #
       if (file.exists(target) && file.size(target) > 0) {
         return(TRUE)
       }
     }, error = function(e) {
-      if (i == max_retries) {
-        stop("\t\t ⛔ Download failed after retries: ", e$message, 
-             "\n\t\t ⚠️ If necessary, make sure required token is set in 
-             ~/.Renviron or ~/.env \n")
-      }
-      # Backoff longer on rate limiting
-      if (grepl("HTTP 429|Too Many Requests", e$message)) {
-        Sys.sleep(30 * i)
+      msg <- e$message
+      # ---------------------- #
+      # HTTP 429 handling      #
+      # ---------------------- #
+      if (grepl(pattern = "429", x = msg) ||
+          grepl(pattern = "Too Many Requests", x = msg, ignore.case = TRUE)) {
+        wait_time <- 60
+        pipeline_message(
+          sprintf("Rate limit reached. Waiting %s sec", wait_time), 
+          process = "warning")
+        Sys.sleep(time = wait_time)
       } else {
-        Sys.sleep(5)
+        
+        # Standard retry wait
+        Sys.sleep(time = throttle_delay)
+      }
+      # ---------------------- #
+      # Stop if last retry     #
+      # ---------------------- #
+      if (i == max_retries) {
+        pipeline_message(
+          sprintf("Download failed after retries: ", msg,
+                  "\n\t\t ⚠️ If necessary, make sure required token is set in ",
+                  "~/.Renviron or ~/.env \n"), 
+          process = "stop")
       }
     })
   }
@@ -244,7 +265,7 @@ build_avatar_aggregated_url <- function(
 #' @export
 download_avatar_count_points <- function(
     target,
-    api_token = "",
+    api_token = NULL,
     max_retries = 3, 
     limit = 10000) {
   # Avatar API URL
@@ -588,4 +609,39 @@ apply_avatar_quality_rules <- function(dt) {
                                                pmax(0.0, ratio_flow_trucks)),   # Cap between 0 and 5
                                     no = NA_real_)]
   invisible(dt)
+}
+#' 
+#' @title Validate Avatar data structure
+#' @description Checks whether the Avatar data contains the required columns for 
+#'              downstream processing and whether it is non-empty. This function is 
+#'              intended to be used as a preliminary validation step after loading 
+#'              or downloading Avatar data, before performing any aggregation or 
+#'              analysis.
+#' @param avatar_data A data.frame or data.table containing Avatar aggregated metrics. 
+#'                    Expected to have at least the following columns:
+#'                    \itemize{
+#'                      \item count_point_id
+#'                      \item period
+#'                      \item aggregate_flow
+#'                    }
+#' @return A logical value: `TRUE` if the data is valid, `FALSE` otherwise. If the data is invalid, an error message is printed to the console indicating the reason (e.g. missing columns, empty data).
+#' @export 
+validate_avatar_data <- function(avatar_data) {
+  required_cols <- c("count_point_id", "period", "aggregate_flow")
+  missing_cols <- setdiff(x = required_cols, y = names(avatar_data))
+  
+  if (length(missing_cols) > 0) {
+    pipeline_message(
+      text = sprintf("Missing required columns: %s", 
+                     paste(missing_cols, collapse = ", ")),
+      process = "error")
+    return(FALSE)
+  }
+  
+  if (nrow(avatar_data) == 0) {
+    pipeline_message(text = "Avatar data is empty", process = "error")
+    return(FALSE)
+  }
+  
+  return(TRUE)
 }

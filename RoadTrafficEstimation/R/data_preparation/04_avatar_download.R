@@ -1,39 +1,37 @@
 # ==============================================================================
-# STAGE 3: AVATAR FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS AND MATCHING - MINIMAL 
+# STAGE 4: AVATAR FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS AND MATCHING - MINIMAL 
 #          VERSION
 # ==============================================================================
 
-pipeline_message(
-  text = "Matching Avatar traffic count points to OSM road segments", 
-  level = 0, progress = "start", process = "join")
+pipeline_message("Matching Avatar traffic count points to OSM road segments", 
+                 level = 0, progress = "start", process = "join")
 
 # ------------------------------------------------------------------------------
 # Load full road network with connectivities and towns
 # ------------------------------------------------------------------------------
 
-if (!exists(x = 'osm_full_network', inherits = FALSE) || 
-  !inherits(get('osm_full_network'), 'sf')){
+if (!exists(x = 'osm_full_network', inherits = FALSE)){
   
   pipeline_message(
-    text = sprintf("Loading road network data from %s", 
-                   rel_path(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
+    sprintf("Loading road network data from %s", 
+            rel_path(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
+  # Load OSM full road network
   osm_full_network <- sf::st_read(
     dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
     quiet = TRUE)
   
+  # Project data into target CRS if needed
   if (sf::st_crs(osm_full_network) != CFG$TARGET_CRS){
     osm_full_network <- osm_full_network %>% 
       st_transform(crs = CFG$TARGET_CRS)
   }
   
-  pipeline_message(text = describe_df(osm_full_network), process = "info")
+  pipeline_message(describe_df(osm_full_network), process = "info")
   
-  pipeline_message(
-    text = "OSM full road network loaded in successfully loaded", 
-    level = 1, progress = "end", process = "valid")
-  
+  pipeline_message("OSM full road network loaded in successfully loaded", 
+                   level = 1, progress = "end", process = "valid")
 }
 
 # ------------------------------------------------------------------------------
@@ -41,11 +39,11 @@ if (!exists(x = 'osm_full_network', inherits = FALSE) ||
 # ------------------------------------------------------------------------------
 
 if (file.exists(CFG$AVATAR_COUNT_POINTS_FILEPATH) && 
-  isFALSE(CFG$FORCE_REDOWNLOAD_COUNT_POINTS)) {
+   (isFALSE(CFG$FORCE_REDOWNLOAD_COUNT_POINTS))){
   
   pipeline_message(
-    text = sprintf("Loading previously downloaded count points data from %s", 
-                   rel_path(CFG$AVATAR_COUNT_POINTS_FILEPATH)), 
+    sprintf("Loading previously downloaded count points data from %s", 
+            rel_path(CFG$AVATAR_COUNT_POINTS_FILEPATH)), 
     level = 1, progress = "start", process = "load")
   
   # Read counting data to JSON file
@@ -53,24 +51,14 @@ if (file.exists(CFG$AVATAR_COUNT_POINTS_FILEPATH) &&
     path = CFG$AVATAR_COUNT_POINTS_FILEPATH, 
     simplifyVector = TRUE)
   
-  pipeline_message(text = "Count points successfully loaded",  
-                   level = 1, progress = "end", process = "valid")
+  pipeline_message("Count points successfully loaded", level = 1, 
+                   progress = "end", process = "valid")
   
-} else if (CFG$FORCE_REDOWNLOAD_COUNT_POINTS || 
-           !file.exists(CFG$AVATAR_COUNT_POINTS_FILEPATH)) {
-
-  if (nchar(CFG$AVATAR_API_TOKEN) == 0) {
-    stop(
-      "Missing Avatar count points file and AVATAR_API_TOKEN is not set. ",
-      "Please set AVATAR_API_TOKEN in your environment (e.g. ~/.Renviron) ",
-      "or provide the file at ",
-      CFG$AVATAR_COUNT_POINTS_FILEPATH,
-      "."
-    )
-  }
+} else if (!file.exists(CFG$AVATAR_COUNT_POINTS_FILEPATH) && 
+           RUN_CONTEXT == "local") {
   
-  pipeline_message(text = "Downloading count points data from Avatar API",  
-                   level = 1, progress = "start", process = "download")
+  pipeline_message("Downloading count points data from Avatar API", level = 1, 
+                   progress = "start", process = "download")
   
   # Download Avatar data via API
   download_status <- download_avatar_count_points(
@@ -88,25 +76,30 @@ if (file.exists(CFG$AVATAR_COUNT_POINTS_FILEPATH) &&
   
   if (isTRUE(download_status)){
     pipeline_message(
-      text = sprintf("Count point data successfully downloaded thanks to Avatar 
-                     API and saved into file %s", 
-                     rel_path(CFG$AVATAR_COUNT_POINTS_FILEPATH)), 
-      level = 1, progress = "end", process = "valid")
+    sprintf("Count point data successfully downloaded thanks to Avatar API and saved into file %s", 
+            rel_path(CFG$AVATAR_COUNT_POINTS_FILEPATH)), 
+    level = 1, progress = "end", process = "valid")
   }
+} else if (!file.exists(CFG$AVATAR_COUNT_POINTS_FILEPATH) && 
+           RUN_CONTEXT == "slurm") {
+  pipeline_message(
+    sprintf("Avatar data can't be downloaded from a Slurm job and the file %s is missing. Run the script locally", CFG$AVATAR_COUNT_POINTS_FILEPATH), 
+    process = "stop")
 }
 
 # ------------------------------------------------------------------------------
 # Format Avatar count points
 # ------------------------------------------------------------------------------
 
-pipeline_message(text = "Formatting Avatar count points data",  
-                 level = 1, progress = "start", process = "download")
+pipeline_message("Formatting Avatar count points data", level = 1, 
+                 progress = "start", process = "download")
 
 # Convert count points data to sf points
 count_points <- sf::st_as_sf(x = count_points_data, 
                              wkt = c("punctual_position"), 
-                             crs = 4326) %>% 
-  st_transform(crs = CFG$TARGET_CRS)
+                             crs = 4326)
+# Project data into target CRS
+count_points <- count_points %>% st_transform(crs = CFG$TARGET_CRS)
 
 # Keep lane_number field (CRITICAL: Avatar measures lanes in ONE direction only)
 count_points <- count_points %>%
@@ -116,7 +109,7 @@ count_points <- count_points %>%
          punctual_position, 
          everything())
 
-pipeline_message(text = describe_df(count_points), process = "info")
+pipeline_message(describe_df(count_points), process = "info")
 
 # Reduce to test region if running in TEST mode
 IS_TEST_MODE <- exists("TEST_REGION") && !is.null(TEST_REGION)
@@ -130,19 +123,18 @@ if (IS_TEST_MODE) {
   )
 }
 
-pipeline_message(text = "Avatar data successfully formatted",  
-                 level = 1, progress = "end", process = "valid")
+pipeline_message("Avatar data successfully formatted", level = 1, 
+                 progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Spatial matching: count points → osm roads
 # ------------------------------------------------------------------------------
 
-pipeline_message(text = "Spatial joining of Avatar count points and OSM roads", 
+pipeline_message("Spatial joining of Avatar count points and OSM roads", 
                  level = 1, progress = "start", process = "join")
 
-pipeline_message(
-  text = "Search for the OSM routes closest to the Avatar count points", 
-  level = 2, progress = "start", process = "search")
+pipeline_message("Search for the OSM routes closest to the Avatar count points", 
+                 level = 2, progress = "start", process = "search")
 
 # Buffer around points (O(n))
 count_points_buffered <- sf::st_buffer(x = count_points, 
@@ -190,18 +182,17 @@ rm(count_points_buffered)
 count_points <- get(x = "count_points", 
                     envir = .GlobalEnv)
 
-pipeline_message(text = describe_df(pointsId_with_roads), process = "info")
+pipeline_message(describe_df(pointsId_with_roads), process = "info")
 
-pipeline_message(text = "Closest OSM roads to buffered count points evaluated", 
+pipeline_message("Closest OSM roads to buffered count points evaluated", 
                  level = 2, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 ## Restrict OSM network to Avatar-measured roads only
 # ------------------------------------------------------------------------------
 
-pipeline_message(
-  text = "Filtering OSM road network data with Avatar count points", 
-  level = 2, progress = "start", process = "search")
+pipeline_message("Filtering OSM road network data with Avatar count points", 
+                 level = 2, progress = "start", process = "search")
 
 # Filtering OSM road network data when Avatar data are available
 full_network_avatar <- osm_full_network %>% 
@@ -221,6 +212,8 @@ full_network_avatar_id <- merge(
 
 # Project data into target CRS if needed
 if (sf::st_crs(full_network_avatar_id) != CFG$TARGET_CRS){
+  pipeline_message(sprintf("Reproject into CRS %d", CFG$TARGET_CRS), 
+                   process = "info")
   full_network_avatar_id <- full_network_avatar_id %>% 
     st_transform(crs = CFG$TARGET_CRS)
 }
@@ -231,36 +224,35 @@ full_network_avatar_id <- add_period_datetime_columns(full_network_avatar_id)
 # Write final OSM road network with count point data
 sf::st_write(
   full_network_avatar_id,
-  dsn = CFG$AVATAR_IDS_FULL_NETWORK_FILEPATH,
+  dsn = CFG$AVATAR_MERGED_WITH_OSM_FILEPATH,
   delete_dsn = TRUE,
   quiet = TRUE)
 
 pipeline_message(
-  text = sprintf("OSM road network successfully merged with count point data and saved into file %s", 
-                 rel_path(CFG$AVATAR_IDS_FULL_NETWORK_FILEPATH)), 
+  sprintf("OSM road network successfully merged with count point data and saved into file %s", 
+          rel_path(CFG$AVATAR_MERGED_WITH_OSM_FILEPATH)), 
   level = 2, progress = "end", process = "valid")
 
 # ------------------------------------------------------------------------------
 # Download avatar traffic data for each point
 # ------------------------------------------------------------------------------
 
-pipeline_message(text = "Download Avatar traffic data for count point", 
-                 level = 1, progress = "start", process = "download")
+pipeline_message("Download Avatar traffic data for count point", level = 1, 
+                 progress = "start", process = "download")
 
 # Check API token
 if (nchar(CFG$AVATAR_API_TOKEN) == 0) {
   pipeline_message(
-    text = sprintf("AVATAR_API_TOKEN not set. Add it to ~/.Renviron:\n", 
-                   "\t\t $echo 'AVATAR_API_TOKEN=your_token' >> ~/.Renviron\n", 
-                   "\t\t Then restart R session.\n", 
-                   "\t\t Continuing without authentication ", 
-                   "(5 requests/min limit)..."), 
+    paste0("AVATAR_API_TOKEN not set. Add it to ~/.Renviron:\n", 
+           "\t\t $echo 'AVATAR_API_TOKEN=your_token' >> ~/.Renviron\n", 
+           "\t\t Then restart R session.\n", 
+           "\t\t Continuing without authentication (5 requests/min limit)..."), 
     process = "warning")
 }
 
 # Delete old chunks if forcing re-download
 if (CFG$FORCE_REDOWNLOAD_CHUNKS) {
-  old_chunks <- list.files(path = CFG$AVATAR_CSV_DATA_DIRPATH, 
+  old_chunks <- list.files(path = CFG$AVATAR_CSV_DATA_DIR, 
                            pattern = "avatar_data_chunk_.*\\.csv",
                            full.names = TRUE)
   if (file.exists(CFG$AVATAR_RDS_DATA_FILEPATH)) {
@@ -269,7 +261,7 @@ if (CFG$FORCE_REDOWNLOAD_CHUNKS) {
 }
 
 # Check existing files and validate them
-existing_files <- list.files(path = CFG$AVATAR_CSV_DATA_DIRPATH, 
+existing_files <- list.files(path = CFG$AVATAR_CSV_DATA_DIR, 
                              pattern = "avatar_data_chunk_.*\\.csv", 
                              full.names = TRUE)
 
@@ -281,10 +273,12 @@ total_chunks <- ceiling(x = total_points / chunk_size)
 # First pass: validate all existing chunks
 chunks_to_redownload <- c()
 for (chunk_id in 1:total_chunks) {
-  chunk_file <- file.path(CFG$AVATAR_CSV_DATA_DIRPATH, 
+  chunk_file <- file.path(CFG$AVATAR_CSV_DATA_DIR, 
                           paste0("avatar_data_chunk_", 
                                  sprintf("%03d", chunk_id), 
                                  ".csv"))
+  pipeline_message(sprintf("Checking file %s", rel_path(chunk_file)), 
+                   process = "info")
   start_idx <- (chunk_id - 1) * chunk_size + 1
   end_idx <- min(chunk_id * chunk_size, total_points)
   expected_points <- end_idx - start_idx + 1
@@ -296,27 +290,33 @@ for (chunk_id in 1:total_chunks) {
   }
 }
 
+# Force re-download Avatar data
+if (CFG$FORCE_REDOWNLOAD_CHUNKS && RUN_CONTEXT == "local") {
+  pipeline_message("Force re-downloading ALL chunks...")
+  chunks_to_redownload <- 1:total_chunks
+}
+
 if (length(chunks_to_redownload) > 0) {
   if (RUN_CONTEXT == "local"){
     pipeline_message(
-      text = sprintf("Found %d chunks to re-download (empty/corrupted/missing)", 
-                     length(chunks_to_redownload)), 
+      sprintf("Found %d chunks to re-download (empty/corrupted/missing)", 
+              length(chunks_to_redownload)), 
       process = "warning")
   } else {
     pipeline_message(
-      text = sprintf("Found %d chunks to re-download (empty/corrupted/missing), 
-                      but the computing environment does not allow it. Please 
-                      run the shell script run_avatar_download.sh to re-download 
-                     these chunks", length(chunks_to_redownload)), 
+      sprintf("Found %s chunks to re-download (empty/corrupted/missing), but the computing environment does not allow it. Please run the shell script run_avatar_download.sh to re-download these chunks", 
+              length(chunks_to_redownload)), 
       process = "warning")
   }
 }
 
 # Download missing or invalid chunks if not downloaded yet
-if (CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
+if (CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && 
+    length(chunks_to_redownload) > 0 && 
+    RUN_CONTEXT == "local") {
   
-  pipeline_message(text = "Download missing or invalid chunks", 
-                   level = 2, progress = "start", process = "download")
+  pipeline_message("Download missing or invalid chunks", level = 2, 
+                   progress = "start", process = "download")
   
   # Download missing or invalid chunks
   chunks_to_process <- if (length(chunks_to_redownload) > 0) {
@@ -332,7 +332,7 @@ if (CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
   }
   # Process chunks to re-download
   if (length(chunks_to_process) == 0) {
-    pipeline_message(text = "No chunk to download", process = "info")
+    pipeline_message("No chunk to download", process = "info")
     return(invisible(NULL))
   }
   chunks_downloaded <- 0
@@ -348,14 +348,13 @@ if (CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
       end_time = CFG$END_TIME
     )
     # Output filename
-    target_file <- file.path(CFG$AVATAR_CSV_DATA_DIRPATH, 
+    target_file <- file.path(CFG$AVATAR_CSV_DATA_DIR, 
                              paste0("avatar_data_chunk_", 
                                     sprintf("%03d", chunk_id), 
                                     ".csv"))
-    pipeline_message(
-      text = sprintf("[%3d/%3d] Downloading chunk %03d (points %d-%d)", 
-                     chunk_id, total_chunks, chunk_id, start_idx, end_idx), 
-      process = "download")
+    pipeline_message(sprintf("[%3d/%3d] Downloading chunk %03d (points %d-%d)", 
+                             chunk_id, total_chunks, chunk_id, start_idx, end_idx), 
+                     process = "download")
     
     tryCatch({
       if (IS_TEST_MODE) {
@@ -373,23 +372,21 @@ if (CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS && RUN_CONTEXT == "local"){
       if (validation$valid) {
         chunks_downloaded <- chunks_downloaded + 1
       } else {
-        pipeline_message(text = sprintf("Chunk invalid: %s", validation$reason), 
+        pipeline_message(sprintf("Chunk invalid: %s", validation$reason), 
                          process = "warning")
       }
     }, error = function(e) {
       pipeline_message(
-        text = sprintf("Failed to download chunk %d: %s", 
-                       chunk_id, e$message), 
-        process = "stop")
+        sprintf("Failed to download chunk %d: %s", chunk_id, e$message), 
+                process = "stop")
     })
   }
   
-  pipeline_message(text = "Missing or invalid chunks successfully downloaded", 
+  pipeline_message("Missing or invalid chunks successfully downloaded", 
                    level = 2, progress = "end", process = "valid")
-  pipeline_message(
-    text = sprintf("%d chunks processed\n\t\t %d chunks successfully 
-                   downloaded", length(chunks_to_process), chunks_downloaded), 
-    process = "info")
+  pipeline_message(sprintf("%d chunks processed\n\t\t %d chunks successfully downloaded", 
+                           length(chunks_to_process), chunks_downloaded), 
+                   process = "info")
 }
 
 # Free large objects no longer needed before combining CSV chunks
@@ -415,13 +412,13 @@ if (file.exists(CFG$AVATAR_RDS_DATA_FILEPATH)) {
 } else {
 
 # List of files for all chunks
-files <- list.files(path = CFG$AVATAR_CSV_DATA_DIRPATH, 
+files <- list.files(path = CFG$AVATAR_CSV_DATA_DIR, 
                     pattern = "avatar_data_chunk_.*\\.csv", 
                     full.names = TRUE)
 
-# Load and combine using data.table for memory efficiency
+# Load and combine
 if (length(files) > 0) {
-  pipeline_message(text = "Combining all downloaded chunks", 
+  pipeline_message("Combining all downloaded chunks", 
                    level = 2, progress = "start", process = "join")
   
   # Read all CSV files with fread (much more memory-efficient than read.csv)
@@ -436,7 +433,7 @@ if (length(files) > 0) {
     min_gb = 4, warn_gb = 8)
 
   # Disk-streamed concatenation to avoid keeping all batches in RAM
-  temp_combined_csv <- file.path(CFG$AVATAR_CSV_DATA_DIRPATH,
+  temp_combined_csv <- file.path(CFG$AVATAR_CSV_DATA_DIR,
                                  "avatar_data_combined_tmp.csv")
   if (file.exists(temp_combined_csv)) {
     file.remove(temp_combined_csv)
@@ -517,8 +514,7 @@ if (length(files) > 0) {
                    fmt(nrow(avatar_data))), 
     level = 2, progress = "end", process = "save")
 } else {
-  pipeline_message(text = "No Avatar data files found", process = "stop")
-  stop("No Avatar CSV files found for combination")
+  pipeline_message("No Avatar data files found", process = "stop")
 }
 
 } # end else (no cached RDS)
@@ -526,5 +522,5 @@ if (length(files) > 0) {
 rm(list = intersect(ls(), c("avatar_data", "valid_batches", "files")))
 gc(verbose = FALSE)
 
-pipeline_message(text = "Avatar count points and OSM roads successfully merged", 
+pipeline_message("Avatar count points and OSM roads successfully merged", 
                  level = 0, progress = "end", process = "valid")

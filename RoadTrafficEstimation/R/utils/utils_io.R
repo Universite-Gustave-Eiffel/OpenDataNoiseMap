@@ -81,19 +81,17 @@ get_arg_value <- function(flag, default = NULL, args) {
 #'            }
 #' @details The function operates as follows:
 #'          \enumerate{
-#'            \item Recursively flattens the configuration list,
-#'            \item Selects entries whose names follow path naming conventions,
-#'            \item Computes parent directories using \code{dirname()} for file 
-#'                  paths,
+#'            \item Recursively flattens the configuration list to extract all 
+#'                  values, 
+#'            \item Assumes that character values represent filesystem paths, 
+#'            \item Computes parent directories using \code{dirname()}, 
 #'            \item Removes duplicates and ignores directories that already 
-#'                  exist,
+#'                  exist, 
 #'            \item Creates missing directories recursively.
 #'          }
-#'
 #'          The function is intentionally conservative: it does not delete 
 #'          directories, overwrite files, or validate path semantics beyond 
 #'          existence checks.
-#'
 #' @return Invisibly returns a character vector of directories that were 
 #'         created.
 #' @examples
@@ -104,7 +102,8 @@ get_arg_value <- function(flag, default = NULL, args) {
 setup_directories <- function(cfg) {
   
   if (!is.list(cfg)) {
-    stop("cfg must be a named list.")
+    pipeline_message("cfg must be a named list", 
+                     process = "stop")
   }
   
   # Flatten configuration (preserve names)
@@ -129,7 +128,7 @@ setup_directories <- function(cfg) {
   dirs <- unique(x = c(parent_dirs, explicit_dirs))
   dirs <- dirs[nzchar(x = dirs)]
   
-  created_dirs <- character(0)  
+  created_dirs <- character(0)
   for (d in dirs) {
     if (!dir.exists(paths = d)) {
       dir.create(path = d, recursive = TRUE, showWarnings = FALSE)
@@ -273,8 +272,9 @@ stop_timer <- function() {
 #' @export
 describe_df <- function(df) {
   if (!inherits(x = df, what = c("data.frame", "data.table"))) {
-    pipeline_message("Function describe_df() expects a data.frame or data.table", 
-                     process = "stop")
+    pipeline_message(
+      "Function describe_df() expects a data.frame or data.table", 
+      process = "stop")
   }
   # Object name as passed by the caller
   obj_name <- deparse(expr = substitute(df))

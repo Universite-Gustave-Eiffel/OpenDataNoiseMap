@@ -52,7 +52,7 @@ save_plot_if_needed <- function(plot,
 #'              \itemize{
 #'                \item average flow (solid line), 
 #'                \item median flow (dashed line), 
-#'                \item interquartile range (Q25–Q75 ribbon).
+#'                \item interquartile range (Q25-Q75 ribbon).
 #'              }
 #' @param traffic_hourly_patterns Data frame with hourly aggregated statistics
 #' @param fig_path Optional output directory
@@ -202,7 +202,7 @@ plot_flow_distribution_and_quality <- function(aggregated_traffic_data,
     labs(title = "Data Quality: % Predicted vs Measured", 
          subtitle = "Lower values indicate higher data availability", 
          x = NULL, 
-         y = "% Predicted (0–100%)") + 
+         y = "% Predicted (0-100%)") + 
     theme_pipeline(base_size = 10) + 
     theme(legend.position = "none")
   
