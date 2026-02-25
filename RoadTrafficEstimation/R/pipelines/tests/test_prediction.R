@@ -6,20 +6,21 @@
 # ==============================================================================
 
 test_prediction <- function() {
-  pipeline_message(text = "Testing prediction phase", 
-                   level = 0, progress = "start", process = "test")
+  pipeline_message("Testing prediction phase", level = 0, 
+                   progress = "start", process = "calc")
   
   tests_passed <- 0
   tests_failed <- 0
   
   # Test 1: Nantes predictions file
-  pipeline_message(text = "Test 1: Nantes predictions file", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 1: Nantes predictions file", level = 1, 
+                   progress = "start", process = "search")
   
   if (file.exists(CFG$NANTES_PREDICTION_FILEPATH)) {
-    nantes <- sf::st_read(CFG$NANTES_PREDICTION_FILEPATH, quiet = TRUE)
+    nantes <- sf::st_read(dsn = CFG$NANTES_PREDICTION_FILEPATH, quiet = TRUE)
     
-    if (nrow(nantes) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(nantes))) {
+    if (nrow(nantes) > 0 && 
+        all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(nantes))) {
       # Check data quality
       issues <- 0
       if (any(nantes$TV < 0, na.rm = TRUE)) issues <- issues + 1
@@ -27,34 +28,37 @@ test_prediction <- function() {
       if (any(nantes$LV < 0, na.rm = TRUE)) issues <- issues + 1
       
       if (issues == 0) {
-        pipeline_message(text = sprintf("✓ Nantes predictions: %s rows", fmt(nrow(nantes))),
-                         level = 1, progress = "end", process = "pass")
+        pipeline_message(sprintf("Nantes predictions: %s rows", 
+                                 fmt(nrow(nantes))),
+                         level = 1, progress = "end", process = "valid")
         tests_passed <- tests_passed + 1
       } else {
-        pipeline_message(text = sprintf("✗ Nantes predictions: %d data quality issues", issues),
+        pipeline_message(sprintf("Nantes predictions: %d data quality issues", 
+                                 issues),
                          level = 1, progress = "end", process = "fail")
         tests_failed <- tests_failed + 1
       }
     } else {
-      pipeline_message(text = "✗ Nantes predictions: missing required columns",
+      pipeline_message("Nantes predictions: missing required columns",
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ Nantes predictions file not found: %s",
-                                   CFG$NANTES_PREDICTION_FILEPATH),
+    pipeline_message(sprintf("Nantes predictions file not found: %s", 
+                             CFG$NANTES_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Test 2: Paris predictions file
-  pipeline_message(text = "Test 2: Paris predictions file", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 2: Paris predictions file", level = 1, 
+                   progress = "start", process = "search")
   
   if (file.exists(CFG$PARIS_PREDICTION_FILEPATH)) {
-    paris <- sf::st_read(CFG$PARIS_PREDICTION_FILEPATH, quiet = TRUE)
+    paris <- sf::st_read(dsn = CFG$PARIS_PREDICTION_FILEPATH, quiet = TRUE)
     
-    if (nrow(paris) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(paris))) {
+    if (nrow(paris) > 0 && 
+        all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(paris))) {
       # Check data quality
       issues <- 0
       if (any(paris$TV < 0, na.rm = TRUE)) issues <- issues + 1
@@ -62,68 +66,75 @@ test_prediction <- function() {
       if (any(paris$LV < 0, na.rm = TRUE)) issues <- issues + 1
       
       if (issues == 0) {
-        pipeline_message(text = sprintf("✓ Paris predictions: %s rows", fmt(nrow(paris))),
-                         level = 1, progress = "end", process = "pass")
+        pipeline_message(sprintf("Paris predictions: %s rows", 
+                                 fmt(nrow(paris))),
+                         level = 1, progress = "end", process = "valid")
         tests_passed <- tests_passed + 1
       } else {
-        pipeline_message(text = sprintf("✗ Paris predictions: %d data quality issues", issues),
+        pipeline_message(sprintf("Paris predictions: %d data quality issues", 
+                                 issues),
                          level = 1, progress = "end", process = "fail")
         tests_failed <- tests_failed + 1
       }
     } else {
-      pipeline_message(text = "✗ Paris predictions: missing required columns",
+      pipeline_message("Paris predictions: missing required columns", 
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ Paris predictions file not found: %s",
-                                   CFG$PARIS_PREDICTION_FILEPATH),
+    pipeline_message(sprintf("Paris predictions file not found: %s",
+                             CFG$PARIS_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Test 3: PEMB predictions file
-  pipeline_message(text = "Test 3: PEMB predictions file", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 3: PEMB predictions file", level = 1, 
+                   progress = "start", process = "search")
   
   if (file.exists(CFG$PEMB_PREDICTION_FILEPATH)) {
-    pemb <- sf::st_read(CFG$PEMB_PREDICTION_FILEPATH, quiet = TRUE)
+    pemb <- sf::st_read(dsn = CFG$PEMB_PREDICTION_FILEPATH, 
+                        quiet = TRUE)
     
-    if (nrow(pemb) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(pemb))) {
+    if (nrow(pemb) > 0 && 
+        all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(pemb))) {
       issues <- 0
       if (any(pemb$TV < 0, na.rm = TRUE)) issues <- issues + 1
       if (any(pemb$HGV < 0, na.rm = TRUE)) issues <- issues + 1
       if (any(pemb$LV < 0, na.rm = TRUE)) issues <- issues + 1
       
       if (issues == 0) {
-        pipeline_message(text = sprintf("✓ PEMB predictions: %s rows", fmt(nrow(pemb))),
-                         level = 1, progress = "end", process = "pass")
+        pipeline_message(sprintf("PEMB predictions: %s rows", fmt(nrow(pemb))), 
+                         level = 1, progress = "end", process = "valid")
         tests_passed <- tests_passed + 1
       } else {
-        pipeline_message(text = sprintf("✗ PEMB predictions: %d data quality issues", issues),
+        pipeline_message(sprintf("PEMB predictions: %d data quality issues", 
+                                 issues),
                          level = 1, progress = "end", process = "fail")
         tests_failed <- tests_failed + 1
       }
     } else {
-      pipeline_message(text = "✗ PEMB predictions: missing required columns",
+      pipeline_message("PEMB predictions: missing required columns",
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ PEMB predictions file not found: %s",
-                                   CFG$PEMB_PREDICTION_FILEPATH),
+    pipeline_message(sprintf("PEMB predictions file not found: %s",
+                             CFG$PEMB_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Test 4: Sensors predictions file
-  pipeline_message(text = "Test 4: Sensors predictions file", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 4: Sensors predictions file", level = 1, 
+                   progress = "start", process = "search")
   
   if (file.exists(CFG$SENSORS_ALL_PREDICTION_FILEPATH)) {
-    sensors <- sf::st_read(CFG$SENSORS_ALL_PREDICTION_FILEPATH, quiet = TRUE)
+    sensors <- sf::st_read(dsn = CFG$SENSORS_ALL_PREDICTION_FILEPATH, 
+                           quiet = TRUE)
     
-    if (nrow(sensors) > 0 && all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(sensors))) {
+    if (nrow(sensors) > 0 && 
+        all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(sensors))) {
       # Check data quality
       issues <- 0
       if (any(sensors$TV < 0, na.rm = TRUE)) issues <- issues + 1
@@ -131,29 +142,31 @@ test_prediction <- function() {
       if (any(sensors$LV < 0, na.rm = TRUE)) issues <- issues + 1
       
       if (issues == 0) {
-        pipeline_message(text = sprintf("✓ Sensors predictions: %s rows", fmt(nrow(sensors))),
-                         level = 1, progress = "end", process = "pass")
+        pipeline_message(sprintf("Sensors predictions: %s rows", 
+                                 fmt(nrow(sensors))),
+                         level = 1, progress = "end", process = "valid")
         tests_passed <- tests_passed + 1
       } else {
-        pipeline_message(text = sprintf("✗ Sensors predictions: %d data quality issues", issues),
+        pipeline_message(sprintf("Sensors predictions: %d data quality issues", 
+                                 issues),
                          level = 1, progress = "end", process = "fail")
         tests_failed <- tests_failed + 1
       }
     } else {
-      pipeline_message(text = "✗ Sensors predictions: missing required columns",
+      pipeline_message("Sensors predictions: missing required columns",
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ Sensors predictions file not found: %s",
-                                   CFG$SENSORS_ALL_PREDICTION_FILEPATH),
+    pipeline_message(sprintf("Sensors predictions file not found: %s",
+                             CFG$SENSORS_ALL_PREDICTION_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Test 5: Check consistency (HGV < TV)
-  pipeline_message(text = "Test 5: Prediction data consistency", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 5: Prediction data consistency", level = 1, 
+                   progress = "start", process = "search")
   
   consistency_ok <- TRUE
   
@@ -162,34 +175,36 @@ test_prediction <- function() {
                      CFG$PEMB_PREDICTION_FILEPATH,
                      CFG$SENSORS_ALL_PREDICTION_FILEPATH)) {
     if (file.exists(filepath)) {
-      pred <- sf::st_read(filepath, quiet = TRUE)
+      pred <- sf::st_read(dsn = filepath, quiet = TRUE)
       
       # Check HGV <= TV (HGV should be part of TV)
       inconsistent <- sum(pred$HGV > pred$TV, na.rm = TRUE)
       
       if (inconsistent > 0) {
         consistency_ok <- FALSE
-        pipeline_message(text = sprintf("⚠ %s: %d rows with HGV > TV", 
-                                       basename(filepath), inconsistent),
-                         process = "warn")
+        pipeline_message(sprintf("%s: %d rows with HGV > TV", 
+                                 basename(filepath), inconsistent),
+                         process = "warning")
       }
     }
   }
   
   if (consistency_ok) {
-    pipeline_message(text = "✓ All predictions consistent (HGV ≤ TV)",
-                     level = 1, progress = "end", process = "pass")
+    pipeline_message("All predictions consistent (HGV ≤ TV)", level = 1, 
+                     progress = "end", process = "valid")
     tests_passed <- tests_passed + 1
   } else {
-    pipeline_message(text = "✗ Consistency issues found",
-                     level = 1, progress = "end", process = "fail")
+    pipeline_message("Consistency issues found", level = 1, 
+                     progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Summary
-  pipeline_message(text = sprintf("Prediction tests: %d passed, %d failed", 
-                                 tests_passed, tests_failed),
-                   level = 0, progress = "end", process = ifelse(tests_failed == 0, "pass", "fail"))
+  pipeline_message(sprintf("Prediction tests: %d passed, %d failed", 
+                           tests_passed, tests_failed),
+                   level = 0, progress = "end", 
+                   process = ifelse(test = tests_failed == 0, 
+                                    yes = "valid", no = "fail"))
   
   return(list(passed = tests_passed, failed = tests_failed))
 }

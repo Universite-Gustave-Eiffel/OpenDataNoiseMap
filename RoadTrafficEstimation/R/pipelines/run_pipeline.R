@@ -59,14 +59,14 @@ if ("preparation" %in% phases_to_run) {
   pipeline_message("PHASE 1: DATA PREPARATION", level = 0, 
                    progress = "start", process = "calc")
   
-  source("R/data_preparation/01_osm_processing.R")
-  source("R/data_preparation/02_osm_feature_engineering.R")
-  source("R/data_preparation/03_avatar_download.R")
-  source("R/data_preparation/04_avatar_aggregation.R")
-  source("R/data_preparation/05_training_dataset_merge.R")
+  source("R/pipelines/data_preparation/01_osm_processing.R")
+  source("R/pipelines/data_preparation/02_osm_feature_engineering.R")
+  source("R/pipelines/data_preparation/03_avatar_download.R")
+  source("R/pipelines/data_preparation/04_avatar_aggregation.R")
+  source("R/pipelines/data_preparation/05_training_dataset_merge.R")
   
   if (TEST_FLAG) {
-    source("R/tests/test_data_preparation.R")
+    source("R/pipelines/tests/test_data_preparation.R")
   }
   
   pipeline_message("Data preparation phase completed", level = 0, 
@@ -81,10 +81,10 @@ if ("training" %in% phases_to_run) {
   pipeline_message("PHASE 2: MODEL TRAINING", level = 0, 
                    progress = "start", process = "calc")
   
-  source("R/model_training/train_xgboost_models.R")
+  source("R/pipelines/model_training/train_xgboost_models.R")
   
   if (TEST_FLAG) {
-    source("R/tests/test_model_training.R")
+    source("R/pipelines/tests/test_model_training.R")
   }
   
   pipeline_message("Model training phase completed", level = 0, 
@@ -101,31 +101,31 @@ if ("prediction" %in% phases_to_run) {
   
   # Prediction for Nantes
   if ("nantes" %in% modes_to_run) {
-    source("R/prediction/predict_nantes.R")
+    source("R/pipelines/prediction/predict_nantes.R")
   }
   
   # Prediction for Paris
   if ("paris" %in% modes_to_run) {
-    source("R/prediction/predict_paris.R")
+    source("R/pipelines/prediction/predict_paris.R")
   }
   
   # Prediction for PEMB (Paris Est Marne & Bois)
   if ("pemb" %in% modes_to_run) {
-    source("R/prediction/predict_pemb.R")
+    source("R/pipelines/prediction/predict_pemb.R")
   }
   
   # Prediction for sensors
   if ("sensors" %in% modes_to_run) {
-    source("R/prediction/predict_sensors.R")
+    source("R/pipelines/prediction/predict_sensors.R")
   }
   
   # Prediction for France (tiled, geometry-separated)
   if ("france" %in% modes_to_run) {
-    source("R/prediction/predict_france.R")
+    source("R/pipelines/prediction/predict_france.R")
   }
   
   if (TEST_FLAG) {
-    source("R/tests/test_prediction.R")
+    source("R/pipelines/tests/test_prediction.R")
   }
   
   pipeline_message(

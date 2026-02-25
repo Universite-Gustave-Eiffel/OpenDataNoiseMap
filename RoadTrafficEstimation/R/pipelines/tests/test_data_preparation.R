@@ -20,7 +20,8 @@ test_data_preparation <- function() {
     osm_aug <- sf::st_read(dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
                            quiet = TRUE)
     
-    if (nrow(osm_aug) > 0 && all(c("osm_id", "highway", "DEGRE") %in% names(osm_aug))) {
+    if (nrow(osm_aug) > 0 && 
+        all(c("osm_id", "highway", "DEGRE") %in% names(osm_aug))) {
       pipeline_message(sprintf("✓ OSM augmented: %s roads", fmt(nrow(osm_aug))), 
                        level = 1, progress = "end", process = "valid")
       tests_passed <- tests_passed + 1
@@ -69,55 +70,61 @@ test_data_preparation <- function() {
   }
   
   # Test 3: Avatar data
-  pipeline_message(text = "Test 3: Avatar traffic data", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 3: Avatar traffic data", level = 1, 
+                   progress = "start", process = "search")
   
   if (file.exists(CFG$AVATAR_RDS_DATA_FILEPATH)) {
-    avatar <- readRDS(CFG$AVATAR_RDS_DATA_FILEPATH)
+    avatar <- readRDS(file = CFG$AVATAR_RDS_DATA_FILEPATH)
     
-    if (nrow(avatar) > 0 && all(c("count_point_id", "aggregate_flow") %in% names(avatar))) {
-      pipeline_message(text = sprintf("✓ Avatar data: %s observations", fmt(nrow(avatar))),
-                       level = 1, progress = "end", process = "pass")
+    if (nrow(avatar) > 0 && 
+        all(c("count_point_id", "aggregate_flow") %in% names(avatar))) {
+      pipeline_message(sprintf("Avatar data: %s observations", 
+                               fmt(nrow(avatar))),
+                       level = 1, progress = "end", process = "valid")
       tests_passed <- tests_passed + 1
     } else {
-      pipeline_message(text = "✗ Avatar data: missing required columns",
+      pipeline_message("Avatar data: missing required columns", 
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ Avatar data file not found: %s",
-                                   CFG$AVATAR_RDS_DATA_FILEPATH),
+    pipeline_message(sprintf("Avatar data file not found: %s", 
+                             CFG$AVATAR_RDS_DATA_FILEPATH), 
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Test 4: Training dataset
-  pipeline_message(text = "Test 4: Training dataset", 
-                   level = 1, progress = "start", process = "test")
+  pipeline_message("Test 4: Training dataset", level = 1, 
+                   progress = "start", process = "search")
   
   if (file.exists(CFG$TRAINING_RDS_DATA_FILEPATH)) {
-    training <- readRDS(CFG$TRAINING_RDS_DATA_FILEPATH)
+    training <- readRDS(file = CFG$TRAINING_RDS_DATA_FILEPATH)
     
-    if (nrow(training) > 0 && all(c("osm_id", "aggregate_flow", "highway") %in% names(training))) {
-      pipeline_message(text = sprintf("✓ Training data: %s observations", fmt(nrow(training))),
-                       level = 1, progress = "end", process = "pass")
+    if (nrow(training) > 0 && 
+        all(c("osm_id", "aggregate_flow", "highway") %in% names(training))) {
+      pipeline_message(sprintf("Training data: %s observations", 
+                               fmt(nrow(training))),
+                       level = 1, progress = "end", process = "valid")
       tests_passed <- tests_passed + 1
     } else {
-      pipeline_message(text = "✗ Training data: missing required columns",
+      pipeline_message("Training data: missing required columns",
                        level = 1, progress = "end", process = "fail")
       tests_failed <- tests_failed + 1
     }
   } else {
-    pipeline_message(text = sprintf("✗ Training data file not found: %s",
-                                   CFG$TRAINING_RDS_DATA_FILEPATH),
+    pipeline_message(sprintf("Training data file not found: %s", 
+                             CFG$TRAINING_RDS_DATA_FILEPATH),
                      level = 1, progress = "end", process = "fail")
     tests_failed <- tests_failed + 1
   }
   
   # Summary
-  pipeline_message(text = sprintf("Data preparation tests: %d passed, %d failed", 
-                                 tests_passed, tests_failed),
-                   level = 0, progress = "end", process = ifelse(tests_failed == 0, "pass", "fail"))
+  pipeline_message(sprintf("Data preparation tests: %d passed, %d failed", 
+                           tests_passed, tests_failed),
+                   level = 0, progress = "end", 
+                   process = ifelse(test = tests_failed == 0, 
+                                    yes = "valid", no = "fail"))
   
   return(list(passed = tests_passed, failed = tests_failed))
 }
