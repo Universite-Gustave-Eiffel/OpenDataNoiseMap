@@ -43,7 +43,7 @@ CONFIG_DATA_PREP <- list(
   # Process forcing #
   # *************** #
   
-  FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
+  FORCE_REJOIN_OSM_AND_COMMUNES = TRUE,
   FORCE_REENGINEER_OSM_FRANCE   = TRUE,
   
   # ********************* #
