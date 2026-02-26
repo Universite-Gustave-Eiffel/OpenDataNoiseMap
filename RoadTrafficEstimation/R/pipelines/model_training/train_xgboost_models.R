@@ -617,6 +617,14 @@ for (model_name in names(all_configs)) {
     NULL
   }
 
+  # Safety check on best_rounds
+  if (is.null(best_rounds) || is.na(best_rounds) || best_rounds < 1) {
+    pipeline_message(sprintf("Invalid best_rounds (%s). 
+                             Falling back to CFG$NROUNDS = %d", 
+                             best_rounds, CFG$NROUNDS), 
+                     process = "warning")
+    best_rounds <- CFG$NROUNDS
+  }
   # Training
   xgb_model <- xgboost::xgb.train(
     params = params,
@@ -782,8 +790,7 @@ pipeline_message(sprintf("Save training models and features in files %s and %s "
 saveRDS(object = models_list, 
         file = CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
 saveRDS(object = list(road_feature_formula = road_feature_formula, 
-                      all_periods = all_periods, 
-                      training_feature_names = training_feature_names), 
+                      all_periods = all_periods), 
         file = CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 pipeline_message("Training models and features successfully saved ", level = 1, 

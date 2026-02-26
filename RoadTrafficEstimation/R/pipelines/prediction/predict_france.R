@@ -1,5 +1,5 @@
 # ==============================================================================
-# PREDICTION: FRANCE ENTIÈRE (TILED + TEMPORAL CHUNKS)
+# PREDICTION: ALL OF FRANCE (TILED + TEMPORAL CHUNKS)
 # ==============================================================================
 # Predicts traffic for all of France using spatial tiling (200 km tiles)
 # and exports geometry separately from temporal traffic data.

@@ -631,15 +631,14 @@ validate_avatar_data <- function(avatar_data) {
   missing_cols <- setdiff(x = required_cols, y = names(avatar_data))
   
   if (length(missing_cols) > 0) {
-    pipeline_message(
-      text = sprintf("Missing required columns: %s", 
-                     paste(missing_cols, collapse = ", ")),
-      process = "error")
+    pipeline_message(sprintf("Missing required columns: %s", 
+                             paste(missing_cols, collapse = ", ")),
+                     process = "fail")
     return(FALSE)
   }
   
   if (nrow(avatar_data) == 0) {
-    pipeline_message(text = "Avatar data is empty", process = "error")
+    pipeline_message("Avatar data is empty", process = "fail")
     return(FALSE)
   }
   

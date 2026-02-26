@@ -20,11 +20,11 @@
 load_network_for_prediction <- function(bbox, cfg) {
   
   # Configuration parameters
-  target_crs <- cfg$global$TARGET_CRS
-  osm_roads_path <- cfg$data_prep$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
-  default_vehicle_speed <- cfg$data_prep$DEFAULT_VEHICLE_SPEED
-  xgb_models_path <- cfg$training$XGB_MODELS_WITH_RATIOS_FILEPATH
-  xgb_feature_path <- cfg$training$XGB_RATIO_FEATURE_INFO_FILEPATH
+  target_crs <- CFG$TARGET_CRS
+  osm_roads_path <- CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  default_vehicle_speed <- CFG$DEFAULT_VEHICLE_SPEED
+  xgb_models_path <- CFG$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- CFG$XGB_RATIO_FEATURE_INFO_FILEPATH
 
   pipeline_message(sprintf("Loading OSM France engineered network from %s", 
                            rel_path(osm_roads_path)), 
@@ -796,24 +796,21 @@ predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) 
     delete_dsn = TRUE,
     quiet = FALSE)
 
-  pipeline_message(
-    text = sprintf("Predictions exported to %s",
-                   rel_path(output_filepath)),
-    level = 1, progress = "end", process = "save")
+  pipeline_message(sprintf("Predictions exported to %s",
+                           rel_path(output_filepath)), 
+                   level = 1, progress = "end", process = "save")
 
   # --- Summary ---
-  pipeline_message(
-    text = sprintf("Prediction summary for %s:", region_name),
-    level = 1, process = "info")
-  pipeline_message(
-    text = sprintf("  - Roads: %s", fmt(length(unique(predictions_long$osm_id)))),
-    level = 1, process = "info")
-  pipeline_message(
-    text = sprintf("  - Periods: %s", length(all_periods)),
-    level = 1, process = "info")
-  pipeline_message(
-    text = sprintf("  - Total predictions: %s", fmt(nrow(predictions_long))),
-    level = 1, process = "info")
+  pipeline_message(sprintf("Prediction summary for %s:", region_name),
+                   process = "info")
+  pipeline_message(sprintf("  - Roads: %s", 
+                           fmt(length(unique(predictions_long$osm_id)))), 
+                   process = "info")
+  pipeline_message(sprintf("  - Periods: %s", length(all_periods)), 
+                   process = "info")
+  pipeline_message(sprintf("  - Total predictions: %s", 
+                           fmt(nrow(predictions_long))), 
+                   process = "info")
 
   period_stats <- predictions_long %>%
     group_by(period) %>%
@@ -828,13 +825,13 @@ predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) 
     if (p %in% period_stats$period) {
       stats <- period_stats[period_stats$period == p, ]
       pipeline_message(
-        text = sprintf("  - Period %s: %d veh/h avg, %.1f km/h, %.1f%% trucks",
+        sprintf("  - Period %s: %d veh/h avg, %.1f km/h, %.1f%% trucks",
                        p, stats$avg_TV, stats$avg_speed, stats$avg_truck_pct),
-        level = 1, process = "info")
+                process = "info")
     }
   }
 
-  pipeline_message(text = sprintf("%s prediction completed", region_name),
+  pipeline_message(sprintf("%s prediction completed", region_name),
                    level = 0, progress = "end", process = "valid")
 
   invisible(NULL)
@@ -937,22 +934,22 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
                                  chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")) {
   
   # Configuration parameters
-  osm_roads_path <- cfg$data_prep$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
-  xgb_models_path <- cfg$training$XGB_MODELS_WITH_RATIOS_FILEPATH
-  xgb_feature_path <- cfg$training$XGB_RATIO_FEATURE_INFO_FILEPATH
-  france_outpath <- cfg$predict$FRANCE_OUTPUT_DIR
-  france_fraffic_den_fpath <- cfg$predict$FRANCE_TRAFFIC_DEN_FILEPATH
-  france_fraffic_hourly_fpath <- cfg$predict$FRANCE_TRAFFIC_HOURLY_FILEPATH
-  france_fraffic_hourly_wd_fpath <- cfg$predict$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH
-  france_fraffic_hourly_we_fpath <- cfg$predict$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
-  france_geom_fpath <- cfg$predict$FRANCE_GEOMETRY_FILEPATH
+  osm_roads_path <- CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  xgb_models_path <- CFG$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- CFG$XGB_RATIO_FEATURE_INFO_FILEPATH
+  france_outpath <- CFG$FRANCE_OUTPUT_DIR
+  france_fraffic_den_fpath <- CFG$FRANCE_TRAFFIC_DEN_FILEPATH
+  france_fraffic_hourly_fpath <- CFG$FRANCE_TRAFFIC_HOURLY_FILEPATH
+  france_fraffic_hourly_wd_fpath <- CFG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH
+  france_fraffic_hourly_we_fpath <- CFG$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
+  france_geom_fpath <- CFG$FRANCE_GEOMETRY_FILEPATH
   
-  pipeline_message(text = "FRANCE-WIDE tiled prediction",
-                   level = 0, progress = "start", process = "calc")
+  pipeline_message("FRANCE-WIDE tiled prediction", level = 0, 
+                   progress = "start", process = "calc")
 
   # --- Load models (once for all tiles) ---
-  pipeline_message(text = "Loading trained XGBoost models",
-                   level = 1, progress = "start", process = "load")
+  pipeline_message("Loading trained XGBoost models", level = 1, 
+                   progress = "start", process = "load")
 
   if (!file.exists(xgb_models_path)) {
     pipeline_message(sprintf("Models not found: %s", xgb_models_path), 
@@ -963,8 +960,8 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
   all_periods  <- feature_info$all_periods
 
   pipeline_message(
-    text = sprintf("Models loaded: %d models for %d periods",
-                   length(models_list), length(all_periods)),
+    sprintf("Models loaded: %d models for %d periods",
+            length(models_list), length(all_periods)),
     level = 1, progress = "end", process = "valid")
 
   # --- Define temporal chunks ---
@@ -972,22 +969,21 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
   temporal_chunks <- temporal_chunks[intersect(chunks, names(temporal_chunks))]
 
   if (length(temporal_chunks) == 0) {
-    stop("No valid temporal chunks requested. Valid: DEN, hourly, hourly_wd, hourly_we")
+    pipeline_message(
+      "No valid temporal chunks requested. Valid: DEN, hourly, hourly_wd, hourly_we", process = "stop")
   }
 
-  pipeline_message(
-    text = sprintf("Temporal chunks to export: %s",
-                   paste(names(temporal_chunks), collapse = ", ")),
+  pipeline_message(sprintf("Temporal chunks to export: %s",
+                           paste(names(temporal_chunks), collapse = ", ")),
     process = "info")
 
   # Verify all periods are covered
   covered <- unlist(temporal_chunks, use.names = FALSE)
   missing_periods <- setdiff(all_periods, covered)
   if (length(missing_periods) > 0) {
-    pipeline_message(
-      text = sprintf("Warning: %d periods not in any temporal chunk: %s",
-                     length(missing_periods),
-                     paste(head(missing_periods, 10), collapse = ", ")),
+    pipeline_message(sprintf("Warning: %d periods not in any temporal chunk: %s",
+                             length(missing_periods),
+                             paste(head(missing_periods, 10), collapse = ", ")),
       process = "warning")
   }
 
@@ -1006,10 +1002,9 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
 
   # --- Build spatial tiles ---
   tiles <- build_france_tiles(tile_size_m = tile_size_m)
-  pipeline_message(
-    text = sprintf("Tile grid: %d tiles of %d km each",
-                   nrow(tiles), tile_size_m / 1000),
-    process = "info")
+  pipeline_message(sprintf("Tile grid: %d tiles of %d km each",
+                          nrow(tiles), tile_size_m / 1000),
+                   process = "info")
 
   # --- Clean output files (overwrite mode) ---
   for (fp in c(geom_path, unlist(chunk_paths))) {
@@ -1098,10 +1093,10 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
     remaining <- (nrow(tiles) - i) * avg_time
 
     pipeline_message(
-      text = sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s",
-                     i, nrow(tiles), fmt(n_tile), dt,
-                     fmt(total_roads),
-                     format_duration(remaining)),
+      sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s", 
+              i, nrow(tiles), fmt(n_tile), dt, 
+              fmt(total_roads), 
+              format_duration(remaining)), 
       level = 2, process = "calc")
   }
 
@@ -1109,27 +1104,23 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
   gc(verbose = FALSE)
 
   # --- Summary ---
-  pipeline_message(text = "France-wide prediction summary:",
-                   level = 1, process = "info")
-  pipeline_message(
-    text = sprintf("  Roads predicted: %s across %d tiles",
-                   fmt(total_roads), total_tiles_with_data),
-    level = 1, process = "info")
-  pipeline_message(
-    text = sprintf("  Geometry layer: %s", rel_path(geom_path)),
-    level = 1, process = "info")
+  pipeline_message("France-wide prediction summary:", process = "info")
+  pipeline_message(sprintf("  - Roads predicted: %s across %d tiles", 
+                           fmt(total_roads), total_tiles_with_data), 
+                   process = "info")
+  pipeline_message(sprintf("  - Geometry layer: %s", rel_path(geom_path)), 
+                   process = "info")
   for (cn in names(chunk_paths)) {
     if (file.exists(chunk_paths[[cn]])) {
       sz <- round(file.info(chunk_paths[[cn]])$size / 1024^2, 1)
-      pipeline_message(
-        text = sprintf("  Traffic [%s]: %s (%.1f MB)",
-                       cn, rel_path(chunk_paths[[cn]]), sz),
-        level = 1, process = "info")
+      pipeline_message(sprintf("  - Traffic [%s]: %s (%.1f MB)", 
+                               cn, rel_path(chunk_paths[[cn]]), sz), 
+                   process = "info")
     }
   }
 
-  pipeline_message(text = "FRANCE-WIDE prediction completed",
-                   level = 0, progress = "end", process = "valid")
+  pipeline_message("FRANCE-WIDE prediction completed", level = 0, 
+                   progress = "end", process = "valid")
 
   invisible(NULL)
 }

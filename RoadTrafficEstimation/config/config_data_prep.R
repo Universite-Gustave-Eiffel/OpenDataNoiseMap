@@ -43,7 +43,7 @@ CONFIG_DATA_PREP <- list(
   # Process forcing #
   # *************** #
   
-  FORCE_REJOIN_OSM_AND_COMMUNES = TRUE,
+  FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
   FORCE_REENGINEER_OSM_FRANCE   = TRUE,
   
   # ********************* #
@@ -72,9 +72,9 @@ CONFIG_DATA_PREP <- list(
   # ****************** #
 
   # Maximum path length to consider when calculating the betweenness
-  CUTOFF_BETWEENNESS = 100, 
+  CUTOFF_BETWEENNESS = 25, 
   # Maximum path length to consider when calculating the closeness
-  CUTOFF_CLOSENESS   = 20, 
+  CUTOFF_CLOSENESS   = 25, 
   
   # ************************* #
   # Default allocation values #

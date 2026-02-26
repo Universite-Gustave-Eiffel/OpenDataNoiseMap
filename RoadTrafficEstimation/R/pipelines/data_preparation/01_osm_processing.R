@@ -296,9 +296,9 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Betweenness centralities of positions on undirected geodesics
   pipeline_message("Computing node betweenness", process = "info")
-  node_betweenness <- igraph::betweenness(graph = g,  
-                                  cutoff = CFG$CUTOFF_BETWEENNESS, 
-                                  directed = FALSE)
+  node_betweenness <- igraph::betweenness(graph = g, 
+                                          cutoff = CFG$CUTOFF_BETWEENNESS, 
+                                          directed = FALSE)
   
   # Closeness centrality measures (how many steps is required to access every 
   # other vertex from a given one)
