@@ -287,8 +287,7 @@ extract_osm_other_tags <- function(other_tags_vector,
     pb_width <- 90
     last_printed <- 0
     if (IS_TTY) {
-      pipeline_message("Extracting OSM tags", 
-                       process = "info")
+      pipeline_message("Extracting OSM tags", process = "info")
     } else {
       pipeline_message(
         sprintf("Extracting %d OSM tags (%d columns)", 

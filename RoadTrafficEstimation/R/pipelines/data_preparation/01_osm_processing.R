@@ -373,10 +373,10 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Memory cleanup
   rm(g, edge_df, node_connectivity, node_betweenness, 
-      node_closeness, node_pagerank, node_coreness,
-      edge_connectivity, edge_betweenness,
-      edge_closeness, edge_pagerank, edge_coreness,
-      edge_dead_end_score, edge_length_m,
+     node_closeness, node_pagerank, node_coreness,
+     edge_connectivity, edge_betweenness,
+     edge_closeness, edge_pagerank, edge_coreness,
+     edge_dead_end_score, edge_length_m,
      roads_for_network, unique_roads, edge_ends, from_indices, to_indices,
      coords_dt, start_pts, end_pts)
   gc(verbose = FALSE)
@@ -396,7 +396,7 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Reload osm_roads if not in memory (happens when degre_lookup was cached)
   if (!exists("osm_roads")) {
-    # Force garbage collection to reclaim memory before loading 1.6 Go GPKG
+    # Force garbage collection to reclaim memory before reloading large dataset
     gc(verbose = FALSE)
     
     pipeline_message(
@@ -505,9 +505,6 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   # Free network_features after merge
   rm(network_features)
   gc(verbose = FALSE)
-  pipeline_message(
-    text = "Road network successfully merged with with network features", 
-    level = 2, progress = "end", process = "valid")
   
   pipeline_message("Saving final road network", 
                    level = 2, progress = "start", process = "save")
