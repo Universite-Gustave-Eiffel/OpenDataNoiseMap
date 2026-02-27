@@ -247,49 +247,50 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
                    level = 2, progress = "end", process = "valid")
 
   # Helper: align feature matrix to a model's expected features and predict
-  predict_with_alignment <- function(model, feature_matrix_base) {
+  # Uses the EXACT column names from training stored in feature_info
+  predict_with_alignment <- function(model, feature_matrix_base, feature_info) {
 
     model_features <- model$feature_names
-
-    cat("\n================ DEBUG XGBOOST ================\n")
-    cat("Model class:", class(model), "\n")
-    cat("Model num_feature:", model$params$num_feature, "\n")
-    cat("Feature matrix ncol:", ncol(feature_matrix_base), "\n")
-
-    if (!is.null(model_features)) {
-      cat("Model feature_names length:", length(model_features), "\n")
-      cat("First 10 model features:\n")
-      print(head(model_features, 10))
-    } else {
-      cat("Model feature_names is NULL\n")
+    training_features <- feature_info$feature_names_from_training
+    
+    # Start with base matrix
+    fm <- feature_matrix_base
+    
+    # Remove (Intercept) column if present — XGBoost models don't use it
+    if ("(Intercept)" %in% colnames(fm)) {
+      fm <- fm[, colnames(fm) != "(Intercept)", drop = FALSE]
     }
-
-    cat("First 10 matrix columns:\n")
-    print(head(colnames(feature_matrix_base), 10))
-
-    cat("Columns in matrix not in model:\n")
-    if (!is.null(model_features)) {
-      print(setdiff(colnames(feature_matrix_base), model_features))
+    
+    # BEST: Use the exact feature names from training (stored in feature_info)
+    if (!is.null(training_features) && length(training_features) > 0) {
+      missing_cols <- setdiff(training_features, colnames(fm))
+      if (length(missing_cols) > 0) {
+        for (mc in missing_cols) {
+          fm[[mc]] <- 0
+        }
+      }
+      # Select and reorder to match training exactly
+      fm <- fm[, training_features, drop = FALSE]
+      pipeline_message(
+        sprintf("Feature matrix aligned to training: %d columns selected from %d prediction columns",
+                length(training_features), ncol(feature_matrix_base)),
+        level = 2, process = "info")
     }
-
-    cat("Columns in model not in matrix:\n")
-    if (!is.null(model_features)) {
-      print(setdiff(model_features, colnames(feature_matrix_base)))
-    }
-
-    cat("================================================\n")
-
-    if (!is.null(model_features)) {
-      fm <- feature_matrix_base
+    # FALLBACK: Use stored feature_names from model object (may vary slightly per model)
+    else if (!is.null(model_features) && length(model_features) > 0) {
       missing_cols <- setdiff(model_features, colnames(fm))
       if (length(missing_cols) > 0) {
-        for (mc in missing_cols) fm[[mc]] <- 0
+        for (mc in missing_cols) {
+          fm[[mc]] <- 0
+        }
       }
       fm <- fm[, model_features, drop = FALSE]
-      dmat <- xgboost::xgb.DMatrix(data = as.matrix(fm))
-    } else {
-      dmat <- xgboost::xgb.DMatrix(data = as.matrix(feature_matrix_base))
+      pipeline_message(
+        sprintf("Feature matrix aligned to model object: %d columns", ncol(fm)),
+        level = 2, process = "info")
     }
+    
+    dmat <- xgboost::xgb.DMatrix(data = as.matrix(fm))
     predict(model, dmat)
   }
   
@@ -297,13 +298,13 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   if (is.null(models_list$flow_D$model)) {
     stop("Missing base model for period D: flow_D")
   }
-  flow_D <- predict_with_alignment(models_list$flow_D$model, feature_matrix)
+  flow_D <- predict_with_alignment(models_list$flow_D$model, feature_matrix, feature_info)
   truck_pct_D <- if (is.null(models_list$truck_pct_D$model)) {
     pipeline_message("Missing base model truck_pct_D: outputs will be NA", 
                      process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
-    predict_with_alignment(models_list$truck_pct_D$model, feature_matrix)
+    predict_with_alignment(models_list$truck_pct_D$model, feature_matrix, feature_info)
   }
   speed_model_target <- NA_character_
   if (!is.null(models_list$speed_D$config) &&
@@ -316,7 +317,7 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
                      process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
-    predict_with_alignment(models_list$speed_D$model, feature_matrix)
+    predict_with_alignment(models_list$speed_D$model, feature_matrix, feature_info)
   }
 
   speed_osm_raw <- suppressWarnings(as.numeric(network_data$speed))
@@ -379,21 +380,21 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
       ratio_flow <- if (is.null(ratio_flow_model)) {
         rep(NA_real_, length(flow_D))
       } else {
-        predict_with_alignment(ratio_flow_model, feature_matrix)
+        predict_with_alignment(ratio_flow_model, feature_matrix, feature_info)
       }
       ratio_truck_pct <- if (all(is.na(truck_pct_D))) {
         rep(NA_real_, length(truck_pct_D))
       } else if (is.null(ratio_truck_model)) {
         rep(NA_real_, length(truck_pct_D))
       } else {
-        predict_with_alignment(ratio_truck_model, feature_matrix)
+        predict_with_alignment(ratio_truck_model, feature_matrix, feature_info)
       }
       ratio_speed <- if (all(is.na(speed_D))) {
         rep(NA_real_, length(speed_D))
       } else if (is.null(ratio_speed_model)) {
         rep(NA_real_, length(speed_D))
       } else {
-        predict_with_alignment(ratio_speed_model, feature_matrix)
+        predict_with_alignment(ratio_speed_model, feature_matrix, feature_info)
       }
       
       # Apply ratios to base predictions

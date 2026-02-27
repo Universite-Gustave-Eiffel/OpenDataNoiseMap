@@ -789,8 +789,21 @@ pipeline_message(sprintf("Save training models and features in files %s and %s "
 # Save list of models and road feature formula
 saveRDS(object = models_list, 
         file = CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+
+# Extract feature names from first base model to ensure consistent alignment
+# All models use the same feature matrix, so any model's feature_names should work
+feature_names_from_training <- NULL
+if (!is.null(models_list$flow_D$feature_names)) {
+  feature_names_from_training <- models_list$flow_D$feature_names
+} else if (!is.null(models_list$truck_pct_D$feature_names)) {
+  feature_names_from_training <- models_list$truck_pct_D$feature_names
+} else if (!is.null(models_list$speed_D$feature_names)) {
+  feature_names_from_training <- models_list$speed_D$feature_names
+}
+
 saveRDS(object = list(road_feature_formula = road_feature_formula, 
-                      all_periods = all_periods), 
+                      all_periods = all_periods,
+                      feature_names_from_training = feature_names_from_training), 
         file = CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 pipeline_message("Training models and features successfully saved ", level = 1, 
