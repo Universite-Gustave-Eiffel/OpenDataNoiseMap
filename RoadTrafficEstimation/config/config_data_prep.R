@@ -45,6 +45,7 @@ CONFIG_DATA_PREP <- list(
   
   FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
   FORCE_REENGINEER_OSM_FRANCE   = FALSE,
+  FORCE_BUILD_TRAINING_DATASET  = FALSE,
   
   # ********************* #
   # Directories and files #

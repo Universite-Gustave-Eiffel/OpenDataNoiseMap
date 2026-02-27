@@ -35,15 +35,52 @@ Analysis: Emission analysis  (run_emission_analysis.R, run_flow_comparison.R, et
 
 ### Running the Pipeline
 
+Use the unified launcher under `RoadTrafficEstimation/scripts` which sets up local vs HPC contexts and writes an R log under `logs/`.
+
+Local (preferred):
+
 ```bash
 cd RoadTrafficEstimation
-bash scripts/run_local.sh --phase all --mode all                    # Full run
-bash scripts/run_local.sh --phase prediction --mode pemb            # PEMB only
-bash scripts/run_local.sh --phase prediction --mode nantes --region test  # Test mode
-bash scripts/run_local.sh --phase training --test                   # With unit tests
+bash scripts/run_pipeline.sh --phase all --mode all            # Full run (local)
+bash scripts/run_pipeline.sh --phase prediction --mode pemb     # PEMB only
+bash scripts/run_pipeline.sh --phase prediction --mode nantes --region test  # Test region
 ```
 
-Direct R: `Rscript run_pipeline.R --phase <preparation|training|prediction|all> --mode <nantes|paris|pemb|sensors|all> [--region test] [--test]`
+Direct R entrypoint (advanced):
+
+```bash
+Rscript --vanilla main.R --phase <preparation|training|prediction|all> --mode <nantes|paris|pemb|sensors|all> [--region test] [--test]
+```
+
+Notes:
+- The launcher activates `renv` when running locally (see `renv/activate.R`) — ensure `renv` is installed or run `renv::restore()` from an R session.
+- On HPC the launcher loads system modules and reads `./.Renviron` (so set `AVATAR_API_TOKEN` there when needed).
+- Logs are written to `RoadTrafficEstimation/logs/pipeline_*.Rout` by the wrapper.
+
+### Developer workflows: tests, env, and quick checks
+
+- Run the project's test suite (fast configuration + small-region checks):
+
+```bash
+cd RoadTrafficEstimation
+bash scripts/run_tests.sh
+```
+
+- To validate config keys quickly without running full pipeline use `scripts/run_tests.sh` which runs lightweight R checks against `TEST_CONFIG.R` and writes to `data/output/TEST_OUTPUTS/`.
+- Recreate a reproducible local environment with renv from project root in R:
+
+```r
+install.packages("renv")
+renv::restore()
+```
+
+- If you need to run a single pipeline phase interactively, call `main.R` with `--phase` and `--mode` as above.
+
+### Runtime dependencies and integration points
+
+- Java runtime required for CNOSSOS emission bridge located in `NoiseModellingEmission/` (the R helper `compute_emission_cnossos()` calls the Java batch `CnossosEmissionBatch.java` and accompanying jars).
+- External data: AVATAR API (token via `AVATAR_API_TOKEN`), OSM PBFs under `data/osm/pbf/`, INSEE shapefiles under `data/insee/`.
+- Persistent engineered network: `data/02_osm_network_france_engineered.gpkg` is the canonical pivot for training and prediction.
 
 ### Period Definitions
 
