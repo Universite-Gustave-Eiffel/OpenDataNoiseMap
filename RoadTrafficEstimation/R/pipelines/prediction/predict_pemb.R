@@ -10,5 +10,6 @@
 predict_region(
   region_name = "PEMB (Paris Est Marne & Bois)",
   bbox = c(xmin = 654892, ymin = 6852748, xmax = 671006, ymax = 6862393),
-  output_filepath = CFG$PEMB_PREDICTION_FILEPATH
+  output_filepath = CFG$PEMB_PREDICTION_FILEPATH, 
+  cfg = CFG
 )

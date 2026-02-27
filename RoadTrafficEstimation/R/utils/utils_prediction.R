@@ -15,16 +15,16 @@
 #' Load and crop France engineered network to bounding box
 #'
 #' @param bbox numeric vector c(xmin, ymin, xmax, ymax) in target CRS
-#' @param cfg configuration list with file paths
+#' @param cfg Configuration list
 #' @return sf data.frame with cropped network
 load_network_for_prediction <- function(bbox, cfg) {
   
   # Configuration parameters
-  target_crs <- CFG$TARGET_CRS
-  osm_roads_path <- CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
-  default_vehicle_speed <- CFG$DEFAULT_VEHICLE_SPEED
-  xgb_models_path <- CFG$XGB_MODELS_WITH_RATIOS_FILEPATH
-  xgb_feature_path <- CFG$XGB_RATIO_FEATURE_INFO_FILEPATH
+  target_crs <- cfg$TARGET_CRS
+  osm_roads_path <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  default_vehicle_speed <- cfg$DEFAULT_VEHICLE_SPEED
+  xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
 
   pipeline_message(sprintf("Loading OSM France engineered network from %s", 
                            rel_path(osm_roads_path)), 
@@ -665,12 +665,17 @@ add_period_datetime_columns <- function(predictions_long) {
 #' @param region_name Character. Human-readable region name for log messages.
 #' @param bbox Named numeric vector c(xmin, ymin, xmax, ymax) in EPSG:2154.
 #' @param output_filepath Character. Full path to the output .gpkg file.
-#' @param config CONFIG list with file paths and parameters.
+#' @param cfg Configuration list
 #' @return Invisible NULL. Side effect: writes GPKG to disk.
-predict_region <- function(region_name, bbox, output_filepath, config = CONFIG) {
+predict_region <- function(region_name, bbox, output_filepath, cfg) {
 
   pipeline_message(sprintf("%s traffic prediction", region_name), level = 0, 
                    progress = "start", process = "calc")
+  
+  # Configuration parameters
+  target_crs <- cfg$TARGET_CRS
+  xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
 
   # --- Load models ---
   pipeline_message("Loading trained XGBoost models", level = 1, 
@@ -923,7 +928,7 @@ pivot_to_long_chunk <- function(predictions_wide, periods, all_periods) {
 #'   1. Geometry layer (GPKG with spatial index)
 #'   2. One GPKG per temporal chunk (attribute-only, keyed by osm_id)
 #'
-#' @param cfg configuration list
+#' @param cfg Configuration list
 #' @param tile_size_m Tile side in meters (default 200 km)
 #' @param chunks Character vector of temporal chunks to export.
 #'   Valid values: "DEN", "hourly", "hourly_wd", "hourly_we".
@@ -934,15 +939,15 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
                                  chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")) {
   
   # Configuration parameters
-  osm_roads_path <- CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
-  xgb_models_path <- CFG$XGB_MODELS_WITH_RATIOS_FILEPATH
-  xgb_feature_path <- CFG$XGB_RATIO_FEATURE_INFO_FILEPATH
-  france_outpath <- CFG$FRANCE_OUTPUT_DIR
-  france_fraffic_den_fpath <- CFG$FRANCE_TRAFFIC_DEN_FILEPATH
-  france_fraffic_hourly_fpath <- CFG$FRANCE_TRAFFIC_HOURLY_FILEPATH
-  france_fraffic_hourly_wd_fpath <- CFG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH
-  france_fraffic_hourly_we_fpath <- CFG$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
-  france_geom_fpath <- CFG$FRANCE_GEOMETRY_FILEPATH
+  osm_roads_path <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
+  france_outpath <- cfg$FRANCE_OUTPUT_DIR
+  france_fraffic_den_fpath <- cfg$FRANCE_TRAFFIC_DEN_FILEPATH
+  france_fraffic_hourly_fpath <- cfg$FRANCE_TRAFFIC_HOURLY_FILEPATH
+  france_fraffic_hourly_wd_fpath <- cfg$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH
+  france_fraffic_hourly_we_fpath <- cfg$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
+  france_geom_fpath <- cfg$FRANCE_GEOMETRY_FILEPATH
   
   pipeline_message("FRANCE-WIDE tiled prediction", level = 0, 
                    progress = "start", process = "calc")
