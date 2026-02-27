@@ -701,7 +701,7 @@ predict_region <- function(region_name, bbox, output_filepath, cfg) {
                    process = "info")
 
   # --- Load network ---
-  osm_region <- load_network_for_prediction(bbox = bbox, config = config)
+  osm_region <- load_network_for_prediction(bbox = bbox, cfg = cfg)
 
   pipeline_message(sprintf("Network loaded: %s roads in %s", 
                            fmt(nrow(osm_region)), region_name), 
