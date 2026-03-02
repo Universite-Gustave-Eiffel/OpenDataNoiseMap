@@ -12,8 +12,7 @@
 #      `CFG$FRANCE_GEOMETRY_FILEPATH` and traffic attributes are split into one
 #      or more tables (`CFG$FRANCE_TRAFFIC_*_FILEPATH`).  This mode is memory
 #      friendly for the full France dataset and is the default when the
-developer
-#      explicitly calls `predict_france_tiled()`.
+#      developer explicitly calls `predict_france_tiled()`.
 #
 # The simple mode is useful for quick sanity checks or when you just want a
 # single GPKG file (e.g. for testing with `--region test`).  The tiled mode
