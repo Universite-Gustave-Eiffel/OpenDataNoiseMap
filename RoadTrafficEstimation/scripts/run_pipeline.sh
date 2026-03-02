@@ -64,8 +64,12 @@ while [ $i -lt ${#ALL_ARGS[@]} ]; do
   esac
 done
 
+# default region name when none supplied should be 'full'
+if [ -z "$REGION" ]; then
+  REGION="full"
+fi
 # Safe log suffix (fallbacks when flags not provided)
-LOG_SUFFIX="${PHASE:-noPhase}_${MODE:-noMode}_${REGION:-noRegion}"
+LOG_SUFFIX="${PHASE:-noPhase}_${MODE:-noMode}_${REGION}"
 
 # ------------------------------------------------------------------------------
 # HPC-specific setup (login + slurm)
@@ -104,7 +108,7 @@ R --version
 # ------------------------------------------------------------------------------
 MAIN_R="${PROJECT_ROOT}/main.R"
 LOG_DIR="${PROJECT_ROOT}/logs"
-OUT_LOG="${LOG_DIR}/pipeline_${LOG_SUFFIX}_$(date +%Y%m%d_%H%M%S).Rout"
+OUT_LOG="${LOG_DIR}/pipeline_${LOG_SUFFIX}.Rout"
 
 mkdir -p "${LOG_DIR}"
 
