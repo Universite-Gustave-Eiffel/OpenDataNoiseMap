@@ -790,15 +790,41 @@ pipeline_message(sprintf("Save training models and features in files %s and %s "
 saveRDS(object = models_list, 
         file = CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
 
-# Extract feature names from first base model to ensure consistent alignment
+# Extract feature names from first available model to ensure consistent alignment
 # All models use the same feature matrix, so any model's feature_names should work
+# Priority: flow_D > truck_pct_D > speed_D > any other model
 feature_names_from_training <- NULL
-if (!is.null(models_list$flow_D$feature_names)) {
-  feature_names_from_training <- models_list$flow_D$feature_names
-} else if (!is.null(models_list$truck_pct_D$feature_names)) {
-  feature_names_from_training <- models_list$truck_pct_D$feature_names
-} else if (!is.null(models_list$speed_D$feature_names)) {
-  feature_names_from_training <- models_list$speed_D$feature_names
+
+# Try priority base models first
+for (base_model in c("flow_D", "truck_pct_D", "speed_D")) {
+  if (!is.null(models_list[[base_model]]) && 
+      !is.null(models_list[[base_model]]$feature_names)) {
+    feature_names_from_training <- models_list[[base_model]]$feature_names
+    pipeline_message(
+      sprintf("Feature names extracted from model: %s", base_model),
+      process = "info")
+    break
+  }
+}
+
+# Fallback: use any available model's feature_names
+if (is.null(feature_names_from_training)) {
+  for (model_key in names(models_list)) {
+    if (!is.null(models_list[[model_key]]) && 
+        !is.null(models_list[[model_key]]$feature_names)) {
+      feature_names_from_training <- models_list[[model_key]]$feature_names
+      pipeline_message(
+        sprintf("Feature names extracted from fallback model: %s", model_key),
+        process = "warning")
+      break
+    }
+  }
+}
+
+if (is.null(feature_names_from_training)) {
+  pipeline_message(
+    "⚠️ No feature_names found in any model. Predictions may fail due to feature matrix misalignment.",
+    process = "warning")
 }
 
 saveRDS(object = list(road_feature_formula = road_feature_formula, 

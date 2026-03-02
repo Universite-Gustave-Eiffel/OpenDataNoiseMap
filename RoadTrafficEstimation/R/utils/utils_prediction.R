@@ -158,7 +158,7 @@ load_network_around_points <- function(points, buffer_radius, config) {
 #' @param models_list list of trained XGBoost models
 #' @param feature_info list with feature formula and periods
 #' @return data.frame with predictions for all periods
-apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
+apply_xgboost_predictions <- function(network_data, models_list, feature_info, default_vehicle_speed = 50) {
   pipeline_message("Applying XGBoost models to network", 
                    level = 1, progress = "start", process = "calc")
   
@@ -248,63 +248,108 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
 
   # Helper: align feature matrix to a model's expected features and predict
   # Uses the EXACT column names from training stored in feature_info
-  predict_with_alignment <- function(model, feature_matrix_base, feature_info) {
+  # Handles factor level mismatches between training and prediction data
+  predict_with_alignment <- function(model_entry, feature_matrix_base, feature_info) {
 
-    model_features <- model$feature_names
+    # "model_entry" may be either the raw xgb.Booster object (old behaviour)
+    # or the list entry stored in models_list (which contains both the booster
+    # and the saved feature_names).  This wrapper normalises input.
+    if (is.list(model_entry) && !is.null(model_entry$model)) {
+      model_obj <- model_entry$model
+      model_features <- model_entry$feature_names
+    } else {
+      model_obj <- model_entry
+      # Booster objects do not carry feature_names, so leave NULL.
+      model_features <- NULL
+    }
     training_features <- feature_info$feature_names_from_training
     
-    # Start with base matrix
+    # Start with base matrix (remove Intercept if present)
     fm <- feature_matrix_base
-    
-    # Remove (Intercept) column if present — XGBoost models don't use it
     if ("(Intercept)" %in% colnames(fm)) {
       fm <- fm[, colnames(fm) != "(Intercept)", drop = FALSE]
     }
     
-    # BEST: Use the exact feature names from training (stored in feature_info)
-    if (!is.null(training_features) && length(training_features) > 0) {
-      missing_cols <- setdiff(training_features, colnames(fm))
-      if (length(missing_cols) > 0) {
-        for (mc in missing_cols) {
-          fm[[mc]] <- 0
-        }
-      }
-      # Select and reorder to match training exactly
-      fm <- fm[, training_features, drop = FALSE]
-      pipeline_message(
-        sprintf("Feature matrix aligned to training: %d columns selected from %d prediction columns",
-                length(training_features), ncol(feature_matrix_base)),
-        level = 2, process = "info")
+    # Prefer the per-model feature list if available; this ensures each
+    # XGBoost booster receives exactly the columns it was trained with.
+    target_features <- NULL
+    target_source <- NULL
+    if (!is.null(model_features) && length(model_features) > 0) {
+      target_features <- model_features
+      target_source <- "model"
+    } else if (!is.null(training_features) && length(training_features) > 0) {
+      target_features <- training_features
+      target_source <- "feature_info"
     }
-    # FALLBACK: Use stored feature_names from model object (may vary slightly per model)
-    else if (!is.null(model_features) && length(model_features) > 0) {
-      missing_cols <- setdiff(model_features, colnames(fm))
-      if (length(missing_cols) > 0) {
-        for (mc in missing_cols) {
-          fm[[mc]] <- 0
-        }
-      }
-      fm <- fm[, model_features, drop = FALSE]
+    
+    # Warn if both sources are present but differ substantially
+    if (!is.null(model_features) && !is.null(training_features) &&
+        length(model_features) != length(training_features)) {
       pipeline_message(
-        sprintf("Feature matrix aligned to model object: %d columns", ncol(fm)),
+        sprintf("Note: model has %d features but feature_info lists %d features; using model list", 
+                length(model_features), length(training_features)),
         level = 2, process = "info")
     }
     
+    if (!is.null(target_features) && length(target_features) > 0) {
+      fm_cols <- colnames(fm)
+      
+      # Step 1: Add missing columns
+      missing_cols <- setdiff(target_features, fm_cols)
+      if (length(missing_cols) > 0) {
+        for (mc in missing_cols) {
+          fm[[mc]] <- 0
+        }
+        pipeline_message(
+          sprintf("⚠️ Added %d missing feature columns with zero values", 
+                  length(missing_cols)),
+          level = 2, process = "info")
+      }
+      
+      # Step 2: Identify and handle EXTRA columns
+      extra_cols <- setdiff(fm_cols, target_features)
+      if (length(extra_cols) > 0) {
+        # Report extra columns (could indicate factor level mismatch)
+        extra_summary <- paste(head(extra_cols, 5), collapse = ", ")
+        if (length(extra_cols) > 5) {
+          extra_summary <- paste0(extra_summary, " ... (", length(extra_cols) - 5, " more)")
+        }
+        pipeline_message(
+          sprintf("⚠️ Removing %d extra feature columns (factor level mismatch?): %s", 
+                  length(extra_cols), extra_summary),
+          level = 2, process = "warning")
+      }
+      
+      # Step 3: Select and reorder columns to match target exactly
+      fm <- fm[, target_features, drop = FALSE]
+      
+      pipeline_message(
+        sprintf("Feature matrix aligned (%s): %d columns (base %d, aligned %d)",
+                target_source, ncol(fm), ncol(feature_matrix_base), 
+                length(target_features)),
+        level = 2, process = "info")
+    } else {
+      pipeline_message(
+        "⚠️ No training feature names available; using raw feature matrix (may cause dimension errors)",
+        level = 2, process = "warning")
+    }
+    
+    # Create DMatrix and predict
     dmat <- xgboost::xgb.DMatrix(data = as.matrix(fm))
-    predict(model, dmat)
+    predict(model_obj, dmat)
   }
   
   # Predict base models (period D)
   if (is.null(models_list$flow_D$model)) {
     stop("Missing base model for period D: flow_D")
   }
-  flow_D <- predict_with_alignment(models_list$flow_D$model, feature_matrix, feature_info)
+  flow_D <- predict_with_alignment(models_list$flow_D, feature_matrix, feature_info)
   truck_pct_D <- if (is.null(models_list$truck_pct_D$model)) {
     pipeline_message("Missing base model truck_pct_D: outputs will be NA", 
                      process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
-    predict_with_alignment(models_list$truck_pct_D$model, feature_matrix, feature_info)
+    predict_with_alignment(models_list$truck_pct_D, feature_matrix, feature_info)
   }
   speed_model_target <- NA_character_
   if (!is.null(models_list$speed_D$config) &&
@@ -317,7 +362,7 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
                      process = "warning")
     rep(NA_real_, length(flow_D))
   } else {
-    predict_with_alignment(models_list$speed_D$model, feature_matrix, feature_info)
+    predict_with_alignment(models_list$speed_D, feature_matrix, feature_info)
   }
 
   speed_osm_raw <- suppressWarnings(as.numeric(network_data$speed))
@@ -380,21 +425,21 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
       ratio_flow <- if (is.null(ratio_flow_model)) {
         rep(NA_real_, length(flow_D))
       } else {
-        predict_with_alignment(ratio_flow_model, feature_matrix, feature_info)
+        predict_with_alignment(models_list[[paste0("ratio_flow_", period)]], feature_matrix, feature_info)
       }
       ratio_truck_pct <- if (all(is.na(truck_pct_D))) {
         rep(NA_real_, length(truck_pct_D))
       } else if (is.null(ratio_truck_model)) {
         rep(NA_real_, length(truck_pct_D))
       } else {
-        predict_with_alignment(ratio_truck_model, feature_matrix, feature_info)
+        predict_with_alignment(models_list[[paste0("ratio_truck_pct_", period)]], feature_matrix, feature_info)
       }
       ratio_speed <- if (all(is.na(speed_D))) {
         rep(NA_real_, length(speed_D))
       } else if (is.null(ratio_speed_model)) {
         rep(NA_real_, length(speed_D))
       } else {
-        predict_with_alignment(ratio_speed_model, feature_matrix, feature_info)
+        predict_with_alignment(models_list[[paste0("ratio_speed_", period)]], feature_matrix, feature_info)
       }
       
       # Apply ratios to base predictions
@@ -472,7 +517,7 @@ apply_xgboost_predictions <- function(network_data, models_list, feature_info) {
   
   pipeline_message(sprintf("Predictions completed for %s roads × %s periods", 
                            fmt(nrow(results)), length(feature_info$all_periods)), 
-                   level = 1, progress = "end", process = "valid")
+                   process = "valid")
   
   return(results)
 }
@@ -717,7 +762,8 @@ predict_region <- function(region_name, bbox, output_filepath, cfg) {
   predictions_wide <- apply_xgboost_predictions(
     network_data = osm_region_dt,
     models_list = models_list,
-    feature_info = feature_info)
+    feature_info = feature_info,
+    default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
 
   pipeline_message(sprintf("Predictions completed: %s roads x %s periods", 
                            fmt(nrow(predictions_wide)), 
@@ -1066,7 +1112,8 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
     predictions_wide <- apply_xgboost_predictions(
       network_data = tile_dt,
       models_list  = models_list,
-      feature_info = feature_info)
+      feature_info = feature_info,
+      default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
 
     rm(tile_dt)
 
