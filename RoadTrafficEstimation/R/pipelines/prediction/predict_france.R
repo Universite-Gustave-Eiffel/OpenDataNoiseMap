@@ -33,10 +33,13 @@
 # with predict_pemb.R.  To switch to tiled output uncomment the block at the
 # bottom of this file.
 
-# simple full‑region prediction (same pattern as PEMB)
+# simple full‑region prediction (same pattern as PEMB).  Use `bbox = NULL`
+# to signal "no spatial crop" to the loader (passing -Inf/Inf builds an
+# invalid WKT polygon and fails in GDAL).  When memory is constrained prefer
+# the tiled export via `predict_france_tiled()` instead.
 predict_region(
   region_name = "FRANCE",
-  bbox = c(xmin = -Inf, ymin = -Inf, xmax = Inf, ymax = Inf),
+  bbox = NULL,
   output_filepath = CFG$FRANCE_PREDICTION_FILEPATH,
   cfg = CFG
 )
