@@ -126,7 +126,32 @@ test_prediction <- function() {
   }
   
   # Test 4: Sensors predictions file
-  pipeline_message("Test 4: Sensors predictions file", level = 1, 
+  # (prior to this we check Nantes/Paris/PEMB; the France file is optional but
+  # should be defined when running the simple mode)
+  pipeline_message("Test 4: France single‑file predictions (if present)", level = 1, 
+                   progress = "start", process = "search")
+  if (!is.null(CFG$FRANCE_PREDICTION_FILEPATH) &&
+      file.exists(CFG$FRANCE_PREDICTION_FILEPATH)) {
+    france <- sf::st_read(dsn = CFG$FRANCE_PREDICTION_FILEPATH, quiet = TRUE)
+    if (nrow(france) > 0 &&
+        all(c("osm_id", "TV", "HGV", "LV", "period") %in% names(france))) {
+      pipeline_message(sprintf("France predictions: %s rows",
+                               fmt(nrow(france))),
+                       level = 1, progress = "end", process = "valid")
+      tests_passed <- tests_passed + 1
+    } else {
+      pipeline_message("France predictions: missing required columns",
+                       level = 1, progress = "end", process = "fail")
+      tests_failed <- tests_failed + 1
+    }
+  } else {
+    pipeline_message("France predictions file not created (tiled mode?)",
+                     level = 1, progress = "end", process = "info")
+    # do not increment fail counter; absence is allowed when using tiled export
+  }
+
+  # Test 5: Sensors predictions file
+  pipeline_message("Test 5: Sensors predictions file", level = 1, 
                    progress = "start", process = "search")
   
   if (file.exists(CFG$SENSORS_ALL_PREDICTION_FILEPATH)) {

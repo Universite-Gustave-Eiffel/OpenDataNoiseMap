@@ -113,6 +113,9 @@ CONFIG$FRANCE_GEOMETRY_FILEPATH <-
   file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_network_TEST.gpkg")
 CONFIG$FRANCE_TRAFFIC_DEN_FILEPATH <-
   file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_DEN_TEST.gpkg")
+# test path for simple full-france prediction (not tiled)
+CONFIG$FRANCE_PREDICTION_FILEPATH <-
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_predictions_france_TEST.gpkg")
 CONFIG$FRANCE_TRAFFIC_HOURLY_FILEPATH <-
   file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_TEST.gpkg")
 CONFIG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH <-

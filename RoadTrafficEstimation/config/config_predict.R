@@ -31,6 +31,9 @@ CONFIG_PREDICT <- list(
   PEMB_PREDICTION_FILEPATH          = file.path(PREDICTION_DIR, 
                                                 pemb_predictions_filename), 
   FRANCE_OUTPUT_DIR                 = FRANCE_OUTPUT_DIR, 
+  # single-file export (used by predict_france.R when not using tiling)
+  FRANCE_PREDICTION_FILEPATH        = file.path(FRANCE_OUTPUT_DIR, 
+                                                "07_predictions_france.gpkg"),
   FRANCE_GEOMETRY_FILEPATH          = file.path(FRANCE_OUTPUT_DIR, 
                                                 france_network_filename), 
   FRANCE_TRAFFIC_DEN_FILEPATH       = file.path(FRANCE_OUTPUT_DIR, 
