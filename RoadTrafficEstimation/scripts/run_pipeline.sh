@@ -78,7 +78,7 @@ R --version
 # ------------------------------------------------------------------------------
 MAIN_R="${PROJECT_ROOT}/main.R"
 LOG_DIR="${PROJECT_ROOT}/logs"
-OUT_LOG="${LOG_DIR}/pipeline_$(date +%Y%m%d_%H%M%S).Rout"
+OUT_LOG="${LOG_DIR}/pipeline_${LOG_DIR}/${PHASE}_${MODE}_${REGION}_$(date +%Y%m%d_%H%M%S).Rout"
 
 mkdir -p "${LOG_DIR}"
 
