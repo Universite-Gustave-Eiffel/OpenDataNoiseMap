@@ -41,6 +41,32 @@ echo "🌱 PROJECT_ROOT: ${PROJECT_ROOT}"
 
 cd "${PROJECT_ROOT}"
 
+# Preserve original args and extract --phase/--mode/--region for log naming
+ALL_ARGS=("$@")
+
+# Pre-initialize from environment if already exported
+PHASE=${PHASE:-}
+MODE=${MODE:-}
+REGION=${REGION:-}
+
+i=0
+while [ $i -lt ${#ALL_ARGS[@]} ]; do
+  arg="${ALL_ARGS[$i]}"
+  case "$arg" in
+    --phase)
+      PHASE="${ALL_ARGS[$((i+1))]}"; i=$((i+2));;
+    --mode)
+      MODE="${ALL_ARGS[$((i+1))]}"; i=$((i+2));;
+    --region)
+      REGION="${ALL_ARGS[$((i+1))]}"; i=$((i+2));;
+    *)
+      i=$((i+1));;
+  esac
+done
+
+# Safe log suffix (fallbacks when flags not provided)
+LOG_SUFFIX="${PHASE:-noPhase}_${MODE:-noMode}_${REGION:-noRegion}"
+
 # ------------------------------------------------------------------------------
 # HPC-specific setup (login + slurm)
 # ------------------------------------------------------------------------------
@@ -78,7 +104,7 @@ R --version
 # ------------------------------------------------------------------------------
 MAIN_R="${PROJECT_ROOT}/main.R"
 LOG_DIR="${PROJECT_ROOT}/logs"
-OUT_LOG="${LOG_DIR}/pipeline_${LOG_DIR}/${PHASE}_${MODE}_${REGION}_$(date +%Y%m%d_%H%M%S).Rout"
+OUT_LOG="${LOG_DIR}/pipeline_${LOG_SUFFIX}_$(date +%Y%m%d_%H%M%S).Rout"
 
 mkdir -p "${LOG_DIR}"
 
