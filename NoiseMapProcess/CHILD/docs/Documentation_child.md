@@ -2,7 +2,7 @@
 
 Auteur : Gwendall Petit ([UMRAE](https://www.umrae.fr/) - gwendall.petit@ec-nantes.fr)
 
-Mise à jour : 03/2025
+Mise à jour : 03/2026
 
 ------
 
@@ -23,7 +23,7 @@ L'objectif de ce travail est de pouvoir estimer l'exposition au bruit des enfant
 
 Le schéma ci-dessous illustre ces deux niveaux d'analyse
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Process/home_and_500m.png)
+![](./Process/home_and_500m.png)
 
 
 
@@ -70,7 +70,7 @@ La récupération des données issues d'OpenStreetMap se fait via GeoClimate. En
 
 
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Process/zones.png)
+![](./Process/zones.png)
 
 ### Traitements dans une base de données
 
@@ -132,13 +132,13 @@ Tableau de correspondance pour le formatage des isosurfaces de train en LNIGHT
 
 À l'issue des traitements SQL dans la base de données, on obtient des couches de ROUTE (`trafic_predit_1300`), AVION (`avion_buffer`) ou TRAIN (`train_lden_buffer` et `train_lnight_buffer`), à l'échelle nationale (tous les enfants sont ensembles). L'objectif de cette étape est de générer des fichiers de ROUTE, AVION ou TRAIN par enfants. Pour cela, on va utiliser QGIS qui dispose d'une interface `Séparer une couche vecteur` (via le menu `Vecteur/Outils de gestion des données`). 
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/qgis_separation_enfants.png)
+![](./Images/qgis_separation_enfants.png)
 
 Dans l'exemple ci-dessus, on va séparer la couche `avion` sur la base du champ `FID` (l'identifiant de l'enfant). Les fichiers seront exportés dans le dossier `.../2024_CHILD/input_data/avion/avion_enfants/` au format `.geojson`.
 
 On obtient alors les fichiers `FID_xxx.geojson` ci-dessous
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/avion_separation.png)
+![](./Images/avion_separation.png)
 
 On réalise cette opération pour les 3 données suivantes :
 
@@ -208,7 +208,7 @@ for file in FID_*.geojson; do mv "$file" "${file/FID/AVION}"; done
 
 On obtient alors les fichiers suivants
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/avion_separation_renommage.png)
+![](./Images/avion_separation_renommage.png)
 
 
 
@@ -216,7 +216,7 @@ On obtient alors les fichiers suivants
 
 Dans le dossier de travail, on retrouve les 5 dossiers suivants :
 
-![image-dossiers](/home/gpetit/Documents/2024_CHILD/Documentation/Images/Dossiers.png)
+![image-dossiers](./Images/Dossiers.png)
 
 ### Dossier `code`
 
@@ -233,25 +233,25 @@ Dossier contenant la librairie [GeoClimate](https://github.com/orbisgis/geoclima
 
 Dossier contenant l'ensemble des données d'entrée
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/input_data.png)
+![](./Images/input_data.png)
 
 On y retrouve :
 
 - Dossier `avion` et le sous-dossier `avion_enfants` dans lequel on retrouve l'ensemble des fichiers `AVION_XXX.geojson` ainsi que le dossier vide `creation` (*voir explication plus bas*) qui sera alimenté au fur et à mesure des calculs.
 
-  ![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/input_avion.png)
+  ![](./Images/input_avion.png)
 
 - Dossier `trafic_enfants` dans lequel on retrouve les fichiers `ROUTE_XXX.geojson`
 
-  ![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/input_route.png)
+  ![](./Images/input_route.png)
 
 - Dossier `train` dans lequel on retrouve les deux sous-dossiers `train_enfants_lden` (*voir illustration ci-dessous*) et `train_enfants_lnight` , respectivement pour les niveaux Lden et Lnight, avec dans les deux cas, les fichiers respectifs `TRAIN_LDEN_XXX.geojson` ou `TRAIN_LNIGHT_XXX.geojson` ainsi qu'un dossier vide `creation` qui sera alimenté au fur et à mesure des calculs.
 
-  ![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/input_train.png)
+  ![](./Images/input_train.png)
 
 - Fichier `ENFANTS_BBOX_1300.csv` contenant la liste des enfants à traiter (identifiant unique `FID`), avec la géométrie du point `GEOM_POINT` (en WGS84) et l'enveloppe de 1300m `BBOX` (en WGS84).
 
-  ![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/input_enfants.png)
+  ![](./Images/input_enfants.png)
 
 
 
@@ -273,7 +273,7 @@ Dossier contenant NoiseModelling 5.0 dans les sous-dossiers `noisemodelling/5.0/
 
 Dossier vide, qui sera amené à recevoir au fur à mesure de l'avancé des calculs, l'ensemble des dossiers résultants `enfant_xxx`, propres à chaque enfants.
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/output_enfant_xxx.png)
+![](./Images/output_enfant_xxx.png)
 
 Pour chacun des enfants on retrouve les fichiers suivants :
 
@@ -288,7 +288,7 @@ Pour chacun des enfants on retrouve les fichiers suivants :
 
 
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/output_enfant_xxx_detail.png)
+![](./Images/output_enfant_xxx_detail.png)
 
 
 
@@ -324,14 +324,13 @@ bash run_child.sh
 ```
 
 
-
 ## 4. Mise en forme des résultats
 
 ### Compression des bâtiments
 
 Dans chacun des dossiers résultants, se trouve un fichier `building.geojson`, qui potentiellement prend beaucoup de place (environ 90% du poids global du dossier). 
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/building_geojson.png)
+![](./Images/building_geojson.png)
 
 Étant donné que cette donnée n'a pas vocation à être réutilisée dans l'immédiat, on va pouvoir la compresser dans un fichier `.7z` (qui a un meilleur taux de compression que le `.zip`).
 
@@ -344,7 +343,7 @@ bash compression_building_geojson.sh
 
 Une fois le traitement terminé, l'ensemble des fichiers `building.geojson` sera remplacé par les fichiers `building.geojson.7z`
 
-![](/home/gpetit/Documents/2024_CHILD/Documentation/Images/building_geojson_7z.png)
+![](./Images/building_geojson_7z.png)
 
 
 
