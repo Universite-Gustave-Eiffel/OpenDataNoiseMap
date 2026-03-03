@@ -940,36 +940,19 @@ build_france_tiles <- function(tile_size_m = 200000) {
   tiles[, c("tile_id", "xmin", "ymin", "xmax", "ymax")]
 }
 
-#' Pivot wide predictions to long for a subset of periods
-#'
-#' @param predictions_wide data.frame from apply_xgboost_predictions()
-#' @param periods character vector of period names to include
-#' @param all_periods full ordered period vector (for factor levels)
-#' @return data.frame in long format (no geometry)
-pivot_to_long_chunk <- function(predictions_wide, periods, all_periods) {
-  # Build regex to match only requested periods
-  period_pattern <- paste0("^(flow|truck_pct|speed)_(", paste(periods, collapse = "|"), ")$")
-  cols_to_pivot <- grep(period_pattern, names(predictions_wide), value = TRUE)
-
-  if (length(cols_to_pivot) == 0) return(data.frame())
-
-  predictions_wide %>%
-    dplyr::select(osm_id, dplyr::all_of(cols_to_pivot)) %>%
-    tidyr::pivot_longer(
-      cols = dplyr::all_of(cols_to_pivot),
-      names_to = c(".value", "period"),
-      names_pattern = "^(flow|truck_pct|speed)_(.+)$"
-    ) %>%
-    dplyr::mutate(
-      HGV = flow * (truck_pct / 100),
-      LV  = flow - HGV,
-      TV  = flow,
-      period = factor(period, levels = all_periods)
-    ) %>%
-    dplyr::select(osm_id, period, TV, HGV, LV, speed, truck_pct)
-}
 
 #' Run France-wide prediction with spatial tiling and temporal chunking
+#'
+#' This variant is designed to avoid the enormous memory spike encountered
+#' when loading the complete national network and pivoting all 75 periods at
+#' once.  The function breaks the domain into a regular grid of square tiles,
+#' reads each tile independently using a GDAL spatial filter, and immediately
+#' drops geometry and writes out results before moving to the next tile.  The
+#' long-format conversion is performed once per tile (using the same working
+#' code as `predict_region`), then split by temporal chunk; intermediate
+#' objects are freed explicitly with `rm()` + `gc()` to keep the footprint low.
+#' Geometry for the whole country is appended tile-by-tile, and traffic
+#' attributes are written into separate tables identified by chunk name.
 #'
 #' Outputs:
 #'   1. Geometry layer (GPKG with spatial index)
@@ -1095,6 +1078,9 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
     total_tiles_with_data <- total_tiles_with_data + 1L
 
     # --- Write geometry (append mode) ---
+    check_memory_available(
+      operation_name = sprintf("Geometry write tile %s", tile$tile_id),
+      min_gb = 0.5, warn_gb = 1)
     geom_layer <- tile_sf[, c("osm_id", "name", "highway", "speed",
                               "lanes_osm", "oneway_osm", "DEGRE")]
     geom_layer <- add_period_datetime_columns(geom_layer)  # safe no-op if no period col
@@ -1117,16 +1103,52 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
 
     rm(tile_dt)
 
+    # convert to long format exactly as in predict_region (this code has been
+    # proven to work and includes memory checks + validation)
+    check_memory_available(
+      operation_name = sprintf("Pivot tile %s (%s roads)", tile$tile_id, fmt(n_tile)),
+      min_gb = 1, warn_gb = 2)
+
+    predictions_long <- predictions_wide %>%
+      tidyr::pivot_longer(
+        cols = matches("^(flow|truck_pct|speed)_"),
+        names_to = c(".value", "period"),
+        names_pattern = "^(flow|truck_pct|speed)_(.+)$"
+      ) %>%
+      mutate(
+        HGV = flow * (truck_pct / 100),
+        LV  = flow - HGV,
+        TV  = flow,
+        period = factor(period, levels = all_periods)
+      ) %>%
+      select(osm_id, highway, period, TV, HGV, LV, speed,
+             osm_speed, osm_speed_imputed, truck_pct)
+
+    predictions_long <- add_period_datetime_columns(predictions_long)
+
+    # validate predictions for this tile, log warnings if any
+    validation <- validate_predictions(predictions_long)
+    if (!validation$is_valid) {
+      pipeline_message(sprintf("Validation warnings in tile %d: %s issues", 
+                               tile$tile_id, length(validation$issues)),
+                       process = "warning")
+      for (issue_name in names(validation$issues)) {
+        pipeline_message(sprintf("  - %s: %s cases", 
+                                 issue_name, validation$issues[[issue_name]]),
+                         process = "warning")
+      }
+    }
+
     # --- Write each temporal chunk (append mode, no geometry) ---
     for (chunk_name in names(temporal_chunks)) {
       chunk_periods <- temporal_chunks[[chunk_name]]
-      chunk_long <- pivot_to_long_chunk(predictions_wide, chunk_periods, all_periods)
+      chunk_long <- predictions_long %>%
+        dplyr::filter(period %in% chunk_periods) %>%
+        # convert factor to char for gpkg compatibility
+        mutate(period = as.character(period))
 
       if (nrow(chunk_long) > 0) {
-        # Convert factor columns to character for GPKG compatibility
-        chunk_long$period <- as.character(chunk_long$period)
         chunk_long <- add_period_datetime_columns(chunk_long)
-        # Write as plain table (no geometry) in GPKG
         sf::st_write(
           obj    = chunk_long,
           dsn    = chunk_paths[[chunk_name]],
@@ -1137,7 +1159,7 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
       rm(chunk_long)
     }
 
-    rm(predictions_wide)
+    rm(predictions_wide, predictions_long)
     gc(verbose = FALSE)
 
     dt <- proc.time()["elapsed"] - t0

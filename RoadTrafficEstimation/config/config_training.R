@@ -6,11 +6,19 @@
 TRAINING_DATA_DIR      <- file.path("data", "training")
 TRAINING_RDS_DATA_DIR  <- file.path(TRAINING_DATA_DIR, "rds")
 TRAINING_GPKG_DATA_DIR <- file.path(TRAINING_DATA_DIR, "gpkg")
+
+# File name suffix based on the pipeline MODE variable.  When the pipeline is
+# executed with `--mode <nantes|paris|pemb|sensors|all>` we want the generated
+# artifacts (dataset and model files) to contain that mode in their name so that
+# multiple runs using different modes do not collide.  The variable MODE is
+# already assigned by main.R before sourcing the configuration files.
+mode_suffix <- if (exists("MODE") && nzchar(MODE)) MODE else "all"
+
 # Training data
-training_data_rds_filename      <- "05_training_dataset.rds"
-training_data_gpkg_filename     <- "05_training_dataset.gpkg"
-xgb_models_with_ratios_filename <- "06_xgboost_trained_models.rds"
-xgboost_feature_info_filename   <- "06_xgboost_feature_info.rds"
+training_data_rds_filename      <- sprintf("05_training_dataset_%s.rds", mode_suffix)
+training_data_gpkg_filename     <- sprintf("05_training_dataset_%s.gpkg", mode_suffix)
+xgb_models_with_ratios_filename <- sprintf("06_xgboost_trained_models_%s.rds", mode_suffix)
+xgboost_feature_info_filename   <- sprintf("06_xgboost_feature_info_%s.rds", mode_suffix)
                        
 # Training configuration list                 
 CONFIG_TRAINING <- list(

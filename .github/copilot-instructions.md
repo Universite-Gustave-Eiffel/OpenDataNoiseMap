@@ -26,7 +26,7 @@ Analysis: Emission analysis  (run_emission_analysis.R, run_flow_comparison.R, et
 
 - **CRS**: Always EPSG:2154 (Lambert-93). All spatial operations use `sf::st_transform(crs = 2154)`.
 - **Config**: All paths and parameters live in the global `CONFIG` list (built in `config_pipeline.R`). Access via `CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH`, etc. Never hardcode paths.
-- **File naming**: Exports follow `{phase_number}_{description}.{gpkg|rds}` (e.g., `05_training_dataset.gpkg`, `06_xgboost_trained_models.rds`, `07_predictions_nantes.gpkg`).
+- **File naming**: Exports follow `{phase_number}_{description}.{gpkg|rds}` with an additional `_mode` suffix matching the pipeline mode (e.g. `05_training_dataset_paris.gpkg`, `06_xgboost_trained_models_pemb.rds`, `07_predictions_nantes.gpkg`). This avoids name collisions when running in different modes.
 - **Spatial format**: All spatial outputs use GeoPackage (`.gpkg`), never Shapefile. Models/config use `.rds`.
 - **QGIS datetime fields**: All GPKG exports call `add_period_datetime_columns()` (from `utils_prediction.R`) before `st_write()`. This adds `datetimestart` / `datetimeend` POSIXct columns when a `period` column is present. The function returns data unchanged if no `period` column exists — safe to call on any data. Year-based convention: D/E/N → 1970, h*_wd → 1971-01-01, h*_we → 1972-01-01, h* → 1973-01-01.
 - **Logging**: Use `pipeline_message(text, level, progress, process)` from `R/utils_io.R` — not `cat()` or bare `message()`. Levels: 0=section header, 1=timed step, 2=timed sub-step. Process icons: `"calc"`, `"load"`, `"save"`, `"info"`, `"valid"`, `"stop"`.

@@ -4,16 +4,23 @@
 
 # Prediction paths and filenames
 PREDICTION_DIR                    <- file.path("data", "prediction")
-sensor_predictions_filename       <- "07_predictions_sensors_all.gpkg"
-nantes_predictions_filename       <- "07_predictions_nantes.gpkg"
-paris_predictions_filename        <- "07_predictions_paris.gpkg"
-pemb_predictions_filename         <- "07_predictions_pemb.gpkg"
+
+# Use the MODE variable to tag outputs with the current pipeline mode.  This
+# mirrors the behaviour already in place for the `pemb` output (i.e.
+# "07_predictions_pemb.gpkg") and ensures that all prediction files are
+# unambiguously associated with the mode that produced them.
+mode_suffix <- if (exists("MODE") && nzchar(MODE)) MODE else "all"
+
+sensor_predictions_filename       <- sprintf("07_predictions_sensors_%s.gpkg", mode_suffix)
+nantes_predictions_filename       <- sprintf("07_predictions_nantes_%s.gpkg", mode_suffix)
+paris_predictions_filename        <- sprintf("07_predictions_paris_%s.gpkg", mode_suffix)
+pemb_predictions_filename         <- sprintf("07_predictions_pemb_%s.gpkg", mode_suffix)
 FRANCE_OUTPUT_DIR                 <- file.path(PREDICTION_DIR, "france")
-france_network_filename           <- "07_france_network.gpkg"
-france_traffic_den_filename       <- "07_france_traffic_DEN.gpkg"
-france_traffic_hourly_filename    <- "07_france_traffic_hourly.gpkg"
-france_traffic_hourly_wd_filename <- "07_france_traffic_hourly_wd.gpkg"
-france_traffic_hourly_we_filename <- "07_france_traffic_hourly_we.gpkg"
+france_network_filename           <- sprintf("07_france_network_%s.gpkg", mode_suffix)
+france_traffic_den_filename       <- sprintf("07_france_traffic_DEN_%s.gpkg", mode_suffix)
+france_traffic_hourly_filename    <- sprintf("07_france_traffic_hourly_%s.gpkg", mode_suffix)
+france_traffic_hourly_wd_filename <- sprintf("07_france_traffic_hourly_wd_%s.gpkg", mode_suffix)
+france_traffic_hourly_we_filename <- sprintf("07_france_traffic_hourly_we_%s.gpkg", mode_suffix)
 
 CONFIG_PREDICT <- list(
   

@@ -58,70 +58,73 @@ if (!dir.exists(TEST_OUTPUT_DIR)) {
   dir.create(TEST_OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 }
 
-# Redefine key output paths to use TEST directory
+# Redefine key output paths to use TEST directory and include the current mode
+mode_suffix <- if (exists("MODE") && nzchar(MODE)) MODE else "all"
+suffix <- paste(mode_suffix, "TEST", sep = "_")
+
 CONFIG$OSM_DEGRE_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "01_commune_density_lookup_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("01_commune_density_lookup_%s.rds", suffix))
 
 CONFIG$OSM_ROADS_CONNECTIVITY_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "01_osm_network_augmented_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("01_osm_network_augmented_%s.gpkg", suffix))
 
 CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "02_osm_network_france_engineered_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("02_osm_network_france_engineered_%s.gpkg", suffix))
 
 CONFIG$IMPUTATION_RULES_FRANCE_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "02_imputation_rules_france_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("02_imputation_rules_france_%s.rds", suffix))
 
 CONFIG$AVATAR_RDS_DATA_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "03_avatar_raw_traffic_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("03_avatar_raw_traffic_%s.rds", suffix))
 
 CONFIG$AVATAR_IDS_FULL_NETWORK_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "03_osm_network_with_avatar_ids_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("03_osm_network_with_avatar_ids_%s.gpkg", suffix))
 
 CONFIG$AVATAR_AGGREGATED_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "04_avatar_aggregated_with_ratios_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("04_avatar_aggregated_with_ratios_%s.rds", suffix))
 
 CONFIG$AVATAR_AGGREGATED_CLEAN_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "04_avatar_aggregated_clean_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("04_avatar_aggregated_clean_%s.rds", suffix))
 
 CONFIG$TRAINING_RDS_DATA_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "05_training_dataset_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("05_training_dataset_%s.rds", suffix))
 
 CONFIG$TRAINING_GPKG_DATA_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "05_training_dataset_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("05_training_dataset_%s.gpkg", suffix))
 
 CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "06_xgboost_trained_models_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("06_xgboost_trained_models_%s.rds", suffix))
 
 CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "06_xgboost_feature_info_TEST.rds")
+  file.path(TEST_OUTPUT_DIR, sprintf("06_xgboost_feature_info_%s.rds", suffix))
 
 # Prediction outputs
 CONFIG$NANTES_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "07_predictions_nantes_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_nantes_%s.gpkg", suffix))
 
 CONFIG$PARIS_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "07_predictions_paris_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_paris_%s.gpkg", suffix))
 
 CONFIG$SENSORS_ALL_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "07_predictions_sensors_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_sensors_%s.gpkg", suffix))
 
 CONFIG$PEMB_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, "07_predictions_pemb_TEST.gpkg")
+  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_pemb_%s.gpkg", suffix))
 
-CONFIG$FRANCE_OUTPUT_DIR <- file.path(TEST_OUTPUT_DIR, "france_TEST")
+CONFIG$FRANCE_OUTPUT_DIR <- file.path(TEST_OUTPUT_DIR, sprintf("france_%s", suffix))
 CONFIG$FRANCE_GEOMETRY_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_network_TEST.gpkg")
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_network_%s.gpkg", suffix))
 CONFIG$FRANCE_TRAFFIC_DEN_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_DEN_TEST.gpkg")
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_DEN_%s.gpkg", suffix))
 # test path for simple full-france prediction (not tiled)
 CONFIG$FRANCE_PREDICTION_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_predictions_france_TEST.gpkg")
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_predictions_france_%s.gpkg", suffix))
 CONFIG$FRANCE_TRAFFIC_HOURLY_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_TEST.gpkg")
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_hourly_%s.gpkg", suffix))
 CONFIG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_wd_TEST.gpkg")
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_hourly_wd_%s.gpkg", suffix))
 CONFIG$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, "07_france_traffic_hourly_we_TEST.gpkg")
+  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_hourly_we_%s.gpkg", suffix))
 
 CONFIG$FORECAST_DATA_DIR <- TEST_OUTPUT_DIR
 

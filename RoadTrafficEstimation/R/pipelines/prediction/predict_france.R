@@ -35,14 +35,29 @@
 
 # simple full‑region prediction (same pattern as PEMB).  Use `bbox = NULL`
 # to signal "no spatial crop" to the loader (passing -Inf/Inf builds an
-# invalid WKT polygon and fails in GDAL).  When memory is constrained prefer
-# the tiled export via `predict_france_tiled()` instead.
-predict_region(
-  region_name = "FRANCE",
-  bbox = NULL,
-  output_filepath = CFG$FRANCE_PREDICTION_FILEPATH,
-  cfg = CFG
+# invalid WKT polygon and fails in GDAL).  **For production runs on the
+# complete France network, this call will almost certainly OOM**.  The
+# preferred default is the tiled helper below, which performs the same
+# operations tile‑by‑tile and streams results to disk.
+
+# -----------------------------------------------------------------------------
+# Default behaviour for large runs: use the memory‑friendly tiled export
+# -----------------------------------------------------------------------------
+predict_france_tiled(
+  cfg         = CFG,
+  tile_size_m = 200000,          # 200 km tiles, tweak if needed
+  chunks      = c("DEN")        # change to c("DEN","hourly") etc.
 )
+
+# -----------------------------------------------------------------------------
+# Single‑file option (uncomment for quick sanity checks or very small regions)
+# -----------------------------------------------------------------------------
+# predict_region(
+#   region_name = "FRANCE",
+#   bbox = NULL,
+#   output_filepath = CFG$FRANCE_PREDICTION_FILEPATH,
+#   cfg = CFG
+# )
 
 # if you need the geometry‑separated, chunked files use the tiled helper
 # instead of the call above.  the parameters and output paths are all pulled
