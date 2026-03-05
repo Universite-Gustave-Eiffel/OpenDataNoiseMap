@@ -1274,17 +1274,31 @@ build_france_tiles <- function(tile_size_m = 200000) {
       chunk_periods <- temporal_chunks[[chunk_name]]
       chunk_long <- predictions_long %>%
         dplyr::filter(period %in% chunk_periods) %>%
-        # convert factor to char for gpkg compatibility
+        # convert factor to char for JSON compatibility
         mutate(period = as.character(period))
 
       if (nrow(chunk_long) > 0) {
         chunk_long <- add_period_datetime_columns(chunk_long)
-        sf::st_write(
-          obj    = chunk_long,
-          dsn    = chunk_paths[[chunk_name]],
-          layer  = paste0("traffic_", chunk_name),
-          append = TRUE,
-          quiet  = TRUE)
+
+        # Write traffic data as JSON (more efficient than GPKG for tabular data)
+        chunk_file <- chunk_paths[[chunk_name]]
+        chunk_data <- sf::st_drop_geometry(chunk_long)
+
+        # Append to existing JSON file or create new one
+        if (file.exists(chunk_file)) {
+          # Read existing data and append
+          existing_data <- jsonlite::read_json(chunk_file, simplifyVector = TRUE)
+          combined_data <- rbind(existing_data, chunk_data)
+        } else {
+          combined_data <- chunk_data
+        }
+
+        # Write as JSON
+        jsonlite::write_json(
+          x = combined_data,
+          path = chunk_file,
+          pretty = FALSE,  # Compact JSON for efficiency
+          auto_unbox = TRUE)
       }
       rm(chunk_long)
     }
