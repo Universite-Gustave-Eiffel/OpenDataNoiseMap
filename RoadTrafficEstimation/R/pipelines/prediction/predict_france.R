@@ -1,69 +1,51 @@
 # ==============================================================================
-# PREDICTION: ALL OF FRANCE
+# PREDICTION: ALL OF FRANCE (TILED + TEMPORAL CHUNKS)
 # ==============================================================================
-# The France pipeline can run in two flavours:
-#   1. simple full‑region prediction (identical to the PEMB script) –
-#      loads the entire engineered network in one go and writes a single
-#      GeoPackage containing geometry and all period columns.  The output path
-#      is controlled by `CFG$FRANCE_PREDICTION_FILEPATH` (added in
-#      config_predict.R).
-#   2. tiled/temporal‑chunk export – the legacy behaviour retained in
-#      `utils_prediction::predict_france_tiled()`.  Geometry is written once to
-#      `CFG$FRANCE_GEOMETRY_FILEPATH` and traffic attributes are split into one
-#      or more tables (`CFG$FRANCE_TRAFFIC_*_FILEPATH`).  This mode is memory
-#      friendly for the full France dataset and is the default when the
-#      developer explicitly calls `predict_france_tiled()`.
+# This script runs France-wide traffic prediction using spatial tiling to manage
+# memory efficiently. The output is split into separate GPKG files by temporal
+# chunk (D/E/N, hourly, hourly weekday, hourly weekend) to allow selective
+# loading and processing.
 #
-# The simple mode is useful for quick sanity checks or when you just want a
-# single GPKG file (e.g. for testing with `--region test`).  The tiled mode
-# must be used when creating the standard production outputs described below.
+# Outputs (all tagged with current MODE):
+#   - 07_france_network_{mode}.gpkg            — road geometry + static attributes
+#   - 07_france_traffic_DEN_{mode}.gpkg        — D/E/N periods (3 periods) ~1 GB
+#   - 07_france_traffic_hourly_{mode}.gpkg     — h0..h23 (24 periods) ~8.5 GB
+#   - 07_france_traffic_hourly_wd_{mode}.gpkg  — h0_wd..h23_wd (24 periods) ~8.5 GB
+#   - 07_france_traffic_hourly_we_{mode}.gpkg  — h0_we..h23_we (24 periods) ~8.5 GB
 #
-# Legacy tiled outputs (see predict_france_tiled):
-#   - 07_france_network.gpkg             — road geometry + static attributes
-#   - 07_france_traffic_DEN.gpkg         — D/E/N periods (3 periods)
-#   - 07_france_traffic_hourly.gpkg      — h0..h23 (24 periods)       [optional]
-#   - 07_france_traffic_hourly_wd.gpkg   — h0_wd..h23_wd (24 periods) [optional]
-#   - 07_france_traffic_hourly_we.gpkg   — h0_we..h23_we (24 periods) [optional]
+# For noise mapping applications, all temporal chunks are typically needed,
+# as they capture the full temporal profile (working hours, evenings, nights,
+# weekday vs. weekend variations). Total disk space: ~26 GB before compression.
 #
-# The configuration keys for the tiled export are defined in
-# config_predict.R and propagated to TEST_CONFIG.R;
-# see also `utils_prediction.R` for the implementation.
-#
-# We default to the simple full‑region call to make the behaviour consistent
-# with predict_pemb.R.  To switch to tiled output uncomment the block at the
-# bottom of this file.
+# Note: This is the default implementation. For quick sanity checks on a subset
+# of France, use predict_traffic(method="region", bbox=...) instead.
+# ==============================================================================
 
-# simple full‑region prediction (same pattern as PEMB).  Use `bbox = NULL`
-# to signal "no spatial crop" to the loader (passing -Inf/Inf builds an
-# invalid WKT polygon and fails in GDAL).  **For production runs on the
-# complete France network, this call will almost certainly OOM**.  The
-# preferred default is the tiled helper below, which performs the same
-# operations tile‑by‑tile and streams results to disk.
+pipeline_message("France-wide traffic prediction (tiled + all temporal chunks)",
+                 level = 0, progress = "start", process = "calc")
 
-# -----------------------------------------------------------------------------
-# Default behaviour for large runs: use the memory‑friendly tiled export
-# -----------------------------------------------------------------------------
-predict_france_tiled(
-  cfg         = CFG,
-  tile_size_m = 200000,          # 200 km tiles, tweak if needed
-  chunks      = c("DEN")        # change to c("DEN","hourly") etc.
+# Build output paths for France extent
+france_output_config <- build_prediction_filepaths(extent = "france", mode = mode_suffix)
+
+# Run tiled prediction with all temporal chunks
+# Chunks:
+#   - "DEN": Day/Evening/Night periods (compact, ~1 GB, recommended minimum)
+#   - "hourly": Generic hourly h0..h23 (all days combined, ~8.5 GB)
+#   - "hourly_wd": Weekday hourly h0_wd..h23_wd (~8.5 GB)
+#   - "hourly_we": Weekend hourly h0_we..h23_we (~8.5 GB)
+#
+# For full temporal detail, include all chunks: c("DEN", "hourly", "hourly_wd", "hourly_we")
+# For disk/memory constrained environments, use: c("DEN") only
+#
+predict_traffic(
+  region_name = "France",
+  cfg = CFG,
+  bbox = NULL,
+  output_config = france_output_config,
+  method = "tiled",
+  chunks = c("DEN", "hourly", "hourly_wd", "hourly_we"),  # all temporal chunks
+  tile_size_m = 200000  # 200 km tiles
 )
 
-# -----------------------------------------------------------------------------
-# Single‑file option (uncomment for quick sanity checks or very small regions)
-# -----------------------------------------------------------------------------
-# predict_region(
-#   region_name = "FRANCE",
-#   bbox = NULL,
-#   output_filepath = CFG$FRANCE_PREDICTION_FILEPATH,
-#   cfg = CFG
-# )
-
-# if you need the geometry‑separated, chunked files use the tiled helper
-# instead of the call above.  the parameters and output paths are all pulled
-# from `CFG` so you don't need to hard‑code anything.
-#
-# predict_france_tiled(
-#   cfg         = CFG,
-#   tile_size_m = 200000,
-#   chunks      = c("DEN")           # override as desired
+pipeline_message("France-wide prediction completed",
+                 level = 0, progress = "end", process = "valid")

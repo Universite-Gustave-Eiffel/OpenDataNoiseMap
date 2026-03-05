@@ -700,20 +700,146 @@ add_period_datetime_columns <- function(predictions_long) {
 }
 
 # ==============================================================================
-# GENERIC REGION PREDICTION
+# GENERIC TRAFFIC PREDICTION (regional and tiled)
 # ==============================================================================
 
-#' Run traffic prediction for a geographic region
+#' Run traffic prediction for a geographic region with optional spatial tiling
 #'
-#' Loads the France engineered network (cropped to bbox), applies XGBoost
-#' models, converts to long format, validates, and exports to GeoPackage.
+#' This function provides a unified interface for traffic prediction that
+#' automatically handles both small regions (simple single-file export) and
+#' large regions like France (memory-efficient tiling with temporal chunking).
+#'
+#' For small regions (bbox-based), the function:
+#'   - Loads the engineered network cropped to the bounding box
+#'   - Applies XGBoost models to predict flow, truck percentage, and speed
+#'   - Exports all periods to a single GeoPackage file
+#'
+#' For large regions (tiled method), the function:
+#'   - Partitions the domain into a regular grid of square tiles
+#'   - Processes each tile independently using spatial filters (memory-friendly)
+#'   - Optionally splits traffic attributes into separate GPKG files by
+#'     temporal chunk (e.g., separate files for D/E/N, hourly, weekday,
+#'     weekend periods)
+#'   - Writes geometry once, appending traffic data incrementally
+#'
+#' Temporal chunks (relevant for tiled method only):
+#'   - "DEN": D, E, N periods (day/evening/night)
+#'   - "hourly": h0..h23 (all days combined)
+#'   - "hourly_wd": h0_wd..h23_wd (weekdays only)
+#'   - "hourly_we": h0_we..h23_we (weekend only)
 #'
 #' @param region_name Character. Human-readable region name for log messages.
-#' @param bbox Named numeric vector c(xmin, ymin, xmax, ymax) in EPSG:2154.
-#' @param output_filepath Character. Full path to the output .gpkg file.
-#' @param cfg Configuration list
-#' @return Invisible NULL. Side effect: writes GPKG to disk.
-predict_region <- function(region_name, bbox, output_filepath, cfg) {
+#' @param cfg Configuration list with model paths and settings.
+#' @param bbox Named numeric vector c(xmin, ymin, xmax, ymax) in EPSG:2154,
+#'   or NULL. If NULL, triggers tiled method; if provided, triggers
+#'   simple region method.
+#' @param output_config List with output file paths. Structure depends on method:
+#'   - Simple region: list(filepath = "path/to/output.gpkg")
+#'   - Tiled: list(geom = "path/to/geom.gpkg",
+#'              den = "path/to/traffic_DEN.gpkg",
+#'              hourly = "path/..._hourly.gpkg",
+#'              hourly_wd = "path/..._hourly_wd.gpkg",
+#'              hourly_we = "path/..._hourly_we.gpkg")
+#' @param method Character. Prediction approach: "region" (simple), "tiled"
+#'   (spatial tiles), or "auto" (auto-detect based on bbox presence).
+#'   Default: "auto".
+#' @param chunks Character vector. Temporal chunks to export (tiled method only).
+#'   Valid values: "DEN", "hourly", "hourly_wd", "hourly_we".
+#'   Default: c("DEN") for memory efficiency.
+#'   For full export use: c("DEN", "hourly", "hourly_wd", "hourly_we").
+#' @param tile_size_m Numeric. Tile side length in meters for tiled method.
+#'   Default: 200000 (200 km).
+#'
+#' @return Invisible NULL. Side effects: writes GPKG file(s) to disk.
+#'
+#' @examples
+#' \dontrun{
+#' # Simple region prediction (e.g., PEMB)
+#' predict_traffic(
+#'   region_name = "PEMB",
+#'   cfg = CFG,
+#'   bbox = c(xmin = 654892, ymin = 6852748, xmax = 671006, ymax = 6862393),
+#'   output_config = list(filepath = "data/prediction/pemb.gpkg"),
+#'   method = "region"
+#' )
+#'
+#' # Tiled prediction for France (all temporal chunks)
+#' predict_traffic(
+#'   region_name = "France",
+#'   cfg = CFG,
+#'   bbox = NULL,
+#'   output_config = list(
+#'     geom = "data/prediction/france/geometry.gpkg",
+#'     den = "data/prediction/france/traffic_DEN.gpkg",
+#'     hourly = "data/prediction/france/traffic_hourly.gpkg",
+#'     hourly_wd = "data/prediction/france/traffic_hourly_wd.gpkg",
+#'     hourly_we = "data/prediction/france/traffic_hourly_we.gpkg"
+#'   ),
+#'   method = "tiled",
+#'   chunks = c("DEN", "hourly", "hourly_wd", "hourly_we"),
+#'   tile_size_m = 200000
+#' )
+#' }
+predict_traffic <- function(region_name, cfg, bbox = NULL,
+                           output_config = NULL,
+                           method = "auto",
+                           chunks = c("DEN"),
+                           tile_size_m = 200000) {
+
+  # --- Auto-detect method ---
+  if (method == "auto") {
+    method <- if (is.null(bbox)) "tiled" else "region"
+  }
+
+  if (!(method %in% c("region", "tiled"))) {
+    stop("method must be one of: 'region', 'tiled', 'auto'")
+  }
+
+  # --- Validate output_config ---
+  if (is.null(output_config) || !is.list(output_config)) {
+    stop("output_config must be a non-empty list")
+  }
+
+  # --- Route to appropriate method ---
+  if (method == "region") {
+    if (is.null(bbox)) {
+      stop("bbox must be provided for method='region'")
+    }
+    if (is.null(output_config$filepath)) {
+      stop("output_config must contain 'filepath' for method='region'")
+    }
+    .predict_region_impl(
+      region_name = region_name,
+      bbox = bbox,
+      output_filepath = output_config$filepath,
+      cfg = cfg
+    )
+  } else if (method == "tiled") {
+    if (!is.null(bbox)) {
+      pipeline_message(
+        "Warning: bbox is ignored when method='tiled'; use method='region' for bbox-based prediction",
+        process = "warning")
+    }
+    .predict_france_tiled_impl(
+      cfg = cfg,
+      region_name = region_name,
+      output_config = output_config,
+      tile_size_m = tile_size_m,
+      chunks = chunks
+    )
+  }
+
+  invisible(NULL)
+}
+
+# ==============================================================================
+# GENERIC REGION PREDICTION (INTERNAL IMPLEMENTATION)
+# ==============================================================================
+
+#' Internal: Simple region prediction
+#'
+#' @keywords internal
+.predict_region_impl <- function(region_name, bbox, output_filepath, cfg) {
 
   pipeline_message(sprintf("%s traffic prediction", region_name), level = 0, 
                    progress = "start", process = "calc")
@@ -941,7 +1067,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
 }
 
 
-#' Run France-wide prediction with spatial tiling and temporal chunking
+#' (Internal) Run France-wide prediction with spatial tiling
+#'
+#' @keywords internal
 #'
 #' This variant is designed to avoid the enormous memory spike encountered
 #' when loading the complete national network and pivoting all 75 periods at
@@ -949,8 +1077,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
 #' reads each tile independently using a GDAL spatial filter, and immediately
 #' drops geometry and writes out results before moving to the next tile.  The
 #' long-format conversion is performed once per tile (using the same working
-#' code as `predict_region`), then split by temporal chunk; intermediate
-#' objects are freed explicitly with `rm()` + `gc()` to keep the footprint low.
+#' code), then split by temporal chunk; intermediate objects are freed
+#' explicitly with `rm()` + `gc()` to keep the footprint low.
 #' Geometry for the whole country is appended tile-by-tile, and traffic
 #' attributes are written into separate tables identified by chunk name.
 #'
@@ -959,27 +1087,36 @@ build_france_tiles <- function(tile_size_m = 200000) {
 #'   2. One GPKG per temporal chunk (attribute-only, keyed by osm_id)
 #'
 #' @param cfg Configuration list
+#' @param region_name Character. Human-readable region name for log messages.
+#' @param output_config List with output paths: geom, den, hourly, hourly_wd, hourly_we.
 #' @param tile_size_m Tile side in meters (default 200 km)
 #' @param chunks Character vector of temporal chunks to export.
 #'   Valid values: "DEN", "hourly", "hourly_wd", "hourly_we".
-#'   Default: all chunks. Use c("DEN") for noise mapping (smallest output).
+#'   Default: c("DEN") for memory efficiency.
+#'   For full export use: c("DEN", "hourly", "hourly_wd", "hourly_we").
 #'   Disk estimate per chunk: DEN ~1 GB, hourly/wd/we ~8.5 GB each.
 #' @return Invisible NULL
-predict_france_tiled <- function(cfg, tile_size_m = 200000,
-                                 chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")) {
+#' @keywords internal
+.predict_france_tiled_impl <- function(cfg, region_name = "France",
+                                       output_config,
+                                       tile_size_m = 200000,
+                                       chunks = c("DEN")) {
   
-  # Configuration parameters
+  # Configuration parameters from cfg
   osm_roads_path <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
   xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
   xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
-  france_outpath <- cfg$FRANCE_OUTPUT_DIR
-  france_fraffic_den_fpath <- cfg$FRANCE_TRAFFIC_DEN_FILEPATH
-  france_fraffic_hourly_fpath <- cfg$FRANCE_TRAFFIC_HOURLY_FILEPATH
-  france_fraffic_hourly_wd_fpath <- cfg$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH
-  france_fraffic_hourly_we_fpath <- cfg$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
-  france_geom_fpath <- cfg$FRANCE_GEOMETRY_FILEPATH
   
-  pipeline_message("FRANCE-WIDE tiled prediction", level = 0, 
+  # Output paths from output_config
+  chunk_paths_all <- list(
+    DEN       = output_config$den,
+    hourly    = output_config$hourly,
+    hourly_wd = output_config$hourly_wd,
+    hourly_we = output_config$hourly_we
+  )
+  geom_path <- output_config$geom
+  
+  pipeline_message(sprintf("%s tiled prediction", region_name), level = 0, 
                    progress = "start", process = "calc")
 
   # --- Load models (once for all tiles) ---
@@ -1022,18 +1159,11 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
       process = "warning")
   }
 
-  # --- Output paths ---
-  output_dir <- france_outpath
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  # --- Output paths (use provided output_config) ---
+  geom_dir <- dirname(geom_path)
+  if (!dir.exists(geom_dir)) dir.create(geom_dir, recursive = TRUE)
 
-  geom_path  <- france_geom_fpath
-  chunk_paths <- list(
-    DEN       = france_fraffic_den_fpath,
-    hourly    = france_fraffic_hourly_fpath,
-    hourly_wd = france_fraffic_hourly_wd_fpath,
-    hourly_we = france_fraffic_hourly_we_fpath
-  )
-  chunk_paths <- chunk_paths[names(temporal_chunks)]
+  chunk_paths <- chunk_paths_all[names(temporal_chunks)]
 
   # --- Build spatial tiles ---
   tiles <- build_france_tiles(tile_size_m = tile_size_m)
@@ -1194,17 +1324,74 @@ predict_france_tiled <- function(cfg, tile_size_m = 200000,
     }
   }
 
-  pipeline_message("FRANCE-WIDE prediction completed", level = 0, 
+  pipeline_message(sprintf("%s prediction completed", region_name), level = 0, 
                    progress = "end", process = "valid")
 
   invisible(NULL)
 }
 
-#' Format seconds into human-readable duration
-#' @param seconds numeric
-#' @return character
-format_duration <- function(seconds) {
-  if (!is.finite(seconds) || seconds < 0) return("??")
+# ==============================================================================
+# COMPATIBILITY WRAPPERS (for legacy code)
+# ==============================================================================
+
+#' (Deprecated) Simple region prediction
+#'
+#' Use [predict_traffic] instead. This wrapper is provided for backward
+#' compatibility with existing code.
+#'
+#' @param region_name Character. Human-readable region name.
+#' @param bbox Named numeric vector c(xmin, ymin, xmax, ymax) in EPSG:2154.
+#' @param output_filepath Character. Output .gpkg file path.
+#' @param cfg Configuration list.
+#'
+#' @return Invisible NULL.
+#' @export
+predict_region <- function(region_name, bbox, output_filepath, cfg) {
+  .Deprecated(new = "predict_traffic",
+    old = "predict_region",
+    msg = "predict_region is deprecated; use predict_traffic(method='region') instead")
+
+  predict_traffic(
+    region_name = region_name,
+    cfg = cfg,
+    bbox = bbox,
+    output_config = list(filepath = output_filepath),
+    method = "region"
+  )
+}
+
+#' (Deprecated) France-wide tiled prediction
+#'
+#' Use [predict_traffic] instead. This wrapper is provided for backward
+#' compatibility with existing code.
+#'
+#' @param cfg Configuration list.
+#' @param tile_size_m Tile side in meters. Default: 200000.
+#' @param chunks Temporal chunks. Default: c("DEN").
+#'
+#' @return Invisible NULL.
+#' @export
+predict_france_tiled <- function(cfg, tile_size_m = 200000,
+                                  chunks = c("DEN")) {
+  .Deprecated(new = "predict_traffic",
+    old = "predict_france_tiled",
+    msg = "predict_france_tiled is deprecated; use predict_traffic(method='tiled') instead")
+
+  predict_traffic(
+    region_name = "France",
+    cfg = cfg,
+    bbox = NULL,
+    output_config = list(
+      geom = cfg$FRANCE_GEOMETRY_FILEPATH,
+      den = cfg$FRANCE_TRAFFIC_DEN_FILEPATH,
+      hourly = cfg$FRANCE_TRAFFIC_HOURLY_FILEPATH,
+      hourly_wd = cfg$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH,
+      hourly_we = cfg$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH
+    ),
+    method = "tiled",
+    tile_size_m = tile_size_m,
+    chunks = chunks
+  )
   h <- floor(seconds / 3600)
   m <- floor((seconds %% 3600) / 60)
   s <- round(seconds %% 60)

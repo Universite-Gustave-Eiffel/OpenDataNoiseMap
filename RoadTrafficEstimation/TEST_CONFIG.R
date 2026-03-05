@@ -98,33 +98,32 @@ CONFIG$XGB_MODELS_WITH_RATIOS_FILEPATH <-
 CONFIG$XGB_RATIO_FEATURE_INFO_FILEPATH <- 
   file.path(TEST_OUTPUT_DIR, sprintf("06_xgboost_feature_info_%s.rds", suffix))
 
-# Prediction outputs
-CONFIG$NANTES_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_nantes_%s.gpkg", suffix))
+# Prediction outputs (use dynamic path generation)
+test_mode <- suffix  # e.g., "all_TEST" or "test_TEST"
 
-CONFIG$PARIS_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_paris_%s.gpkg", suffix))
+# Regional predictions
+nantes_paths <- build_prediction_filepaths("nantes", test_mode)
+paris_paths <- build_prediction_filepaths("paris", test_mode)
+sensors_paths <- build_prediction_filepaths("sensors", test_mode)
+pemb_paths <- build_prediction_filepaths("pemb", test_mode)
+france_paths <- build_prediction_filepaths("france", test_mode)
 
-CONFIG$SENSORS_ALL_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_sensors_%s.gpkg", suffix))
+CONFIG$NANTES_PREDICTION_FILEPATH <- nantes_paths$all
+CONFIG$PARIS_PREDICTION_FILEPATH <- paris_paths$all
+CONFIG$SENSORS_ALL_PREDICTION_FILEPATH <- sensors_paths$all
+CONFIG$PEMB_PREDICTION_FILEPATH <- pemb_paths$all
 
-CONFIG$PEMB_PREDICTION_FILEPATH <- 
-  file.path(TEST_OUTPUT_DIR, sprintf("07_predictions_pemb_%s.gpkg", suffix))
+# France tiled predictions
+CONFIG$FRANCE_OUTPUT_DIR <- france_paths$output_dir
+CONFIG$FRANCE_GEOMETRY_FILEPATH <- france_paths$geom
+CONFIG$FRANCE_TRAFFIC_DEN_FILEPATH <- france_paths$den
+CONFIG$FRANCE_TRAFFIC_HOURLY_FILEPATH <- france_paths$hourly
+CONFIG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH <- france_paths$hourly_wd
+CONFIG$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH <- france_paths$hourly_we
 
-CONFIG$FRANCE_OUTPUT_DIR <- file.path(TEST_OUTPUT_DIR, sprintf("france_%s", suffix))
-CONFIG$FRANCE_GEOMETRY_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_network_%s.gpkg", suffix))
-CONFIG$FRANCE_TRAFFIC_DEN_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_DEN_%s.gpkg", suffix))
-# test path for simple full-france prediction (not tiled)
-CONFIG$FRANCE_PREDICTION_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_predictions_france_%s.gpkg", suffix))
-CONFIG$FRANCE_TRAFFIC_HOURLY_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_hourly_%s.gpkg", suffix))
-CONFIG$FRANCE_TRAFFIC_HOURLY_WD_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_hourly_wd_%s.gpkg", suffix))
-CONFIG$FRANCE_TRAFFIC_HOURLY_WE_FILEPATH <-
-  file.path(CONFIG$FRANCE_OUTPUT_DIR, sprintf("07_france_traffic_hourly_we_%s.gpkg", suffix))
+# Legacy single-file export (for testing)
+CONFIG$FRANCE_PREDICTION_FILEPATH <- file.path(france_paths$output_dir,
+                                               sprintf("07_predictions_france_%s.gpkg", test_mode))
 
 CONFIG$FORECAST_DATA_DIR <- TEST_OUTPUT_DIR
 

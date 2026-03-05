@@ -7,9 +7,12 @@
 # Bounds in Lambert93 (EPSG:2154)
 # ==============================================================================
 
-predict_region(
+pemb_output_config <- build_prediction_filepaths(extent = "pemb", mode = mode_suffix)
+
+predict_traffic(
   region_name = "PEMB (Paris Est Marne & Bois)",
+  cfg = CFG,
   bbox = c(xmin = 654892, ymin = 6852748, xmax = 671006, ymax = 6862393),
-  output_filepath = CFG$PEMB_PREDICTION_FILEPATH, 
-  cfg = CFG
+  output_config = list(filepath = pemb_output_config$all),
+  method = "region"
 )
