@@ -546,3 +546,33 @@ check_memory_available <- function(operation_name = "Operation",
 
   invisible(available_gb)
 }
+#'
+# ------------------------------------------------------------------------------
+# Format duration in human-readable format
+# ------------------------------------------------------------------------------
+#' @title Format duration in seconds to human-readable string
+#' @description Converts a duration in seconds to a formatted string showing
+#'              hours, minutes, and seconds.
+#' @param seconds Numeric. Duration in seconds.
+#' @return Character. Formatted duration string (e.g., "2h 15m 30s").
+#' @export
+format_duration <- function(seconds) {
+  if (!is.finite(seconds) || seconds < 0) {
+    return("unknown")
+  }
+
+  hours <- floor(seconds / 3600)
+  minutes <- floor((seconds %% 3600) / 60)
+  secs <- round(seconds %% 60, 1)
+
+  parts <- c()
+  if (hours > 0) {
+    parts <- c(parts, sprintf("%dh", hours))
+  }
+  if (minutes > 0 || hours > 0) {
+    parts <- c(parts, sprintf("%dm", minutes))
+  }
+  parts <- c(parts, sprintf("%.1fs", secs))
+
+  paste(parts, collapse = " ")
+}
