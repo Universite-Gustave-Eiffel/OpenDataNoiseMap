@@ -624,14 +624,17 @@ validate_predictions <- function(predictions) {
 #' Add QGIS-friendly datetime columns from period labels
 #'
 #' Mapping rules:
-#' - D/E/N -> reference day in 1970 (D=06-18h, E=18-22h, N=22-06h)
-#' - h0_wd..h23_wd -> weekdays in 1971 (reference day: 1971-01-01)
-#' - h0_we..h23_we -> weekend in 1972 (reference Saturday: 1972-01-01)
-#' - h0..h23 -> generic hourly periods in 1973 (reference day: 1973-01-01)
+#' - D/E/N -> day 01 of base year (D=06-18h, E=18-22h, N=22-06h)
+#' - h0_wd..h23_wd -> day 02 of base year (weekdays)
+#' - h0_we..h23_we -> day 03 of base year (weekends)
+#' - h0..h23 -> day 04 of base year (generic hourly)
+#' 
+#' Base year is extracted from the first measure_datetime in AVATAR CSV data.
 #'
 #' @param predictions_long data.frame with a `period` column
+#' @param cfg Configuration list (optional, for AVATAR_CSV_DIR)
 #' @return data.frame with added `datetimestart` and `datetimeend` POSIXct columns
-add_period_datetime_columns <- function(predictions_long) {
+add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   if (!"period" %in% names(predictions_long)) {
     return(predictions_long)
   }
@@ -642,54 +645,81 @@ add_period_datetime_columns <- function(predictions_long) {
   datetimestart <- as.POSIXct(rep(NA_character_, n), tz = "UTC")
   datetimeend <- as.POSIXct(rep(NA_character_, n), tz = "UTC")
 
-  # D / E / N reference periods (1970)
+  # Get base year from AVATAR data
+  avatar_dir <- if (!is.null(cfg) && !is.null(cfg$AVATAR_CSV_DIR)) cfg$AVATAR_CSV_DIR else file.path("data", "avatar", "csv")
+  base_year <- 2023  # fallback
+  if (dir.exists(avatar_dir)) {
+    csv_files <- list.files(avatar_dir, pattern = "\\.csv$", full.names = TRUE)
+    if (length(csv_files) > 0) {
+      first_csv <- csv_files[1]
+      # Read first data line (skip header)
+      con <- file(first_csv, "r")
+      header <- readLines(con, n = 1)
+      first_data_line <- readLines(con, n = 1)
+      close(con)
+      if (length(first_data_line) > 0) {
+        # Split by comma, find measure_datetime column
+        cols <- strsplit(header, ",")[[1]]
+        data_cols <- strsplit(first_data_line, ",")[[1]]
+        measure_idx <- which(cols == "measure_datetime")
+        if (length(measure_idx) == 1) {
+          measure_datetime <- data_cols[measure_idx]
+          # Extract date part: 2023-01-01T00:00:00+01:00 -> 2023-01-01
+          date_str <- substr(measure_datetime, 1, 10)
+          base_year <- as.integer(format(as.Date(date_str), "%Y"))
+        }
+      }
+    }
+  }
+
+  # D / E / N reference periods (day 01)
   idx_D <- which(period_chr == "D")
   if (length(idx_D) > 0) {
-    datetimestart[idx_D] <- as.POSIXct("1970-01-01 06:00:00", tz = "UTC")
-    datetimeend[idx_D] <- as.POSIXct("1970-01-01 18:00:00", tz = "UTC")
+    datetimestart[idx_D] <- as.POSIXct(sprintf("%d-01-01 06:00:00", base_year), tz = "UTC")
+    datetimeend[idx_D] <- as.POSIXct(sprintf("%d-01-01 18:00:00", base_year), tz = "UTC")
   }
 
   idx_E <- which(period_chr == "E")
   if (length(idx_E) > 0) {
-    datetimestart[idx_E] <- as.POSIXct("1970-01-01 18:00:00", tz = "UTC")
-    datetimeend[idx_E] <- as.POSIXct("1970-01-01 22:00:00", tz = "UTC")
+    datetimestart[idx_E] <- as.POSIXct(sprintf("%d-01-01 18:00:00", base_year), tz = "UTC")
+    datetimeend[idx_E] <- as.POSIXct(sprintf("%d-01-01 22:00:00", base_year), tz = "UTC")
   }
 
   idx_N <- which(period_chr == "N")
   if (length(idx_N) > 0) {
-    datetimestart[idx_N] <- as.POSIXct("1970-01-01 22:00:00", tz = "UTC")
-    datetimeend[idx_N] <- as.POSIXct("1970-01-02 06:00:00", tz = "UTC")
+    datetimestart[idx_N] <- as.POSIXct(sprintf("%d-01-01 22:00:00", base_year), tz = "UTC")
+    datetimeend[idx_N] <- as.POSIXct(sprintf("%d-01-02 06:00:00", base_year), tz = "UTC")
   }
 
-  # Generic hourly periods h0..h23 (1973)
+  # Generic hourly periods h0..h23 (day 04)
   m_h <- regexec("^h([0-9]{1,2})$", period_chr)
   g_h <- regmatches(period_chr, m_h)
   idx_h <- which(lengths(g_h) == 2)
   if (length(idx_h) > 0) {
     h_vals <- as.integer(vapply(g_h[idx_h], function(x) x[2], character(1)))
-    start_str <- sprintf("1973-01-01 %02d:00:00", h_vals)
+    start_str <- sprintf("%d-01-04 %02d:00:00", base_year, h_vals)
     datetimestart[idx_h] <- as.POSIXct(start_str, tz = "UTC")
     datetimeend[idx_h] <- datetimestart[idx_h] + 3600
   }
 
-  # Weekday hourly periods h0_wd..h23_wd (1971)
+  # Weekday hourly periods h0_wd..h23_wd (day 02)
   m_wd <- regexec("^h([0-9]{1,2})_wd$", period_chr)
   g_wd <- regmatches(period_chr, m_wd)
   idx_wd <- which(lengths(g_wd) == 2)
   if (length(idx_wd) > 0) {
     h_vals <- as.integer(vapply(g_wd[idx_wd], function(x) x[2], character(1)))
-    start_str <- sprintf("1971-01-01 %02d:00:00", h_vals)
+    start_str <- sprintf("%d-01-02 %02d:00:00", base_year, h_vals)
     datetimestart[idx_wd] <- as.POSIXct(start_str, tz = "UTC")
     datetimeend[idx_wd] <- datetimestart[idx_wd] + 3600
   }
 
-  # Weekend hourly periods h0_we..h23_we (1972)
+  # Weekend hourly periods h0_we..h23_we (day 03)
   m_we <- regexec("^h([0-9]{1,2})_we$", period_chr)
   g_we <- regmatches(period_chr, m_we)
   idx_we <- which(lengths(g_we) == 2)
   if (length(idx_we) > 0) {
     h_vals <- as.integer(vapply(g_we[idx_we], function(x) x[2], character(1)))
-    start_str <- sprintf("1972-01-01 %02d:00:00", h_vals)
+    start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
     datetimestart[idx_we] <- as.POSIXct(start_str, tz = "UTC")
     datetimeend[idx_we] <- datetimestart[idx_we] + 3600
   }
@@ -924,7 +954,7 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
     select(osm_id, highway, period, TV, HGV, LV, speed,
            osm_speed, osm_speed_imputed, truck_pct)
 
-  predictions_long <- add_period_datetime_columns(predictions_long)
+  predictions_long <- add_period_datetime_columns(predictions_long, cfg)
 
   rm(predictions_wide)
   gc(verbose = FALSE)
@@ -966,17 +996,23 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
     predictions_sf <- sf::st_transform(predictions_sf, target_crs)
   }
 
-  predictions_sf <- add_period_datetime_columns(predictions_sf)
+  predictions_sf <- add_period_datetime_columns(predictions_sf, cfg)
 
+  # add explicit logging around the write so duration is recorded
+  pipeline_message("Writing GeoPackage file", level = 1,
+                   progress = "start", process = "save")
   sf::st_write(
     obj = predictions_sf,
     dsn = output_filepath,
     delete_dsn = TRUE,
     quiet = FALSE)
+  pipeline_message(sprintf("Written GeoPackage to %s",
+                           rel_path(output_filepath)),
+                   level = 1, progress = "end", process = "save")
 
   pipeline_message(sprintf("Predictions exported to %s",
                            rel_path(output_filepath)), 
-                   level = 1, progress = "end", process = "save")
+                   level = 1, progress = "info", process = "save")
 
   # --- Summary ---
   pipeline_message(sprintf("Prediction summary for %s:", region_name),
@@ -1213,13 +1249,18 @@ build_france_tiles <- function(tile_size_m = 200000) {
       min_gb = 0.5, warn_gb = 1)
     geom_layer <- tile_sf[, c("osm_id", "name", "highway", "speed",
                               "lanes_osm", "oneway_osm", "DEGRE")]
-    geom_layer <- add_period_datetime_columns(geom_layer)  # safe no-op if no period col
+    geom_layer <- add_period_datetime_columns(geom_layer, cfg)  # safe no-op if no period col
+
+    pipeline_message(sprintf("Writing geometry for tile %s", tile$tile_id),
+                     level = 1, progress = "start", process = "save")
     sf::st_write(
       obj        = geom_layer,
       dsn        = geom_path,
       layer      = "france_network",
       append     = TRUE,
       quiet      = TRUE)
+    pipeline_message(sprintf("Geometry written for tile %s", tile$tile_id),
+                     level = 1, progress = "end", process = "save")
 
     # --- Predict ---
     tile_dt <- as.data.frame(sf::st_drop_geometry(tile_sf))
@@ -1254,7 +1295,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
       select(osm_id, highway, period, TV, HGV, LV, speed,
              osm_speed, osm_speed_imputed, truck_pct)
 
-    predictions_long <- add_period_datetime_columns(predictions_long)
+    predictions_long <- add_period_datetime_columns(predictions_long, cfg)
 
     # validate predictions for this tile, log warnings if any
     validation <- validate_predictions(predictions_long)
@@ -1278,16 +1319,36 @@ build_france_tiles <- function(tile_size_m = 200000) {
         mutate(period = as.character(period))
 
       if (nrow(chunk_long) > 0) {
-        chunk_long <- add_period_datetime_columns(chunk_long)
+        chunk_long <- add_period_datetime_columns(chunk_long, cfg)
 
         # Write traffic data as JSON (more efficient than GPKG for tabular data)
         chunk_file <- chunk_paths[[chunk_name]]
         chunk_data <- sf::st_drop_geometry(chunk_long)
 
+        pipeline_message(sprintf("Writing chunk '%s' (%d rows)", chunk_name, nrow(chunk_data)),
+                         level = 1, progress = "start", process = "save")
         # Append to existing JSON file or create new one
         if (file.exists(chunk_file)) {
           # Read existing data and append
           existing_data <- jsonlite::read_json(chunk_file, simplifyVector = TRUE)
+          # Ensure datetime columns are POSIXct (JSON stores as strings)
+          if ("datetimestart" %in% names(existing_data)) {
+            existing_data$datetimestart <- as.POSIXct(existing_data$datetimestart, tz = "UTC")
+          }
+          if ("datetimeend" %in% names(existing_data)) {
+            existing_data$datetimeend <- as.POSIXct(existing_data$datetimeend, tz = "UTC")
+          }
+          # Align columns between existing and new data to avoid rbind failures
+          all_cols <- union(names(existing_data), names(chunk_data))
+          for (col in setdiff(all_cols, names(existing_data))) {
+            existing_data[[col]] <- NA
+          }
+          for (col in setdiff(all_cols, names(chunk_data))) {
+            chunk_data[[col]] <- NA
+          }
+          # ensure same column order
+          existing_data <- existing_data[, all_cols, drop = FALSE]
+          chunk_data <- chunk_data[, all_cols, drop = FALSE]
           combined_data <- rbind(existing_data, chunk_data)
         } else {
           combined_data <- chunk_data
@@ -1299,6 +1360,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
           path = chunk_file,
           pretty = FALSE,  # Compact JSON for efficiency
           auto_unbox = TRUE)
+        pipeline_message(sprintf("Chunk '%s' written to %s", chunk_name, rel_path(chunk_file)),
+                         level = 1, progress = "end", process = "save")
       }
       rm(chunk_long)
     }
