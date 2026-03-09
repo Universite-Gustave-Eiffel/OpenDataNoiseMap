@@ -19,7 +19,7 @@ PREDICTION_DIR <- file.path("data", "prediction")
 #'   - Geometry layer: 07_predictions_{mode}_network.gpkg
 #'   - Temporal chunks: 07_predictions_{mode}_traffic_{CHUNK}.{ext}
 #'       where {CHUNK} is DEN, hourly, hourly_wd, or hourly_we
-#'       and {ext} is 'gpkg' for geometry, 'json' for traffic data
+#'       and {ext} is 'gpkg' for geometry, 'csv' for traffic data
 #'
 #' @param extent Character. Spatial extent: "sensors", "nantes", "paris", "pemb",
 #'   or "france".
@@ -49,13 +49,13 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
       geom = file.path(PREDICTION_DIR, mode,
                        sprintf("07_predictions_%s_network.gpkg", mode)),
       den = file.path(PREDICTION_DIR, mode,
-                      sprintf("07_predictions_%s_traffic_DEN.json", mode)),
+                      sprintf("07_predictions_%s_traffic_DEN.csv.gz", mode)),
       hourly = file.path(PREDICTION_DIR, mode,
-                         sprintf("07_predictions_%s_traffic_hourly.json", mode)),
+                         sprintf("07_predictions_%s_traffic_hourly.csv.gz", mode)),
       hourly_wd = file.path(PREDICTION_DIR, mode,
-                            sprintf("07_predictions_%s_traffic_hourly_wd.json", mode)),
+                            sprintf("07_predictions_%s_traffic_hourly_wd.csv.gz", mode)),
       hourly_we = file.path(PREDICTION_DIR, mode,
-                            sprintf("07_predictions_%s_traffic_hourly_we.json", mode))
+                            sprintf("07_predictions_%s_traffic_hourly_we.csv.gz", mode))
     ),
     stop("Unknown extent: ", extent, ". Valid: sensors, nantes, paris, pemb, france")
   )
@@ -95,15 +95,15 @@ CONFIG_PREDICT <- list(
   FRANCE_GEOMETRY_FILEPATH = file.path(PREDICTION_DIR, mode_suffix,
                                        sprintf("07_predictions_%s_network.gpkg", mode_suffix)),
   
-  # Traffic attributes split by temporal chunk (JSON format for efficiency)
+  # Traffic attributes split by temporal chunk (CSV.GZ format for efficiency)
   FRANCE_TRAFFIC_DEN_FILEPATH = file.path(PREDICTION_DIR, mode_suffix,
-                                          sprintf("07_predictions_%s_traffic_DEN.json", mode_suffix)),
+                                          sprintf("07_predictions_%s_traffic_DEN.csv.gz", mode_suffix)),
   FRANCE_TRAFFIC_HOURLY_FILEPATH = file.path(PREDICTION_DIR, mode_suffix,
-                                             sprintf("07_predictions_%s_traffic_hourly.json", mode_suffix)),
+                                             sprintf("07_predictions_%s_traffic_hourly.csv.gz", mode_suffix)),
   FRANCE_TRAFFIC_HOURLY_WD_FILEPATH = file.path(PREDICTION_DIR, mode_suffix,
-                                                sprintf("07_predictions_%s_traffic_hourly_wd.json", mode_suffix)),
+                                                sprintf("07_predictions_%s_traffic_hourly_wd.csv.gz", mode_suffix)),
   FRANCE_TRAFFIC_HOURLY_WE_FILEPATH = file.path(PREDICTION_DIR, mode_suffix,
-                                                sprintf("07_predictions_%s_traffic_hourly_we.json", mode_suffix)),
+                                                sprintf("07_predictions_%s_traffic_hourly_we.csv.gz", mode_suffix)),
   
   # Legacy single-file export (rarely used; for testing only)
   FRANCE_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, 

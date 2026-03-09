@@ -939,20 +939,63 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
                              fmt(nrow(predictions_wide))),
     min_gb = 2, warn_gb = 4)
 
-  predictions_long <- predictions_wide %>%
-    tidyr::pivot_longer(
-      cols = matches("^(flow|truck_pct|speed)_"),
-      names_to = c(".value", "period"),
-      names_pattern = "^(flow|truck_pct|speed)_(.+)$"
-    ) %>%
-    mutate(
-      HGV = flow * (truck_pct / 100),
-      LV = flow - HGV,
-      TV = flow,
-      period = factor(period, levels = all_periods)
-    ) %>%
-    select(osm_id, highway, period, TV, HGV, LV, speed,
-           osm_speed, osm_speed_imputed, truck_pct)
+  dt <- data.table::as.data.table(predictions_wide)
+
+  flow_cols <- grep("^flow_", names(dt), value = TRUE)
+  truck_cols <- grep("^truck_pct_", names(dt), value = TRUE)
+  speed_cols <- grep("^speed_", names(dt), value = TRUE)
+
+  flow_long <- data.table::melt(
+    dt,
+    id.vars = c("osm_id","highway","osm_speed","osm_speed_imputed"),
+    measure.vars = flow_cols,
+    variable.name = "period",
+    value.name = "flow")
+  
+  flow_long[, period := sub(pattern = "^flow_", 
+                            replacement = "", 
+                            x = period)]
+
+  truck_long <- data.table::melt(
+    dt,
+    id.vars = c("osm_id"),
+    measure.vars = truck_cols,
+    variable.name = "period",
+    value.name = "truck_pct")
+
+  truck_long[, period := sub(pattern = "^truck_pct_", 
+                             replacement = "", 
+                             x = period)]
+
+  speed_long <- data.table::melt(
+    dt,
+    id.vars = c("osm_id"),
+    measure.vars = speed_cols,
+    variable.name = "period",
+    value.name = "speed")
+
+  speed_long[, period := sub(pattern = "^speed_", 
+                            replacement = "", 
+                            x =  period)]
+
+  predictions_long <- flow_long[
+    truck_long, on = c("osm_id","period")
+  ][
+    speed_long, on = c("osm_id","period")
+  ]
+
+  predictions_long[, `:=`(
+    HGV = flow * (truck_pct/100),
+    LV  = flow - HGV,
+    TV  = flow
+  )]
+
+  predictions_long[, period := factor(period, levels = all_periods)]
+
+  predictions_long <- predictions_long[
+    , .(osm_id, highway, period, TV, HGV, LV, speed,
+        osm_speed, osm_speed_imputed, truck_pct)
+  ]
 
   predictions_long <- add_period_datetime_columns(predictions_long, cfg)
 
@@ -1310,60 +1353,44 @@ build_france_tiles <- function(tile_size_m = 200000) {
       }
     }
 
-    # --- Write each temporal chunk (append mode, no geometry) ---
+    # --- Write each temporal chunk (append mode CSV) ---
     for (chunk_name in names(temporal_chunks)) {
+
       chunk_periods <- temporal_chunks[[chunk_name]]
+
       chunk_long <- predictions_long %>%
         dplyr::filter(period %in% chunk_periods) %>%
-        # convert factor to char for JSON compatibility
         mutate(period = as.character(period))
 
       if (nrow(chunk_long) > 0) {
+
         chunk_long <- add_period_datetime_columns(chunk_long, cfg)
 
-        # Write traffic data as JSON (more efficient than GPKG for tabular data)
         chunk_file <- chunk_paths[[chunk_name]]
+
         chunk_data <- sf::st_drop_geometry(chunk_long)
 
-        pipeline_message(sprintf("Writing chunk '%s' (%d rows)", chunk_name, nrow(chunk_data)),
-                         level = 1, progress = "start", process = "save")
-        # Append to existing JSON file or create new one
-        if (file.exists(chunk_file)) {
-          # Read existing data and append
-          existing_data <- jsonlite::read_json(chunk_file, simplifyVector = TRUE)
-          # Ensure datetime columns are POSIXct (JSON stores as strings)
-          if ("datetimestart" %in% names(existing_data)) {
-            existing_data$datetimestart <- as.POSIXct(existing_data$datetimestart, tz = "UTC")
-          }
-          if ("datetimeend" %in% names(existing_data)) {
-            existing_data$datetimeend <- as.POSIXct(existing_data$datetimeend, tz = "UTC")
-          }
-          # Align columns between existing and new data to avoid rbind failures
-          all_cols <- union(names(existing_data), names(chunk_data))
-          for (col in setdiff(all_cols, names(existing_data))) {
-            existing_data[[col]] <- NA
-          }
-          for (col in setdiff(all_cols, names(chunk_data))) {
-            chunk_data[[col]] <- NA
-          }
-          # ensure same column order
-          existing_data <- existing_data[, all_cols, drop = FALSE]
-          chunk_data <- chunk_data[, all_cols, drop = FALSE]
-          combined_data <- rbind(existing_data, chunk_data)
-        } else {
-          combined_data <- chunk_data
-        }
+        pipeline_message(
+          sprintf("Writing chunk '%s' (%d rows)", chunk_name, nrow(chunk_data)),
+          level = 1, progress = "start", process = "save")
 
-        # Write as JSON
-        jsonlite::write_json(
-          x = combined_data,
-          path = chunk_file,
-          pretty = FALSE,  # Compact JSON for efficiency
-          auto_unbox = TRUE)
-        pipeline_message(sprintf("Chunk '%s' written to %s", chunk_name, rel_path(chunk_file)),
-                         level = 1, progress = "end", process = "save")
+        # Convert to data.table for fast write
+        chunk_dt <- data.table::as.data.table(chunk_data)
+
+        # Write CSV (append if exists)
+        data.table::fwrite(
+          chunk_dt,
+          file = chunk_file,
+          append = file.exists(chunk_file),
+          col.names = !file.exists(chunk_file)
+        )
+
+        pipeline_message(
+          sprintf("Chunk '%s' appended to %s", chunk_name, rel_path(chunk_file)),
+          level = 1, progress = "end", process = "save")
       }
-      rm(chunk_long)
+
+      rm(chunk_long, chunk_data, chunk_dt)
     }
 
     rm(predictions_wide, predictions_long)
