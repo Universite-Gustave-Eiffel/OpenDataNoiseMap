@@ -6,10 +6,10 @@
 # Load utility functions
 # ------------------------------------------------------------------------------
 
-utils_dir <- file.path(PROJECT_ROOT, "R", "utils")
+utils_dir   <- file.path(PROJECT_ROOT, "R", "utils")
 utils_files <- list.files(
-  path = utils_dir,
-  pattern = "\\.R$",
+  path       = utils_dir,
+  pattern    = "\\.R$",
   full.names = TRUE)
 
 for (uf in utils_files) {
@@ -31,8 +31,9 @@ RUN_CONTEXT <- Sys.getenv(x = "RUN_CONTEXT", unset = "local")
 assign(x = "RUN_CONTEXT", value = RUN_CONTEXT, envir = .GlobalEnv)
 
 pipeline_message(sprintf("Avatar token: %s", 
-                         ifelse(test = Sys.getenv("AVATAR_API_TOKEN") != "", 
-                                yes = "DETECTED", no = "MISSING")), 
+                         ifelse(test = Sys.getenv(x = "AVATAR_API_TOKEN") != "", 
+                                yes  = "DETECTED", 
+                                no   = "MISSING")), 
                  process = "info")
 
 pipeline_message(paste("Running environment: ", RUN_CONTEXT), level = 1, 
@@ -42,7 +43,7 @@ pipeline_message(paste("Running environment: ", RUN_CONTEXT), level = 1,
 # Detect library environment
 # ------------------------------------------------------------------------------
 
-user_lib <- Sys.getenv("R_LIBS_USER")
+user_lib <- Sys.getenv(x = "R_LIBS_USER")
 is_hpc_lib <- user_lib != ""
 
 pipeline_message(sprintf("R_LIBS_USER detected: %s", user_lib), process = "info")
@@ -56,8 +57,8 @@ if (RUN_CONTEXT == "local" && !is_hpc_lib) {
   pipeline_message("Running locally with renv", level = 1, 
                    progress = "start", process = "install")
   
-  if (!requireNamespace("renv", quietly = TRUE)) {
-    install.packages("renv", repos = "http://cran.rstudio.com/")
+  if (!requireNamespace(package = "renv", quietly = TRUE)) {
+    install.packages(pkgs = "renv", repos = "http://cran.rstudio.com/")
   }
   
   if (file.exists("renv/activate.R")) {
@@ -72,6 +73,7 @@ if (RUN_CONTEXT == "local" && !is_hpc_lib) {
 # ------------------------------------------------------------------------------
 # HPC mode (login node OR SLURM) → user library
 # ------------------------------------------------------------------------------
+
 if (is_hpc_lib) {
   
   pipeline_message("Using HPC user library", level = 1, 
@@ -91,7 +93,8 @@ if (is_hpc_lib) {
 # ------------------------------------------------------------------------------
 # Token for Avatar data download
 # ------------------------------------------------------------------------------
-AVATAR_API_TOKEN <- Sys.getenv("AVATAR_API_TOKEN")
+
+AVATAR_API_TOKEN <- Sys.getenv(x = "AVATAR_API_TOKEN")
 assign(x = "AVATAR_API_TOKEN", value = AVATAR_API_TOKEN, envir = .GlobalEnv)
 if (AVATAR_API_TOKEN == "") {
   pipeline_message("Avatar API token not found. Avatar download mode will fail.", 

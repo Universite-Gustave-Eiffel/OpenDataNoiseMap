@@ -8,6 +8,63 @@
 
 # Note: utils_io.R and utils_sf.R are already loaded by bootstrap.R
 
+
+#' Generate prediction file paths based on spatial extent and mode
+#'
+#' This function creates a standardized naming scheme for prediction outputs,
+#' consistent with the training pipeline. All output files are tagged with the
+#' current MODE (e.g., "nantes", "paris", "pemb", "france") to avoid collisions
+#' when running multiple regions.
+#'
+#' For regional predictions (Nantes, Paris, PEMB, sensors):
+#'   - Single output file: 07_predictions_{mode}.gpkg
+#'
+#' For France-wide tiled predictions:
+#'   - Geometry layer: 07_predictions_{mode}_network.gpkg
+#'   - Temporal chunks: 07_predictions_{mode}_traffic_{CHUNK}.{ext}
+#'       where {CHUNK} is DEN, hourly, hourly_wd, or hourly_we
+#'       and {ext} is 'gpkg' for geometry, 'csv' for traffic data
+#'
+#' @param extent Character. Spatial extent: "sensors", "nantes", "paris", "pemb",
+#'   or "france".
+#' @param mode Character. Pipeline mode (typically from MODE variable: "nantes",
+#'   "paris", "pemb", "france", "sensors", "all", or "test").  Default: "all".
+#' @return List of file paths for the given extent.
+build_prediction_filepaths <- function(extent, mode = NULL) {
+  if (is.null(mode) || !nzchar(mode)) {
+    mode <- if (exists("MODE") && nzchar(MODE)) MODE else "all"
+  }
+
+  switch(extent,
+    sensors = list(
+      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
+    ),
+    nantes = list(
+      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
+    ),
+    paris = list(
+      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
+    ),
+    pemb = list(
+      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
+    ),
+    france = list(
+      output_dir = file.path(PREDICTION_DIR, mode),
+      geom = file.path(PREDICTION_DIR, mode,
+                       sprintf("07_predictions_%s_network.gpkg", mode)),
+      den = file.path(PREDICTION_DIR, mode,
+                      sprintf("07_predictions_%s_traffic_DEN.csv.gz", mode)),
+      hourly = file.path(PREDICTION_DIR, mode,
+                         sprintf("07_predictions_%s_traffic_hourly.csv.gz", mode)),
+      hourly_wd = file.path(PREDICTION_DIR, mode,
+                            sprintf("07_predictions_%s_traffic_hourly_wd.csv.gz", mode)),
+      hourly_we = file.path(PREDICTION_DIR, mode,
+                            sprintf("07_predictions_%s_traffic_hourly_we.csv.gz", mode))
+    ),
+    stop("Unknown extent: ", extent, ". Valid: sensors, nantes, paris, pemb, france")
+  )
+}
+
 # ------------------------------------------------------------------------------
 # Fonctions de chargement et filtrage spatial
 # ------------------------------------------------------------------------------

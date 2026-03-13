@@ -1,21 +1,25 @@
 # ==============================================================================
-# STAGE 1: SETUP
+# SETUP CONFIGURATION
 # ==============================================================================
 
 pipeline_message("Setup configuration", level = 0, 
                  progress = "start", process = "install")
 
+# ------------------------------------------------------------------------------
+# Set library path and required packages
+# ------------------------------------------------------------------------------
+
+# Set lib paths
 Sys.getenv("LD_LIBRARY_PATH")
 
-# ------------------------------------------------------------------------------
 # Required packages
-# ------------------------------------------------------------------------------
 pkgs_needed <- c(
   "Rcpp", "dplyr", "tidyr", "sf", "lwgeom", "httr", "jsonlite", "lubridate", 
   "randomForest", "data.table", "stringr", "sfnetworks", "igraph", "tidygraph", 
   "progress", "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix", 
   "unix", "tools")
 
+# Check for missing packages and install if necessary
 installed <- rownames(installed.packages(lib.loc = .libPaths()))
 missing <- setdiff(pkgs_needed, installed)
 

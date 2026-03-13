@@ -1,6 +1,22 @@
 # ==============================================================================
 # STAGE 4: DATA INTEGRATION - MINIMAL VERSION
 # ==============================================================================
+# This stage performs the aggregation of raw Avatar data into hourly and period 
+# metrics, and computes relative traffic flow metrics. It also generates several 
+# plots to visualize traffic patterns and data quality.
+# 
+# Inputs:
+#   - Raw Avatar data in CSV format (output of 03_avatar_download.R)
+# Outputs:
+#   - AVATAR_AGGREGATED_FILEPATH: Aggregated Avatar data with relative metrics 
+#     (RDS file)
+#   - FIG_HOURLY_TRAFFIC_FILENAME: Hourly traffic patterns plot (PNG file)
+#   - FIG_SPEED_AND_TRUCK_PERCENTAGE: Speed and truck percentage by hour plot 
+#     (PNG file)
+#   - FIG_TRAFFIC_PERIOD_COMPARISONS: Period comparison (D/E/N) plot (PNG file)
+#   - FIG_TRAFFIC_FLOW_DISTRIB_AND_DATA_QUALITY: Traffic flow distribution and 
+#     data quality plot (PNG file)
+# ==============================================================================
 
 pipeline_message("Avatar data post-processing", level = 0, 
                  progress = "start", process = "calc")
@@ -29,7 +45,8 @@ if (!exists(x= 'avatar_data', inherits = FALSE &&
   } else {
     check_memory_available(
       operation_name = "Load Avatar raw traffic RDS (~4 GB in RAM)",
-      min_gb = 6, warn_gb = 10)
+      min_gb         = 6, 
+      warn_gb        = 10)
     
     avatar_data <- readRDS(file = CFG$AVATAR_RDS_DATA_FILEPATH)
     
@@ -46,8 +63,8 @@ if (isTRUE(use_chunk_streaming)) {
     "Chunk-streaming mode: hourly aggregation directly from CSV chunks", 
     level = 1, progress = "start", process = "calc")
   
-  files <- list.files(path = CFG$AVATAR_CSV_DATA_DIRPATH, 
-                      pattern = "avatar_data_chunk_.*\\.csv", 
+  files <- list.files(path       = CFG$AVATAR_CSV_DATA_DIRPATH, 
+                      pattern    = "avatar_data_chunk_.*\\.csv", 
                       full.names = TRUE)
   
   if (length(files) == 0) {
@@ -66,10 +83,9 @@ if (isTRUE(use_chunk_streaming)) {
   
   for (i in seq_along(files)) {
     dt_chunk <- data.table::fread(
-      file = files[i],
-      sep = ";",
-      stringsAsFactors = FALSE
-    )
+      file             = files[i],
+      sep              = ";",
+      stringsAsFactors = FALSE)
     
     # Sanitize raw column names (flow[veh/h] -> flow.veh.h.)
     setnames(dt_chunk, make.names(names(dt_chunk), unique = TRUE))
@@ -77,14 +93,14 @@ if (isTRUE(use_chunk_streaming)) {
     hourly_chunk <- aggregate_avatar_hourly(dt = dt_chunk)
     
     data.table::fwrite(
-      x = hourly_chunk,
-      file = temp_hourly_csv,
-      sep = ";",
-      append = wrote_header,
+      x         = hourly_chunk,
+      file      = temp_hourly_csv,
+      sep       = ";",
+      append    = wrote_header,
       col.names = !wrote_header,
-      quote = TRUE,
-      na = ""
-    )
+      quote     = TRUE,
+      na        = "")
+    
     wrote_header <- TRUE
     
     rm(dt_chunk, hourly_chunk)
@@ -98,8 +114,8 @@ if (isTRUE(use_chunk_streaming)) {
   }
   
   hourly_aggregated <- data.table::fread(
-    file = temp_hourly_csv,
-    sep = ";",
+    file             = temp_hourly_csv,
+    sep              = ";",
     stringsAsFactors = FALSE
   )
   unlink(temp_hourly_csv)
@@ -116,19 +132,19 @@ if (isTRUE(use_chunk_streaming)) {
   setDT(avatar_data)
 
   # Sanitize column names (CSV via fread keeps special chars like flow[veh/h])
-  setnames(avatar_data, make.names(names(avatar_data), unique = TRUE))
+  setnames(avatar_data, make.names(names = names(avatar_data), unique = TRUE))
 
   # Create periods and hours
   if (!inherits(avatar_data$measure_datetime, "POSIXct")) {
-    avatar_data[, measure_datetime := as.POSIXct(measure_datetime, 
-                                                 format="%Y-%m-%dT%H:%M:%S")]
+    avatar_data[, measure_datetime := as.POSIXct(x      = measure_datetime, 
+                                                 format ="%Y-%m-%dT%H:%M:%S")]
   }
   avatar_data[, hour := hour(measure_datetime)]
   avatar_data[, period := ifelse(test = hour >= 6 & hour < 18, 
-                                yes = "D", 
-                                no = ifelse(test = hour >= 18 & hour < 22, 
-                                            yes = "E", 
-                                            no = "N"))]
+                                 yes  = "D", 
+                                 no  = ifelse(test = hour >= 18 & hour < 22, 
+                                              yes  = "E", 
+                                              no   = "N"))]
 
   pipeline_message("Avatar data successfully converted and columns created", 
                   level = 1, progress = "end", process = "valid")
@@ -150,7 +166,7 @@ pipeline_message("Aggregating Avatar data by period", level = 1,
 
 # Data Aggregation over Day/Evening/Night periods
 aggregated_measures_period <- aggregate_avatar_metrics(
-  dt = hourly_aggregated, 
+  dt      = hourly_aggregated, 
   by_vars = c("count_point_id", "period"))
 
 pipeline_message("Aggregation by period successfully done", level = 1, 
@@ -163,7 +179,7 @@ pipeline_message(
 
 # Hourly data aggregation (all days)
 aggregated_measures_hourly <- aggregate_avatar_metrics(
-  dt = hourly_aggregated, 
+  dt      = hourly_aggregated, 
   by_vars = c("count_point_id", "hour"))
 
 # Add period column with "h0", "h1", etc. format
@@ -181,17 +197,17 @@ pipeline_message("Calculating weekday/weekend hourly traffic flow metrics",
                  level = 1, progress = "start", process = "calc")
 
 # Weekday hourly aggregation
-hourly_wd <- hourly_aggregated[day_type == "wd"]
+hourly_wd                     <- hourly_aggregated[day_type == "wd"]
 aggregated_measures_hourly_wd <- aggregate_avatar_metrics(
-  dt = hourly_wd, 
+  dt      = hourly_wd, 
   by_vars = c("count_point_id", "hour"))
 aggregated_measures_hourly_wd[, period := paste0("h", hour, "_wd")]
 aggregated_measures_hourly_wd[, hour := NULL]
 
 # Weekend hourly aggregation
-hourly_we <- hourly_aggregated[day_type == "we"]
+hourly_we                     <- hourly_aggregated[day_type == "we"]
 aggregated_measures_hourly_we <- aggregate_avatar_metrics(
-  dt = hourly_we, 
+  dt      = hourly_we, 
   by_vars = c("count_point_id", "hour"))
 aggregated_measures_hourly_we[, period := paste0("h", hour, "_we")]
 aggregated_measures_hourly_we[, hour := NULL]
@@ -205,8 +221,8 @@ pipeline_message(
 # Union of all aggregated data
 aggregated_measures <- rbind(aggregated_measures_period, 
                              aggregated_measures_hourly, 
-                             aggregated_measures_hourly_wd,
-                             aggregated_measures_hourly_we,
+                             aggregated_measures_hourly_wd, 
+                             aggregated_measures_hourly_we, 
                              fill = TRUE)
 
 # Memory cleanup
@@ -225,7 +241,7 @@ avatar_aggregated <- compute_avatar_relative_metrics(aggregated_measures)
 
 # Save aggregated measures with ratios data frame to disk
 saveRDS(object = avatar_aggregated, 
-        file = CFG$AVATAR_AGGREGATED_FILEPATH)
+        file   = CFG$AVATAR_AGGREGATED_FILEPATH)
 
 pipeline_message(describe_df(avatar_aggregated), process = "info")
 
@@ -255,9 +271,10 @@ pipeline_message("Plotting hourly traffic patterns", level = 1,
                  progress = "start", process = "plot")
 
 # Plot 1: hourly traffic patterns (24h profile)
-p1 <- plot_hourly_traffic_profile(traffic_hourly_patterns = hourly_patterns, 
-                                  fig_path = CFG$FIGS_DIR, 
-                                  fig_name = CFG$FIG_HOURLY_TRAFFIC_FILENAME) 
+p1 <- plot_hourly_traffic_profile(
+  traffic_hourly_patterns = hourly_patterns, 
+  fig_path                = CFG$FIGS_DIR, 
+  fig_name                = CFG$FIG_HOURLY_TRAFFIC_FILENAME) 
 
 pipeline_message(
   sprintf("Hourly aggregated data successfully plotted and saved into file %s", 
@@ -275,8 +292,8 @@ pipeline_message("Plotting speed and truck percentage by hour", level = 1,
 # Plot 2: speed and truck percentage by hour
 p2 <- plot_speed_and_truck_percentage(
   traffic_hourly_patterns = hourly_patterns, 
-  fig_path = CFG$FIGS_DIR, 
-  fig_name = CFG$FIG_SPEED_AND_TRUCK_PERCENTAGE)
+  fig_path                = CFG$FIGS_DIR, 
+  fig_name                = CFG$FIG_SPEED_AND_TRUCK_PERCENTAGE)
 
 pipeline_message(
   sprintf("Hourly speed and truck percentage successfully plotted and saved into file %s", 
@@ -292,9 +309,10 @@ pipeline_message(
 pipeline_message("Plotting period comparison (D/E/N)", level = 1, 
                  progress = "start", process = "plot")
 
-p3 <- plot_period_comparison(aggregated_traffic_data = avatar_aggregated, 
-                           fig_path = CFG$FIGS_DIR, 
-                           fig_name = CFG$FIG_TRAFFIC_PERIOD_COMPARISONS)
+p3 <- plot_period_comparison(
+  aggregated_traffic_data = avatar_aggregated, 
+  fig_path                = CFG$FIGS_DIR, 
+  fig_name                = CFG$FIG_TRAFFIC_PERIOD_COMPARISONS)
 
 pipeline_message(
   sprintf("Period comparison (D/E/N) successfully plotted and saved into file %s", 
@@ -312,8 +330,8 @@ pipeline_message("Plotting traffic flow distribution and data quality",
 
 p4 <- plot_flow_distribution_and_quality(
   aggregated_traffic_data = avatar_aggregated, 
-  fig_path = CFG$FIGS_DIR, 
-  fig_name = CFG$FIG_TRAFFIC_FLOW_DISTRIB_AND_DATA_QUALITY)
+  fig_path                = CFG$FIGS_DIR, 
+  fig_name                = CFG$FIG_TRAFFIC_FLOW_DISTRIB_AND_DATA_QUALITY)
 
 pipeline_message(
   sprintf("Traffic flow distribution and data quality successfully plotted and saved into file %s", 

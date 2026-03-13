@@ -3,16 +3,13 @@
 # ==============================================================================
 
 # Training paths and filenames
-TRAINING_DATA_DIR      <- file.path("data", "training")
-TRAINING_RDS_DATA_DIR  <- file.path(TRAINING_DATA_DIR, "rds")
-TRAINING_GPKG_DATA_DIR <- file.path(TRAINING_DATA_DIR, "gpkg")
+TRAINING_DATA_DIR               <- file.path("data", "training")
+TRAINING_RDS_DATA_DIR           <- file.path(TRAINING_DATA_DIR, "rds")
+TRAINING_GPKG_DATA_DIR          <- file.path(TRAINING_DATA_DIR, "gpkg")
 
-# File name suffix based on the pipeline MODE variable.  When the pipeline is
-# executed with `--mode <nantes|paris|pemb|sensors|all>` we want the generated
-# artifacts (dataset and model files) to contain that mode in their name so that
-# multiple runs using different modes do not collide.  The variable MODE is
-# already assigned by main.R before sourcing the configuration files.
-mode_suffix <- if (exists("MODE") && nzchar(MODE)) MODE else "all"
+# File name suffix based on the pipeline MODE variable
+mode_suffix                     <- if (exists("MODE") && nzchar(MODE)){ MODE } 
+                                   else{ "all" }
 
 # Training data
 training_data_rds_filename      <- "05_training_dataset.rds"
@@ -72,11 +69,11 @@ CONFIG_TRAINING <- list(
   # Number of boosting iterations
   NROUNDS = 1500,
   
-  # Quality/robustness options (low overhead)
+  # Quality/robustness options
   # Split by count_point_id to avoid leakage between train/test
-  USE_GROUPED_SENSOR_SPLIT = TRUE,
+  USE_GROUPED_SENSOR_SPLIT   = TRUE,
   # Use Avatar quality indicators as XGBoost sample weights
   USE_AVATAR_QUALITY_WEIGHTS = TRUE,
   # Lower bound for sample weights (avoid zero-weight rows)
-  MIN_AVATAR_SAMPLE_WEIGHT = 0.20
+  MIN_AVATAR_SAMPLE_WEIGHT   = 0.20
 )

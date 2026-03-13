@@ -1,15 +1,42 @@
 # ==============================================================================
 # STAGE 5: TRAINING DATASET MERGE
 # ==============================================================================
-# This script merges the cleaned Avatar data with the France engineered layer 
-# (already pre-calculated with all features) to create the final training dataset.
+# This stage merges the cleaned Avatar data with the France engineered layer 
+# (already pre-calculated with all features) to create the final training 
+# dataset.
 #
 # Inputs:
-#   - 02_osm_network_france_engineered.gpkg (France layer with features)
-#   - 03_osm_network_with_avatar_ids.gpkg (OSM network filtered by Avatar sensors)
-#   - 04_avatar_aggregated_with_ratios.rds (aggregated traffic data)
+#   - OSM_ROADS_FRANCE_ENGINEERED_FILEPATH: Pre-processed OSM France road 
+#     network 
+#     with engineered features
+#   - AVATAR_MERGED_WITH_OSM_FILEPATH: Spatial dataset of OSM roads matched with
+#     AVATAR count points, with count point attributes
+#   - AVATAR_AGGREGATED_FILEPATH: Aggregated traffic data with quality rules 
+#     applied
 # Outputs:
-#   - 05_training_dataset.rds/.gpkg (final dataset for training)
+#  - AVATAR_AGGREGATED_CLEAN_FILEPATH: Cleaned up aggregated traffic data with 
+#    quality rules applied
+#  - TRAINING_RDS_DATA_FILEPATH: Final training dataset in RDS format (joined
+#    table with road features and traffic targets)
+#  - TRAINING_GPKG_DATA_FILEPATH: Final training dataset in GeoPackage format
+#    (joined table with road features and traffic targets, with geometry for 
+#    QGIS-friendly visualization)
+# Notes:
+#   - The merge is done via the `count_point_id` which links OSM roads to AVATAR 
+#     count points
+#   - The final dataset includes both the target variables (traffic flow, speed, 
+#     etc.)
+#     and the engineered features from the OSM France network (connectivity, 
+#     DEGRE, etc.)
+#   - The final dataset is saved in both RDS format (for training) and 
+#     GeoPackage format (for visualization in QGIS)
+#   - The GeoPackage file includes geometry for each road segment, allowing for 
+#     spatial visualization and analysis in GIS software like QGIS
+#   - The script also includes data quality checks and filtering to ensure that 
+#     only valid observations are included in the final training dataset
+#   - The final training dataset can be quite large, so memory checks and 
+#     efficient data handling are implemented to avoid issues during the merge 
+#     process
 #
 # In TEST mode: uses a fraction of the data for speed
 # ==============================================================================
@@ -33,7 +60,7 @@ if (!exists('osm_france_engineered') ||
     level = 1, progress = "start", process = "load")
   
   osm_france_engineered <- sf::st_read(
-    dsn = CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
+    dsn   = CFG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH, 
     quiet = TRUE)
   
   if (sf::st_crs(osm_france_engineered) != CFG$TARGET_CRS) {
@@ -65,7 +92,7 @@ if (!exists('full_network_avatar_id') ||
     level = 1, progress = "start", process = "load")
   
   full_network_avatar_id <- sf::st_read(
-    dsn = CFG$AVATAR_MERGED_WITH_OSM_FILEPATH, 
+    dsn   = CFG$AVATAR_MERGED_WITH_OSM_FILEPATH, 
     quiet = TRUE)
   
   if (sf::st_crs(full_network_avatar_id) != CFG$TARGET_CRS) {
@@ -94,26 +121,30 @@ pipeline_message(describe_df(osm_france_engineered), process = "info")
 pipeline_message(describe_df(full_network_avatar_id), process = "info")
 
 # Get Avatar road OSM IDs
-avatar_osm_ids <- unique(full_network_avatar_id$osm_id)
+avatar_osm_ids <- unique(x = full_network_avatar_id$osm_id)
 
 # Filter engineered network to Avatar roads
 network_clean <- osm_france_engineered[osm_id %in% avatar_osm_ids]
 
 # Get Avatar count point ID mapping (osm_id -> id + lane_number)
 id_mapping <- full_network_avatar_id[, .(osm_id, id, lane_number)]
-setnames(id_mapping, "id", "count_point_id")
+setnames(x = id_mapping, old = "id", new = "count_point_id")
 
 # Add count_point_id and lane_number to network_clean
-network_clean <- merge(network_clean, id_mapping, by = "osm_id", all.x = TRUE)
+network_clean <- merge(x     = network_clean, 
+                       y     = id_mapping, 
+                       by    = "osm_id", 
+                       all.x = TRUE)
 
 # Select network columns
 network_cols <- c("count_point_id", "osm_id", "highway", "DEGRE", "ref_letter", 
-                  "first_word", "oneway_osm", "lanes_osm", "lanes_directional",
+                  "first_word", "oneway_osm", "lanes_osm", "lanes_directional", 
                   "speed", "junction_osm", "lane_number",
                   "connectivity", "betweenness", "closeness", "pagerank",
                   "coreness", "dead_end_score", "edge_length_m")
 
-available_network_cols <- intersect(network_cols, names(network_clean))
+available_network_cols <- intersect(x = network_cols, 
+                                    y = names(network_clean))
 network_clean <- network_clean[, ..available_network_cols]
 
 pipeline_message(
@@ -163,14 +194,14 @@ pipeline_message("Avatar data quality rules applied", level = 1,
                  progress = "end", process = "valid")
 
 # Diagnostic: Check problematic cases
-n_truck_exceed <- sum(!is.na(avatar_data$truck_pct) 
-                      & avatar_data$truck_pct > 100, 
-                      na.rm = TRUE)
-n_extreme_ratio_trucks <- sum(!is.na(avatar_data$ratio_flow_trucks) 
-                              & avatar_data$ratio_flow_trucks > 3, 
-                              na.rm = TRUE)
-n_extreme_ratio_truck_pct <- sum(!is.na(avatar_data$ratio_truck_pct) 
-                                 & avatar_data$ratio_truck_pct > 3, 
+n_truck_exceed            <- sum(!is.na(avatar_data$truck_pct) & 
+                                 avatar_data$truck_pct > 100, 
+                                 na.rm = TRUE)
+n_extreme_ratio_trucks    <- sum(!is.na(avatar_data$ratio_flow_trucks) & 
+                                 avatar_data$ratio_flow_trucks > 3, 
+                                 na.rm = TRUE)
+n_extreme_ratio_truck_pct <- sum(!is.na(avatar_data$ratio_truck_pct) & 
+                                 avatar_data$ratio_truck_pct > 3, 
                                  na.rm = TRUE)
 
 # *************************** #
@@ -182,20 +213,22 @@ pipeline_message("Cleaning Avatar data", level = 1,
 
 # Filter criteria (STRICT for targets, PERMISSIVE for optional variables)
 avatar_clean <- avatar_data[
-  flow_D > 0 &                                                                  # Must have valid period D baseline flow
-  !is.na(aggregate_flow) &                                                      # Must have flow data
-  aggregate_flow > 0 &                                                          # Must be positive
-  aggregate_flow < 20000 &                                                      # Remove extreme outliers (>20k veh/h reasonable for highways)
-  (is.na(aggregate_speed) | (aggregate_speed > 0 & aggregate_speed < 200))]     # Speed can be missing
+  flow_D > 0             &                                                   # Must have valid period D baseline flow
+  !is.na(aggregate_flow) &                                                   # Must have flow data
+  aggregate_flow > 0     &                                                   # Must be positive
+  aggregate_flow < 20000 &                                                   # Remove extreme outliers (>20k veh/h reasonable for highways)
+  (is.na(aggregate_speed) | (aggregate_speed > 0 & aggregate_speed < 200))]  # Speed can be missing
 n_removed <- n_initial - nrow(x = avatar_clean)
 
 # ***************** #
 # Add period factor #
 # ***************** #
 
-period_levels <- c("D", "E", "N", paste0("h", 0:23),
-                   paste0("h", 0:23, "_wd"), paste0("h", 0:23, "_we"))
-avatar_clean$period <- factor(x = avatar_clean$period, 
+period_levels <- c("D", "E", "N", 
+                   paste0("h", 0:23),
+                   paste0("h", 0:23, "_wd"), 
+                   paste0("h", 0:23, "_we"))
+avatar_clean$period <- factor(x      = avatar_clean$period, 
                               levels = period_levels)
 
 # Check period distribution
@@ -215,8 +248,7 @@ avatar_cols <- c("count_point_id", "period",
                 "truck_pct", "ratio_truck_pct",
                 "perc_flow_predicted", "perc_flow_trucks_predicted", 
                 "perc_speed_predicted", "perc_occupancy_predicted",
-                "n_hours_with_data", 
-                "n_total_observations")
+                "n_hours_with_data", "n_total_observations")
 
 available_avatar_cols <- intersect(x = avatar_cols, 
                                    y = names(avatar_clean))
@@ -229,8 +261,8 @@ pipeline_message(
 
 # Save processed avatar data
 saveRDS(object = avatar_clean, 
-        file = CFG$AVATAR_AGGREGATED_CLEAN_FILEPATH)
-assign(x = "avatar_clean", 
+        file   = CFG$AVATAR_AGGREGATED_CLEAN_FILEPATH)
+assign(x     = "avatar_clean", 
        value = as.data.frame(avatar_clean), 
        envir = .GlobalEnv)
 
@@ -255,19 +287,19 @@ pipeline_message(
 
 # Merge avatar data with network attributes (inner join)
 training_data <- merge(
-  x = as.data.frame(avatar_clean), 
-  y = as.data.frame(network_clean),
-  by = "count_point_id",
+  x     = as.data.frame(avatar_clean), 
+  y     = as.data.frame(network_clean),
+  by    = "count_point_id",
   all.x = FALSE,  # Inner join - keep only matched observations
   all.y = FALSE)
 
 # Ratio vitesse réelle / vitesse réglementaire OSM (quand disponible)
 training_data$ratio_speed_to_osm <- ifelse(
-  !is.na(training_data$aggregate_speed) &
-    !is.na(training_data$speed) &
-    training_data$speed > 0,
-  training_data$aggregate_speed / training_data$speed,
-  NA_real_
+  test = !is.na(training_data$aggregate_speed) & 
+         !is.na(training_data$speed) & 
+         training_data$speed > 0, 
+  yes  = training_data$aggregate_speed / training_data$speed, 
+  no   = NA_real_
 )
 
 # Final column order
@@ -309,7 +341,7 @@ pipeline_message(sprintf("Training data integrity check: %s NA detected",
 
 # Save training data
 saveRDS(object = training_data, 
-        file = CFG$TRAINING_RDS_DATA_FILEPATH)
+        file   = CFG$TRAINING_RDS_DATA_FILEPATH)
 
 pipeline_message(
   sprintf("Training dataset successfully created and saved to %s", 
@@ -318,8 +350,8 @@ pipeline_message(
 
 # Add geometry from France engineered network
 training_data_sf <- merge(
-  x = training_data, 
-  y = osm_france_engineered[, c("osm_id", "geom")],  
+  x  = training_data, 
+  y  = osm_france_engineered[, c("osm_id", "geom")],  
   by = "osm_id")
 
 # Convert to sf object
@@ -330,10 +362,10 @@ training_data_sf <- add_period_datetime_columns(training_data_sf)
 
 # Export to GeoPackage file
 sf::st_write(
-  obj = training_data_sf, 
-  dsn = CFG$TRAINING_GPKG_DATA_FILEPATH, 
+  obj        = training_data_sf, 
+  dsn        = CFG$TRAINING_GPKG_DATA_FILEPATH, 
   delete_dsn = TRUE, 
-  quiet = TRUE)
+  quiet      = TRUE)
 
 pipeline_message(
     sprintf("Writing %i features with %i fields and geometry type %s", 

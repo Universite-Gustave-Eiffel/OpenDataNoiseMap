@@ -8,6 +8,56 @@
 
 # Note: utils_io.R is already loaded by bootstrap.R
 
+
+get_quality_indicator_column <- function(target_name, available_cols) {
+  if (target_name %in% c("aggregate_flow", "ratio_flow")) {
+    col <- "perc_flow_predicted"
+  } else if (target_name %in% c("aggregate_speed", "ratio_speed", 
+                                "ratio_speed_to_osm")) {
+    col <- "perc_speed_predicted"
+  } else if (target_name %in% c("truck_pct", "ratio_truck_pct", 
+                                "aggregate_flow_trucks", "ratio_flow_trucks")) {
+    col <- "perc_flow_trucks_predicted"
+  } else {
+    col <- NA_character_
+  }
+  if (!is.na(col) && col %in% available_cols) { col } else { NA_character_ }
+}
+
+safe_sparse_model_matrix <- function(formula_obj, data_df) {
+  vars_in_formula <- intersect(x = unique(x = all.vars(formula_obj)), 
+                               y = names(data_df))
+  if (nrow(data_df) == 0L) {
+    return(Matrix::sparse.model.matrix(object = formula_obj, data = data_df))
+  }
+
+  # Work on a copy and normalize categorical vars to character
+  mm_data <- data_df
+  for (v in vars_in_formula) {
+    if (is.factor(mm_data[[v]])) {
+      mm_data[[v]] <- as.character(mm_data[[v]])
+    }
+  }
+
+  # model.matrix drops rows with NA on variables used in formula; check levels
+  # on that effective subset and neutralize categorical variables with <=1 level
+  mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
+  cc_idx <- complete.cases(mm_subset)
+  cc_data <- mm_data[cc_idx, , drop = FALSE]
+
+  for (v in vars_in_formula) {
+    if (is.character(mm_data[[v]])) {
+      lv <- unique(x = cc_data[[v]])
+      lv <- lv[!is.na(lv) & nzchar(lv)]
+      if (length(lv) <= 1) {
+        mm_data[[v]] <- 0
+      }
+    }
+  }
+
+  Matrix::sparse.model.matrix(object = formula_obj, data = mm_data)
+}
+
 # ------------------------------------------------------------------------------
 # CNOSSOS-EU Emission Calculator (via NoiseModelling Java bridge)
 # ------------------------------------------------------------------------------
@@ -213,3 +263,78 @@ validate_model_suite <- function(models_list) {
     is_complete = length(missing_base) == 0 && length(missing_ratio) == 0
   )
 }
+
+
+  # Helper: summarize metrics by group
+  summarize_group_metrics <- function(df, group_col) {
+    dt <- as.data.table(x = df)
+    out <- dt[, .(
+        n        = .N,
+        bias_xgb = mean(x = db_error, na.rm = TRUE),
+        mae_xgb  = mean(x = abs_db_error, na.rm = TRUE),
+        rmse_xgb = sqrt(x = mean(x = db_error^2, na.rm = TRUE)),
+        bias_osm = if ("db_error_osm" %in% names(x = .SD)) mean(x = db_error_osm, na.rm = TRUE) else NA_real_,
+        mae_osm  = if ("abs_db_error_osm" %in% names(x = .SD)) mean(x = abs_db_error_osm, na.rm = TRUE) else NA_real_), 
+      by = .(group = as.character(x = get(group_col)))]
+    out[!is.na(x = group) & group != ""]
+  }
+
+  fmt_pct <- function(x) {
+    if (is.na(x = x) || !is.finite(x = x)) return("NA")
+    sprintf("%.1f%%", 100 * x)
+  }
+
+  compute_subset_metrics <- function(mask, label) {
+    idx <- !is.na(x = mask) & as.logical(mask)
+    if (sum(idx) == 0) {
+      return(data.frame(
+        subset = label,
+        n = 0L,
+        bias = NA_real_,
+        mae = NA_real_,
+        rmse = NA_real_,
+        q50 = NA_real_,
+        q90 = NA_real_,
+        within_1db = NA_real_,
+        within_2db = NA_real_,
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    err <- emission_test$db_error[idx]
+    abse <- emission_test$abs_db_error[idx]
+    data.frame(
+      subset = label,
+      n = sum(idx),
+      bias = mean(x = err, na.rm = TRUE),
+      mae = mean(x = abse, na.rm = TRUE),
+      rmse = sqrt(x = mean(x = err^2, na.rm = TRUE)),
+      q50 = median(x = abse, na.rm = TRUE),
+      q90 = as.numeric(x = quantile(x = abse, probs = 0.90, na.rm = TRUE)),
+      within_1db = mean(x = abse <= 1, na.rm = TRUE),
+      within_2db = mean(x = abse <= 2, na.rm = TRUE),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  # Helper: identify dominant error source for a subset
+  identify_dominant_source <- function(df) {
+    if (nrow(x = df) == 0) return("N/A")
+    fl <- db_flow_only[as.integer(x = rownames(x = df))] - db_actual_all[as.integer(x = rownames(x = df))]
+    sp <- db_speed_only[as.integer(x = rownames(x = df))] - db_actual_all[as.integer(x = rownames(x = df))]
+    mae_f <- mean(x = abs(x = fl), na.rm = TRUE)
+    mae_s <- mean(x = abs(x = sp), na.rm = TRUE)
+    if (mae_f > mae_s) return("Flux") else return("Vitesse")
+  }
+
+compute_db_stats <- function(df) {
+    if (nrow(x = df) == 0) {
+      return(list(n = 0L, bias = NA_real_, mae = NA_real_, rmse = NA_real_))
+    }
+    list(
+      n = nrow(x = df),
+      bias = mean(x = df$db_error, na.rm = TRUE),
+      mae = mean(x = abs(x = df$db_error), na.rm = TRUE),
+      rmse = sqrt(x = mean(x = df$db_error^2, na.rm = TRUE))
+    )
+  }

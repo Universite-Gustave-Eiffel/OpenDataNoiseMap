@@ -2,8 +2,8 @@
 # Global pipeline configuration
 # ==============================================================================
 
-pipeline_message("Definition of the global configuration",
-                 level = 0, progress = "start", process = "install")
+pipeline_message("Definition of the global configuration", level = 0, 
+                 progress = "start", process = "install")
 
 DATA_DIR <- file.path("data")
 FIGS_DIR <- file.path("figures")
@@ -22,10 +22,10 @@ CONFIG_GLOBAL <- list(
   # Project structure
   # ----------------------------------------------------------------------------
   
-  DATA_DIR = DATA_DIR,
-  FIGS_DIR = FIGS_DIR,
-  LOGS_DIR = LOGS_DIR
+  DATA_DIR   = DATA_DIR,
+  FIGS_DIR   = FIGS_DIR,
+  LOGS_DIR   = LOGS_DIR
 )
 
-pipeline_message("Global configuration successfully defined",
-                 level = 0, progress = "end", process = "valid")
+pipeline_message("Global configuration successfully defined", level = 0, 
+                 progress = "end", process = "valid")

@@ -1,5 +1,18 @@
 # ==============================================================================
-# STAGE 1: OSM PROCESSING - MINIMAL VERSION
+# STAGE 1: OSM PROCESSING
+# ==============================================================================
+# This stage performs the following steps:
+# 1. Load raw OSM road data and commune polygons
+# 2. Spatial join to assign commune DEGREE to each road segment
+# 3. Build road network graph and compute topological metrics
+# 4. Extract structured OSM attributes from "other_tags"
+# 5. Final merge and export of enriched road dataset
+# 
+# Inputs:
+#   - OSM_DEGRE_FILEPATH: raw OSM road data
+#   - OSM_TYPOLOGIES_FILEPATH: commune polygons with DEGREE classification
+# Outputs:
+#   - OSM_ROADS_CONNECTIVITY_FILEPATH: merged data with connectivity metrics
 # ==============================================================================
 
 pipeline_message("Merging OSM road and commune data", level = 0, 
@@ -23,8 +36,8 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
   # Build unique_roads from degre_lookup (needed by graph construction below)
   if (!exists("unique_roads")) {
     unique_roads <- degre_lookup %>% select(osm_id, geom)
-    if (sf::st_crs(unique_roads) != sf::st_crs(CFG$TARGET_CRS)) {
-      unique_roads <- sf::st_transform(unique_roads, crs = CFG$TARGET_CRS)
+    if (sf::st_crs(x = unique_roads) != sf::st_crs(x = CFG$TARGET_CRS)) {
+      unique_roads <- sf::st_transform(x= unique_roads, crs = CFG$TARGET_CRS)
     }
   }
   
@@ -45,11 +58,11 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
                    level = 1, progress = "start", process = "load")
   
   # This dataset contains all OSM roads for France with geometry and attributes
-  osm_roads <- st_read(dsn = CFG$OSM_ROADS_FILEPATH, 
+  osm_roads <- st_read(dsn   = CFG$OSM_ROADS_FILEPATH, 
                        quiet = TRUE)
   
   # Project data into target CRS if needed
-  if (sf::st_crs(osm_roads) != CFG$TARGET_CRS){
+  if (sf::st_crs(x = osm_roads) != CFG$TARGET_CRS){
     pipeline_message(sprintf("Reproject into CRS %d", CFG$TARGET_CRS), 
                      process = "info")
     osm_roads <- osm_roads %>% st_transform(crs = CFG$TARGET_CRS)
@@ -71,7 +84,7 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
   pipeline_message(describe_df(osm_roads), process = "info")
   
   # Explicitly store in global environment (pipeline-style workflow)
-  assign(x = "osm_roads", 
+  assign(x     = "osm_roads", 
          value = osm_roads, 
          envir = .GlobalEnv)
   
@@ -84,7 +97,7 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
   
   # OSM data may contain duplicated osm_id entries
   unique_osm_ids <- match(
-    x = unique(osm_roads$osm_id), 
+    x    = unique(osm_roads$osm_id), 
     table = osm_roads$osm_id)
   
   # Keep only unique road geometries and transform CRS
@@ -102,13 +115,12 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
     level = 1, progress = "start", process = "load")
   
   # Load shp file
-  commune_data <- st_read(
-    dsn = CFG$OSM_TYPOLOGIES_FILEPATH, 
-    quiet = TRUE) %>% 
-    select(DEGRE)   # Urban density category
+  commune_data <- st_read(dsn   = CFG$OSM_TYPOLOGIES_FILEPATH, 
+                          quiet = TRUE) %>% 
+                  select(DEGRE)   # Urban density category
   
   # Project data into target CRS if needed
-  if (sf::st_crs(commune_data) != CFG$TARGET_CRS){
+  if (sf::st_crs(x = commune_data) != CFG$TARGET_CRS){
     pipeline_message(sprintf("Reproject into CRS %d", CFG$TARGET_CRS), 
                      process = "info")
     commune_data <- commune_data %>% st_transform(crs = CFG$TARGET_CRS)
@@ -138,11 +150,10 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
   # spatial join - duplicates may occur when a road intersects multiple 
   # communes)
   degre_lookup <- st_join(
-    x = unique_roads["osm_id"],   # keep only required attributes
-    y = commune_data["DEGRE"],    # commune urban density class
+    x    = unique_roads["osm_id"],   # keep only required attributes
+    y    = commune_data["DEGRE"],    # commune urban density class
     join = st_intersects,
-    left = TRUE
-  )
+    left = TRUE)
   
   # Resolve duplicates (a road may intersect several communes, only the first
   # match is kept, i.e. one DEGREE per osm_id)
@@ -151,7 +162,7 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
   # Handle roads not intersecting any commune polygon (→ assign the nearest 
   # commune DEGREE)
   idx_missing <- which(is.na(degre_lookup$DEGRE))
-  n_missing <- length(x = idx_missing)
+  n_missing   <- length(x = idx_missing)
   
   if (n_missing > 0) {
     
@@ -161,9 +172,8 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
       process = "warning")
     
     # Compute nearest commune polygon for all missing roads in one call
-    nearest_idx <- st_nearest_feature(
-      x = degre_lookup[idx_missing, ], 
-      y = commune_data)
+    nearest_idx <- st_nearest_feature(x = degre_lookup[idx_missing, ], 
+                                      y = commune_data)
     
     # Assign DEGREE of the nearest commune
     degre_lookup$DEGRE[idx_missing] <- commune_data$DEGRE[nearest_idx]
@@ -197,9 +207,8 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
                            rel_path(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH)), 
                    level = 1, progress = "start", process = "load")
   
-  osm_full_network <- sf::st_read(
-    dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH,
-    quiet = TRUE)
+  osm_full_network <- sf::st_read(dsn   = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH, 
+                                  quiet = TRUE)
   
   pipeline_message("Road network data loaded", level = 1, 
                    progress = "end", process = "valid")
@@ -210,9 +219,8 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   pipeline_message("Building road network graph and compute topological metrics", 
                    level = 1, progress = "start", process = "calc")
   
-  pipeline_message(
-    "Creating edge data from start/end points of each road", level = 2, 
-    progress = "start", process = "calc")
+  pipeline_message("Creating edge data from start/end points of each road", 
+                   level = 2, progress = "start", process = "calc")
   
   # Ensure planar geometry operations (GEOS) for performance and robustness
   suppressMessages(sf::sf_use_s2(use_s2 = FALSE))
@@ -228,20 +236,18 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Create edge dataframe by finding start/end points of each road
   edge_df <- data.frame(
-    from = character(n_roads),
-    to = character(n_roads),
-    road_idx = seq_len(n_roads),
-    stringsAsFactors = FALSE
-  )
+    from             = character(n_roads),
+    to               = character(n_roads),
+    road_idx         = seq_len(n_roads),
+    stringsAsFactors = FALSE)
   
   # Road coordinates
-  coords_dt <- as.data.table(
-    st_coordinates(x = roads_for_network))
+  coords_dt <- as.data.table(st_coordinates(x = roads_for_network))
   
   # Start and end points (first and last vertices, i.e. first and last 
   # coordinate of each row)
   start_pts <- coords_dt[, .SD[1], by = L1]
-  end_pts <- coords_dt[, .SD[.N], by = L1]
+  end_pts   <- coords_dt[, .SD[.N], by = L1]
   
   # Edges of each row
   edge_df <- data.frame(from = paste(round(start_pts$X, 2), 
@@ -274,9 +280,9 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   n_nodes <- igraph::vcount(graph = g)
   n_edges <- igraph::ecount(graph = g)
   
-  pipeline_message(
-    sprintf("Network built: %s nodes, %s edges", fmt(x = n_nodes), fmt(x = n_edges)), 
-    process = "info")
+  pipeline_message(sprintf("Network built: %s nodes, %s edges", 
+                           fmt(x = n_nodes), fmt(x = n_edges)), 
+                   process = "info")
   
   # ----------------------------------------------------------------------------
   # Centrality scores
@@ -291,21 +297,21 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # PageRank scores
   pipeline_message("Computing node pagerank", process = "info")
-  node_pagerank <- igraph::page_rank(graph = g, 
+  node_pagerank <- igraph::page_rank(graph    = g, 
                                      directed = FALSE)$vector
   
   # Betweenness centralities of positions on undirected geodesics
   pipeline_message("Computing node betweenness", process = "info")
-  node_betweenness <- igraph::betweenness(graph = g, 
-                                          cutoff = CFG$CUTOFF_BETWEENNESS, 
+  node_betweenness <- igraph::betweenness(graph    = g, 
+                                          cutoff   = CFG$CUTOFF_BETWEENNESS, 
                                           directed = FALSE)
   
   # Closeness centrality measures (how many steps is required to access every 
   # other vertex from a given one)
   pipeline_message("Computing node closeness", process = "info")
-  node_closeness <- igraph::closeness(graph = g, 
+  node_closeness <- igraph::closeness(graph  = g, 
                                       cutoff = CFG$CUTOFF_CLOSENESS, 
-                                      mode = "all")
+                                      mode   = "all")
 
   # K-core index (node structural embeddedness)
   pipeline_message("Computing node coreness", process = "info")
@@ -323,12 +329,12 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Edge-level metrics (retrieve edge endpoints as vertex indices directly)
   edge_ends <- igraph::ends(graph = g, 
-                            es = E(graph = g), 
+                            es    = E(graph = g), 
                             names = FALSE)
   # Map edge endpoints ("from" and "to") to igraph node indices (each road segment
   # connects two graph nodes)
   from_indices <- edge_ends[, 1]
-  to_indices <- edge_ends[, 2]
+  to_indices   <- edge_ends[, 2]
   
   # Compute edge-level metrics assigning each road segment the mean value of the 
   # metrics of its two endpoint nodes: average node degree (edge connectivity), 
@@ -348,8 +354,8 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     (node_coreness[from_indices] + node_coreness[to_indices]) / 2
   edge_dead_end_score <-
     (as.numeric(node_connectivity[from_indices] == 1) +
-       as.numeric(node_connectivity[to_indices] == 1)) / 2
-  edge_length_m <- as.numeric(sf::st_length(roads_for_network))
+     as.numeric(node_connectivity[to_indices] == 1)) / 2
+  edge_length_m <- as.numeric(sf::st_length(x = roads_for_network))
   
   pipeline_message("Edge-level metrics computed", level = 2, 
                    progress = "end", process = "valid")
@@ -362,23 +368,21 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
                    progress = "start", process = "join")
   
   network_features <- data.frame(
-    osm_id = roads_for_network$osm_id,
-    connectivity = edge_connectivity,
-    betweenness = edge_betweenness,
-    closeness = edge_closeness,
-    pagerank = edge_pagerank,
-    coreness = edge_coreness,
+    osm_id         = roads_for_network$osm_id,
+    connectivity   = edge_connectivity,
+    betweenness    = edge_betweenness,
+    closeness      = edge_closeness,
+    pagerank       = edge_pagerank,
+    coreness       = edge_coreness,
     dead_end_score = edge_dead_end_score,
-    edge_length_m = edge_length_m)
+    edge_length_m  = edge_length_m)
   
   # Memory cleanup
-  rm(g, edge_df, node_connectivity, node_betweenness, 
-     node_closeness, node_pagerank, node_coreness,
-     edge_connectivity, edge_betweenness,
-     edge_closeness, edge_pagerank, edge_coreness,
-     edge_dead_end_score, edge_length_m,
-     roads_for_network, unique_roads, edge_ends, from_indices, to_indices,
-     coords_dt, start_pts, end_pts)
+  rm(g, edge_df, node_connectivity, node_betweenness, node_closeness, 
+     node_pagerank, node_coreness,edge_connectivity, edge_betweenness,
+     edge_closeness, edge_pagerank, edge_coreness, edge_dead_end_score, 
+     edge_length_m, roads_for_network, unique_roads, edge_ends, from_indices, 
+     to_indices, coords_dt, start_pts, end_pts)
   gc(verbose = FALSE)
   
   pipeline_message("Feature tables assembled", level = 2, 
@@ -404,7 +408,7 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
               rel_path(CFG$OSM_ROADS_FILEPATH)),
       level = 2, progress = "start", process = "load")
     
-    osm_roads <- st_read(dsn = CFG$OSM_ROADS_FILEPATH, 
+    osm_roads <- st_read(dsn   = CFG$OSM_ROADS_FILEPATH, 
                          quiet = TRUE)
     
     high_traffic_types <- c(
@@ -413,7 +417,9 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
       "primary_link", "secondary_link", "tertiary_link")
     osm_roads <- osm_roads[osm_roads$highway %in% high_traffic_types, ]
     
-    assign(x = "osm_roads", value = osm_roads, envir = .GlobalEnv)
+    assign(x     = "osm_roads", 
+           value = osm_roads, 
+           envir = .GlobalEnv)
     
     pipeline_message(
       text = "OSM road data reloaded for attribute extraction",
@@ -442,7 +448,7 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   if ("other_tags" %in% names(osm_roads)) {
     extracted_tags <- extract_osm_other_tags(
       other_tags_vector = osm_roads$other_tags, 
-      keys = osm_tags)
+      keys              = osm_tags)
     
     # Add extracted tags to osm_roads
     for (tag in osm_tags) {
@@ -476,17 +482,17 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Drop geometries in degre_lookup and network_features to save RAM
   # (geometry is already carried by osm_roads)
-  if (inherits(degre_lookup, "sf")) {
+  if (inherits(x = degre_lookup, what = "sf")) {
     degre_lookup <- degre_lookup %>% st_drop_geometry()
   }
-  if (inherits(network_features, "sf")) {
+  if (inherits(x = network_features, what = "sf")) {
     network_features <- network_features %>% st_drop_geometry()
   }
   gc(verbose = FALSE)
   
   # Merge osm_roads and degre_lookup
-  osm_full_network <- merge(x = osm_roads, 
-                            y = degre_lookup, 
+  osm_full_network <- merge(x  = osm_roads, 
+                            y  = degre_lookup, 
                             by = 'osm_id')
   
   # Free source objects immediately after merge to reclaim RAM
@@ -496,8 +502,8 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   # Merge osm_full_network and network_features
   pipeline_message("Merging OSM road network with network features", 
                    level = 2, progress = "start", process = "calc")
-  osm_full_network <- merge(x = osm_full_network, 
-                            y = network_features, 
+  osm_full_network <- merge(x  = osm_full_network, 
+                            y  = network_features, 
                             by = 'osm_id')
   pipeline_message("Road network successfully merged with with network features", 
                    level = 2, progress = "end", process = "valid")
@@ -510,7 +516,7 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
                    level = 2, progress = "start", process = "save")
   
   # Project data into target CRS if needed
-  if (sf::st_crs(osm_full_network) != CFG$TARGET_CRS){
+  if (sf::st_crs(x = osm_full_network) != sf::st_crs(x = CFG$TARGET_CRS)){
     pipeline_message(sprintf("Reproject into CRS %d", CFG$TARGET_CRS), 
                      process = "info")
     osm_full_network <- osm_full_network %>% st_transform(crs = CFG$TARGET_CRS)
@@ -518,11 +524,10 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
   
   # Write final road dataset
   start_timer()
-  sf::st_write(
-    osm_full_network,
-    dsn = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH,
-    delete_dsn = TRUE,
-    quiet = TRUE)
+  sf::st_write(obj        = osm_full_network,
+               dsn        = CFG$OSM_ROADS_CONNECTIVITY_FILEPATH,
+               delete_dsn = TRUE,
+               quiet      = TRUE)
   
   pipeline_message(
     sprintf("Final road network saved in file %s", 
@@ -531,6 +536,7 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
 }
 
 # Cleanup large objects to free memory for next steps
-rm(list = intersect(ls(), c("osm_roads", "commune_data", "degre_lookup",
-                            "unique_roads", "edges", "g", "node_data")))
+rm(list = intersect(x = ls(), 
+                    y = c("osm_roads", "commune_data", "degre_lookup",
+                          "unique_roads", "edges", "g", "node_data")))
 gc(verbose = FALSE)

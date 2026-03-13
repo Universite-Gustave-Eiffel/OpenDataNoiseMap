@@ -9,13 +9,15 @@
 #                          [--region <full|small|test>] [--test]
 # ==============================================================================
 
-pipeline_message("Run pipeline", level = 0, progress = "start", process = "calc")
+pipeline_message("Run pipeline", level = 0, 
+                 progress = "start", process = "calc")
 
 # ==============================================================================
 # LOAD CONFIGURATION
 # ==============================================================================
 
-pipeline_message("Parsing arguments", level = 1, progress = "start", process = "install")
+pipeline_message("Parsing arguments", level = 1, 
+                 progress = "start", process = "install")
 
 # Define phases to run
 phases_to_run <- if (PHASE == "all") {
@@ -33,6 +35,8 @@ modes_to_run <- if (MODE == "all") {
   MODE
 }
 
+# If prediction phase is selected with a specific mode, ensure preparation and 
+# training are included if models are not already available
 if (PHASE == "prediction" && MODE != "all") {
   # Only add preparation and training if models are not already available
   if (!file.exists(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH) ||
@@ -67,14 +71,12 @@ if ("preparation" %in% phases_to_run) {
     !file.exists(CFG$IMPUTATION_RULES_FRANCE_FILEPATH)
   
   # Check if Avatar aggregation can be skipped
-  avatar_aggregation_needed <-
-    !file.exists(CFG$AVATAR_AGGREGATED_FILEPATH)
+  avatar_aggregation_needed <- !file.exists(CFG$AVATAR_AGGREGATED_FILEPATH)
   
   # Check if training dataset merge is needed
-  training_merge_needed <-
-    isTRUE(CFG$FORCE_BUILD_TRAINING_DATASET) ||
-    !file.exists(CFG$TRAINING_GPKG_DATA_FILEPATH) ||
-    !file.exists(CFG$TRAINING_RDS_DATA_FILEPATH)
+  training_merge_needed <- isTRUE(CFG$FORCE_BUILD_TRAINING_DATASET) || 
+                           !file.exists(CFG$TRAINING_GPKG_DATA_FILEPATH) || 
+                           !file.exists(CFG$TRAINING_RDS_DATA_FILEPATH)
   
   # Run OSM processing and feature engineering if needed
   if (osm_reengineering_needed) {
@@ -82,10 +84,10 @@ if ("preparation" %in% phases_to_run) {
     source("R/pipelines/data_preparation/02_osm_feature_engineering.R")
   } else {
     pipeline_message(
-      paste("OSM engineering data already exists. Skipping 01_osm_processing.R ",
-            "and 02_osm_feature_engineering.R. To rebuild, set ",
-            "FORCE_REENGINEER_OSM_FRANCE=TRUE or FORCE_REJOIN_OSM_AND_COMMUNES=TRUE ",
-            "in config/config_data_prep.R"),
+      paste("OSM engineering data already exists. ", 
+            "Skipping 01_osm_processing.R and 02_osm_feature_engineering.R. ", 
+            "To rebuild, set FORCE_REENGINEER_OSM_FRANCE=TRUE or ", 
+            "FORCE_REJOIN_OSM_AND_COMMUNES=TRUE in config/config_data_prep.R"), 
       level = 1, progress = "end", process = "warning")
   }
   
@@ -95,8 +97,9 @@ if ("preparation" %in% phases_to_run) {
     source("R/pipelines/data_preparation/04_avatar_aggregation.R")
   } else {
     pipeline_message(
-      paste("AVATAR aggregated data already exists. Skipping 03_avatar_download.R ",
-            "and 04_avatar_aggregation.R. To rebuild, set FORCE_REDOWNLOAD_CHUNKS=TRUE ",
+      paste("AVATAR aggregated data already exists. ", 
+            "Skipping 03_avatar_download.R and 04_avatar_aggregation.R. ", 
+            "To rebuild, set FORCE_REDOWNLOAD_CHUNKS=TRUE ", 
             "in config/config_data_prep.R"),
       level = 1, progress = "end", process = "warning")
   }
@@ -106,8 +109,9 @@ if ("preparation" %in% phases_to_run) {
     source("R/pipelines/data_preparation/05_training_dataset_merge.R")
   } else {
     pipeline_message(
-      paste("Training dataset already exists. Skipping 05_training_dataset_merge.R. ",
-            "To rebuild, set FORCE_BUILD_TRAINING_DATASET=TRUE in ",
+      paste("Training dataset already exists. ",
+            "Skipping 05_training_dataset_merge.R. ",
+            "To rebuild, set FORCE_BUILD_TRAINING_DATASET=TRUE in ", 
             "config/config_data_prep.R"),
       level = 1, progress = "end", process = "warning")
   }
@@ -176,14 +180,13 @@ if ("prediction" %in% phases_to_run) {
   }
   
   pipeline_message(
-    text = "Prediction phase completed",
-    level = 0, progress = "end", process = "valid")
+    "Prediction phase completed", level = 0, 
+    progress = "end", process = "valid")
 }
 
 # ==============================================================================
 # SUMMARY
 # ==============================================================================
 
-pipeline_message(
-  text = "Pipeline completed successfully",
-  level = 0, progress = "end", process = "valid")
+pipeline_message("Pipeline completed successfully", level = 0, 
+                 progress = "end", process = "valid")
