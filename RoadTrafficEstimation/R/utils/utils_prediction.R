@@ -1364,6 +1364,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     # Keep geometry for merging with traffic data
     geom_for_merge <- tile_sf[, c("osm_id", "geom")]
+    tile_dt <- as.data.frame(sf::st_drop_geometry(tile_sf))
     rm(tile_sf, geom_layer)
 
     predictions_wide <- apply_xgboost_predictions(
