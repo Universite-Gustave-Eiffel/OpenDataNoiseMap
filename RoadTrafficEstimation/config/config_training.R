@@ -8,8 +8,7 @@ TRAINING_RDS_DATA_DIR           <- file.path(TRAINING_DATA_DIR, "rds")
 TRAINING_GPKG_DATA_DIR          <- file.path(TRAINING_DATA_DIR, "gpkg")
 
 # File name suffix based on the pipeline MODE variable
-mode_suffix                     <- if (exists("MODE") && nzchar(MODE)){ MODE } 
-                                   else{ "all" }
+mode_suffix                     <- if (exists("MODE") && nzchar(MODE)) MODE else "all"
 
 # Training data
 training_data_rds_filename      <- "05_training_dataset.rds"
