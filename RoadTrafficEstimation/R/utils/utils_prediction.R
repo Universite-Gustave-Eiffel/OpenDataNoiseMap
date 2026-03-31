@@ -53,13 +53,13 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
       geom = file.path(PREDICTION_DIR, mode,
                        sprintf("07_predictions_%s_network.gpkg", mode)),
       den = file.path(PREDICTION_DIR, mode,
-                      sprintf("07_predictions_%s_traffic_DEN.csv.gz", mode)),
+                      sprintf("07_predictions_%s_traffic_DEN.gpkg", mode)),
       hourly = file.path(PREDICTION_DIR, mode,
-                         sprintf("07_predictions_%s_traffic_hourly.csv.gz", mode)),
+                         sprintf("07_predictions_%s_traffic_hourly.gpkg", mode)),
       hourly_wd = file.path(PREDICTION_DIR, mode,
-                            sprintf("07_predictions_%s_traffic_hourly_wd.csv.gz", mode)),
+                            sprintf("07_predictions_%s_traffic_hourly_wd.gpkg", mode)),
       hourly_we = file.path(PREDICTION_DIR, mode,
-                            sprintf("07_predictions_%s_traffic_hourly_we.csv.gz", mode))
+                            sprintf("07_predictions_%s_traffic_hourly_we.gpkg", mode))
     ),
     stop("Unknown extent: ", extent, ". Valid: sensors, nantes, paris, pemb, france")
   )
@@ -1152,18 +1152,18 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
 }
 
 # ==============================================================================
-# FRANCE-WIDE TILED PREDICTION (GEOMETRY-SEPARATED)
+# FRANCE-WIDE TILED PREDICTION (GEOMETRY-INCLUDED)
 # ==============================================================================
 #
 # Architecture:
 #   - Geometry layer:  07_france_network.gpkg  (osm_id + road attributes + geom)
-#   - Traffic data:    07_france_traffic_DEN.gpkg        (D, E, N — 3 periods)
-#                      07_france_traffic_hourly.gpkg     (h0..h23 — 24 periods)
-#                      07_france_traffic_hourly_wd.gpkg  (h0_wd..h23_wd — 24 periods)
-#                      07_france_traffic_hourly_we.gpkg  (h0_we..h23_we — 24 periods)
+#   - Traffic data:    07_france_traffic_DEN.gpkg        (D, E, N — 3 periods + geom)
+#                      07_france_traffic_hourly.gpkg     (h0..h23 — 24 periods + geom)
+#                      07_france_traffic_hourly_wd.gpkg  (h0_wd..h23_wd — 24 periods + geom)
+#                      07_france_traffic_hourly_we.gpkg  (h0_we..h23_we — 24 periods + geom)
 #
-# Geometry is written ONCE; traffic data files are attribute-only tables keyed
-# by osm_id. Users join in QGIS / PostGIS / R as needed.
+# Geometry is written ONCE in the network file; traffic data files include
+# geometry for each period. Users can use directly in QGIS / PostGIS / R.
 #
 # Spatial tiling avoids loading all 4M+ roads into RAM at once.
 # ==============================================================================
@@ -1362,8 +1362,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     pipeline_message(sprintf("Geometry written for tile %s", tile$tile_id),
                      level = 1, progress = "end", process = "save")
 
-    # --- Predict ---
-    tile_dt <- as.data.frame(sf::st_drop_geometry(tile_sf))
+    # Keep geometry for merging with traffic data
+    geom_for_merge <- tile_sf[, c("osm_id", "geom")]
     rm(tile_sf, geom_layer)
 
     predictions_wide <- apply_xgboost_predictions(
@@ -1410,7 +1410,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
       }
     }
 
-    # --- Write each temporal chunk (append mode CSV) ---
+    # --- Write each temporal chunk (append mode GPKG with geometry) ---
     for (chunk_name in names(temporal_chunks)) {
 
       chunk_periods <- temporal_chunks[[chunk_name]]
@@ -1425,21 +1425,25 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         chunk_file <- chunk_paths[[chunk_name]]
 
-        chunk_data <- sf::st_drop_geometry(chunk_long)
+        # Merge with geometry
+        chunk_sf <- merge(chunk_long, geom_for_merge, by = "osm_id", all.x = TRUE)
+        chunk_sf <- sf::st_as_sf(chunk_sf)
+
+        if (sf::st_crs(chunk_sf) != cfg$TARGET_CRS) {
+          chunk_sf <- sf::st_transform(chunk_sf, cfg$TARGET_CRS)
+        }
+
+        chunk_sf <- add_period_datetime_columns(chunk_sf, cfg)
 
         pipeline_message(
-          sprintf("Writing chunk '%s' (%d rows)", chunk_name, nrow(chunk_data)),
+          sprintf("Writing chunk '%s' (%d rows with geometry)", chunk_name, nrow(chunk_sf)),
           level = 1, progress = "start", process = "save")
 
-        # Convert to data.table for fast write
-        chunk_dt <- data.table::as.data.table(chunk_data)
-
-        # Write CSV (append if exists)
-        data.table::fwrite(
-          chunk_dt,
-          file = chunk_file,
-          append = file.exists(chunk_file),
-          col.names = !file.exists(chunk_file)
+        sf::st_write(
+          obj = chunk_sf,
+          dsn = chunk_file,
+          append = TRUE,
+          quiet = TRUE
         )
 
         pipeline_message(
@@ -1447,10 +1451,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
           level = 1, progress = "end", process = "save")
       }
 
-      rm(chunk_long, chunk_data, chunk_dt)
+      rm(chunk_long, chunk_sf)
     }
 
-    rm(predictions_wide, predictions_long)
+    rm(predictions_wide, predictions_long, geom_for_merge)
     gc(verbose = FALSE)
 
     dt <- proc.time()["elapsed"] - t0
