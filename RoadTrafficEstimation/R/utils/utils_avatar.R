@@ -1,7 +1,14 @@
+# ==============================================================================
+# AVATAR DATA DOWNLOADING AND PROCESSING UTILITIES
+# ==============================================================================
+#' 
+# -------------------------------------------------------------------------------
+# Download a file from a remote URL
+# -------------------------------------------------------------------------------
 #' @title Download a file from a remote URL
 #' @description Downloads a file from a given URL and saves it to a local target 
 #'              path. Optionally supports authenticated requests using a Bearer 
-#'              token.
+#'              token. 
 #'              This function is designed for use in automated pipelines and HPC 
 #'              environments, with explicit timeout handling and strict HTTP 
 #'              status checking.
@@ -62,12 +69,15 @@ download_file <- function(
   }
 }
 #' 
+# -------------------------------------------------------------------------------
+# Download a file with automatic retry logic
+# -------------------------------------------------------------------------------
 #' @title Download a file with automatic retry logic
 #' @description Attempts to download a file multiple times before failing. This 
 #'              is particularly useful for unstable network connections or 
-#'              remote APIs with intermittent availability.
-#'              The function retries the download after a fixed delay if an 
-#'              error occurs or if the resulting file is empty.
+#'              remote APIs with intermittent availability. The function retries 
+#'              the download after a fixed delay if an error occurs or if the 
+#'              resulting file is empty.
 #' @param url Character string. Remote URL of the file to download.
 #' @param target Character string. Local file path where the downloaded content 
 #'               will be written.
@@ -95,23 +105,17 @@ download_with_retry <- function(
     use_auth = FALSE) {
   for (i in 1:max_retries) {
     tryCatch({
-      # ---------------------- #
-      # Download attempt       #
-      # ---------------------- #
+      # Download attempt
       download_file(url = url, 
                     target = target, 
                     use_auth = use_auth)
-      # ---------------------- #
-      # Success check          #
-      # ---------------------- #
+      # Success check
       if (file.exists(target) && file.size(target) > 0) {
         return(TRUE)
       }
     }, error = function(e) {
       msg <- e$message
-      # ---------------------- #
-      # HTTP 429 handling      #
-      # ---------------------- #
+      # HTTP 429 handling
       if (grepl(pattern = "429", x = msg) ||
           grepl(pattern = "Too Many Requests", x = msg, ignore.case = TRUE)) {
         wait_time <- 60
@@ -119,14 +123,11 @@ download_with_retry <- function(
           sprintf("Rate limit reached. Waiting %s sec", wait_time), 
           process = "warning")
         Sys.sleep(time = wait_time)
-      } else {
-        
+      } else {        
         # Standard retry wait
         Sys.sleep(time = throttle_delay)
       }
-      # ---------------------- #
-      # Stop if last retry     #
-      # ---------------------- #
+      # Stop if last retry
       if (i == max_retries) {
         pipeline_message(
           sprintf("Download failed after retries: ", msg,
@@ -138,22 +139,26 @@ download_with_retry <- function(
   }
 }
 #' 
+# -------------------------------------------------------------------------------
+# Validate a downloaded data chunk
+# -------------------------------------------------------------------------------
 #' @title Validate a downloaded data chunk
 #' @description Checks whether an existing chunk file is valid, non-empty, 
-#'              readable, and not corrupted. This function is mainly used in 
-#'              data download or processing pipelines to detect incomplete, 
-#'              empty, or corrupted chunk files before deciding whether they 
-#'              should be re-downloaded or recomputed.
+#'              readable, and not corrupted. 
+#'              This function is mainly used in data download or processing 
+#'              pipelines to detect incomplete, empty, or corrupted chunk files 
+#'              before deciding whether they should be re-downloaded or 
+#'              recomputed.
 #' @param file_path Character string. Path to the chunk file to validate.
 #' @param expected_points Integer. Expected number of data points in the chunk. 
 #'                        Currently not enforced but kept for future consistency 
 #'                        checks.
 #' @return A list with two elements:
-#' \describe{
-#'   \item{valid}{Logical. `TRUE` if the chunk is considered valid.}
-#'   \item{reason}{Character string describing the validation result (e.g. 
-#'                 `"ok"`, `"missing"`, `"empty"`, `"corrupted"`).}
-#' }
+#'         \describe{
+#'           \item{valid}{Logical. `TRUE` if the chunk is considered valid.}
+#'           item{reason}{Character string describing the validation result 
+#'                        (e.g. `"ok"`, `"missing"`, `"empty"`, `"corrupted"`).}
+#'         }
 #' @details The validation performs the following checks: 
 #'          \enumerate{
 #'            \item File existence
@@ -208,6 +213,9 @@ validate_chunk <- function(
               reason = "ok"))
 }
 #' 
+# -------------------------------------------------------------------------------
+# Build Avatar aggregated measures download URL
+# -------------------------------------------------------------------------------
 #' @title Build Avatar aggregated measures download URL
 #' @description Constructs a valid Avatar API URL for downloading aggregated
 #'              road traffic measures for a given set of count points.
@@ -252,9 +260,12 @@ build_avatar_aggregated_url <- function(
   return(api_url)
 }
 #' 
+# -------------------------------------------------------------------------------
+# Download Avatar count points metadata
+# -------------------------------------------------------------------------------
 #' @title Download Avatar count points metadata
-#' @description Downloads the full list of Avatar count points from the Avatar API
-#'              and saves the raw JSON response to a local file.
+#' @description Downloads the full list of Avatar count points from the Avatar 
+#'              API and saves the raw JSON response to a local file.
 #' @param target Character string. Output JSON file path.
 #' @param api_token Character string. Avatar API token.
 #' @param max_retries Integer. Maximum number of retries.
@@ -282,12 +293,22 @@ download_avatar_count_points <- function(
     use_auth = (nchar(api_token) > 0))
 }
 #' 
+# -------------------------------------------------------------------------------
+# Aggregate Avatar data at hourly resolution
+# -------------------------------------------------------------------------------
 #' @title Aggregate raw Avatar data at hourly resolution
 #' @description Converts raw Avatar measurements into hourly aggregated metrics 
 #'              using median-based statistics to reduce the influence of 
 #'              outliers.
 #' @param dt A `data.table` of raw Avatar measurements.
-#' @return A `data.table` aggregated at the hourly level.
+#' @return A `data.table` aggregated at the hourly level (see details).
+#' @details This function:
+#'          \itemize{
+#'            \item{converts the raw data into a data.table,}
+#'            \item{sanitizes column names (CSV via fread keeps special chars),}
+#'            \item{creates period and hour columns,}
+#'            \item{aggregates the data at the hourly level.}
+#'          }
 #' @export
 aggregate_avatar_hourly <- function(dt) {
   # Ensure POSIXct datetime
@@ -356,16 +377,19 @@ aggregate_avatar_hourly <- function(dt) {
   ), by = .(count_point_id, period, hour, day_type)]
 }
 #' 
+# -------------------------------------------------------------------------------
+# Aggregate Avatar hourly metrics over arbitrary grouping variables
+# -------------------------------------------------------------------------------
 #' @title Aggregate Avatar hourly metrics over arbitrary grouping variables
 #' @description Aggregates hourly Avatar traffic metrics into higher-level 
 #'              summaries (e.g. by period D/E/N or by hour h0–h23). The function 
 #'              computes mean-based aggregate indicators from hourly-level 
 #'              metrics, while:
 #'              \itemize{
-#'                \item Ignoring missing values (`NA`)
-#'                \item Returning `NA` if no valid data is available for a group
+#'                \item Ignoring missing values (`NA`),
+#'                \item Returning `NA` if no valid data is available for a group,
 #'                \item Preserving temporal coverage information (first/last 
-#'                      timestamps)
+#'                      timestamps).
 #'              }
 #'              This function is designed to be applied to the output of an 
 #'              intermediate hourly aggregation step (e.g. `hourly_aggregated`) 
@@ -373,20 +397,20 @@ aggregate_avatar_hourly <- function(dt) {
 #' @param dt A `data.table` containing hourly aggregated Avatar metrics.
 #'           Expected columns include:
 #'           \describe{
-#'             \item{hourly_flow}{Hourly traffic flow}
-#'             \item{hourly_flow_trucks}{Hourly truck traffic flow}
-#'             \item{hourly_occupancy}{Hourly occupancy rate}
-#'             \item{hourly_speed}{Hourly average speed}
-#'             \item{perc_*_predicted}{Percentage of predicted (vs measured) data}
-#'             \item{n_obs_this_hour}{Number of raw observations per hour}
-#'             \item{first_timestamp}{Earliest timestamp in the hour}
-#'             \item{last_timestamp}{Latest timestamp in the hour}
+#'             \item{hourly_flow}{Hourly traffic flow},
+#'             \item{hourly_flow_trucks}{Hourly truck traffic flow},
+#'             \item{hourly_occupancy}{Hourly occupancy rate},
+#'             \item{hourly_speed}{Hourly average speed},
+#'             \item{perc_*_predicted}{Percentage of predicted (vs measured) data},
+#'             \item{n_obs_this_hour}{Number of raw observations per hour},
+#'             \item{first_timestamp}{Earliest timestamp in the hour},
+#'             \item{last_timestamp}{Latest timestamp in the hour}.
 #'           }
 #' @param by_vars A `list` of grouping variables passed to the `by` argument of
 #'                `data.table`. Typical examples include:
 #'                \itemize{
-#'                  \item `.(count_point_id, period)` for D/E/N aggregation
-#'                  \item `.(count_point_id, hour)` for hourly profiles
+#'                  \item `.(count_point_id, period)` for D/E/N aggregation,
+#'                  \item `.(count_point_id, hour)` for hourly profiles.
 #'                }
 #' @return A `data.table` containing aggregated metrics at the requested level.
 #'         One row is returned per group defined by `by_vars`.
@@ -394,9 +418,9 @@ aggregate_avatar_hourly <- function(dt) {
 #'          \itemize{
 #'            \item Traffic and speed indicators are averaged across hours
 #'            \item Quality indicators represent the mean percentage of 
-#'                  predicted data
+#'                  predicted data,
 #'            \item Counts and timestamps summarize data availability and 
-#'                  coverage
+#'                  coverage.
 #'          }
 #'          This function intentionally uses mean aggregation (rather than 
 #'          median), assuming that outliers have already been handled at the 
@@ -480,6 +504,9 @@ aggregate_avatar_metrics <- function(dt, by_vars) {
   return(res)
 }
 #' 
+# -------------------------------------------------------------------------------
+# Compute Avatar relative metrics using Day (D) baseline
+# -------------------------------------------------------------------------------
 #' @title Compute Avatar relative metrics using Day (D) baseline
 #' @description Computes relative traffic metrics (ratios and percentages) for 
 #'              each count point using period D as baseline.
@@ -546,38 +573,40 @@ compute_avatar_relative_metrics <- function(dt) {
   return(dt)
 }
 #' 
+# -------------------------------------------------------------------------------
+# Apply Avatar data quality and safeguard rules
+# ------------------------------------------------------------------------------- 
 #' @title Apply Avatar data quality and safeguard rules
 #' @description Applies post-processing rules to Avatar traffic measurements to 
 #'              ensurephysical consistency and robustness of derived indicators.
 #'              This function:
 #'              \itemize{
-#'                \item Recomputes truck percentages with upper bounds
-#'                \item Recomputes baseline (D) truck percentages
-#'                \item Caps ratio indicators to reasonable ranges
-#'                \item Avoids divisions by near-zero baseline values
+#'                \item Recomputes truck percentages with upper bounds,
+#'                \item Recomputes baseline (D) truck percentages,
+#'                \item Caps ratio indicators to reasonable ranges,
+#'                \item Avoids divisions by near-zero baseline values.
 #'              }
 #' @param dt A data.table containing Avatar aggregated traffic measurements.
 #' @return The input data.table, modified by reference.
 #' @details Expected columns include:
 #'          \itemize{
-#'            \item aggregate_flow, aggregate_flow_trucks
-#'            \item flow_D, flow_trucks_D
+#'            \item aggregate_flow, aggregate_flow_trucks,
+#'            \item flow_D, flow_trucks_D,
 #'            \item ratio_flow_trucks.
 #'          }
 #'          The function modifies the following columns:
 #'          \itemize{
-#'            \item truck_pct
-#'            \item truck_pct_D
-#'            \item ratio_truck_pct
-#'            \item ratio_flow_trucks
+#'            \item truck_pct,
+#'            \item truck_pct_D,
+#'            \item ratio_truck_pct,
+#'            \item ratio_flow_trucks.
+#'          }
 #' @export
 apply_avatar_quality_rules <- function(dt) {
   if (!inherits(x = dt, what = "data.table")) {
     stop("apply_avatar_quality_rules() expects a data.table")
   }
-  # ----------------------------------------------------------------------------
   # Recompute truck percentage (current period)
-  # ----------------------------------------------------------------------------
   dt[, truck_pct := fifelse(test = !is.na(aggregate_flow) & 
                                    !is.na(aggregate_flow_trucks) & 
                                    aggregate_flow > 0, 
@@ -585,25 +614,19 @@ apply_avatar_quality_rules <- function(dt) {
                                        100 * aggregate_flow_trucks / 
                                          aggregate_flow), 
                             no = NA_real_)]
-  # ----------------------------------------------------------------------------
   # Recompute truck percentage for baseline period D
-  # ----------------------------------------------------------------------------
   dt[, truck_pct_D := fifelse(test = !is.na(flow_D) & 
                                      !is.na(flow_trucks_D) & 
                                      flow_D > 0, 
                               yes = pmin(100, 100 * flow_trucks_D / flow_D), 
                               no = NA_real_)]
-  # ----------------------------------------------------------------------------
   # Recompute ratio of truck percentage (with safeguards)
-  # ----------------------------------------------------------------------------
   dt[, ratio_truck_pct := fifelse(test = !is.na(truck_pct) & 
                                          !is.na(truck_pct_D) & 
                                          truck_pct_D > 0.1,                     # Avoid near-zero division
                                   yes = pmin(5.0, truck_pct / truck_pct_D),     # Cap at 5x
                                   no = NA_real_)]
-  # ----------------------------------------------------------------------------
   # Cap ratio of truck flows
-  # ----------------------------------------------------------------------------
   dt[, ratio_flow_trucks := fifelse(test = !is.na(ratio_flow_trucks), 
                                     yes = pmin(5.0, 
                                                pmax(0.0, ratio_flow_trucks)),   # Cap between 0 and 5
@@ -611,20 +634,25 @@ apply_avatar_quality_rules <- function(dt) {
   invisible(dt)
 }
 #' 
+# -------------------------------------------------------------------------------
+# Validate Avatar data structure
+# -------------------------------------------------------------------------------
 #' @title Validate Avatar data structure
 #' @description Checks whether the Avatar data contains the required columns for 
-#'              downstream processing and whether it is non-empty. This function is 
-#'              intended to be used as a preliminary validation step after loading 
-#'              or downloading Avatar data, before performing any aggregation or 
-#'              analysis.
-#' @param avatar_data A data.frame or data.table containing Avatar aggregated metrics. 
-#'                    Expected to have at least the following columns:
+#'              downstream processing and whether it is non-empty. This function
+#'              is intended to be used as a preliminary validation step after 
+#'              loading or downloading Avatar data, before performing any 
+#'              aggregation or analysis.
+#' @param avatar_data A data.frame or data.table containing Avatar aggregated 
+#'                    metrics. Expected to have at least the following columns:
 #'                    \itemize{
 #'                      \item count_point_id
 #'                      \item period
 #'                      \item aggregate_flow
 #'                    }
-#' @return A logical value: `TRUE` if the data is valid, `FALSE` otherwise. If the data is invalid, an error message is printed to the console indicating the reason (e.g. missing columns, empty data).
+#' @return A logical value: `TRUE` if the data is valid, `FALSE` otherwise. If 
+#'         the data is invalid, an error message is printed to the console 
+#'         indicating the reason (e.g. missing columns, empty data).
 #' @export 
 validate_avatar_data <- function(avatar_data) {
   required_cols <- c("count_point_id", "period", "aggregate_flow")
@@ -643,4 +671,82 @@ validate_avatar_data <- function(avatar_data) {
   }
   
   return(TRUE)
+}
+#' 
+# -------------------------------------------------------------------------------
+# Validate Avatar data structure
+# -------------------------------------------------------------------------------
+#' @title Validate Avatar data structure
+#' @description Checks whether the Avatar data contains the required columns for 
+#'              downstream processing and whether it is non-empty. 
+#'              This function is intended to be used as a preliminary validation 
+#'              step after loading or downloading Avatar data, before performing 
+#'              any aggregation or analysis. 
+#' @param avatar_data data.frame with Avatar traffic data
+#' @return logical TRUE if valid, FALSE otherwise
+#' @export
+validate_avatar_data <- function(avatar_data) {
+  required_cols <- c("count_point_id", "period", "aggregate_flow")
+  missing_cols <- setdiff(required_cols, names(avatar_data))
+  
+  if (length(missing_cols) > 0) {
+    pipeline_message(
+      text = sprintf("Missing required columns: %s", 
+                     paste(missing_cols, collapse = ", ")),
+      process = "error")
+    return(FALSE)
+  }
+  
+  if (nrow(avatar_data) == 0) {
+    pipeline_message(text = "Avatar data is empty", process = "error")
+    return(FALSE)
+  }
+  
+  return(TRUE)
+}
+#' 
+# -------------------------------------------------------------------------------
+# Check feature completeness in engineered network
+# -------------------------------------------------------------------------------
+#' @title Check feature completeness in engineered network
+#' @description Checks the completeness of features in the engineered network 
+#'              data. It returns a list containing the total number of required 
+#'              features, the number of available features, a list of missing 
+#'              features, and the percentage of available features.
+#' @param network data.frame with engineered features from the network
+#' @return list with completeness statistics for the network
+#'         \itemize{
+#'            \item total_features, 
+#'            \item available_features, 
+#'            \item missing_features, 
+#'            \item na_counts, 
+#'            \item completeness_pct.
+#'         }
+#' @export
+check_feature_completeness <- function(network) {
+  required_features <- c(
+    "highway", "DEGRE", "ref_letter", "first_word",
+    "oneway_osm", "lanes_osm", "lanes_directional",
+    "speed", "junction_osm",
+    "connectivity", "betweenness", "closeness", "pagerank",
+    "coreness", "dead_end_score", "edge_length_m"
+  )
+  
+  # Check for missing features
+  available <- intersect(required_features, names(network))
+  missing <- setdiff(required_features, names(network))
+  
+  # Check for NA values in available features
+  na_counts <- sapply(available, function(col) {
+    sum(is.na(network[[col]]))
+  })
+  
+  # Return completeness statistics
+  list(
+    total_features = length(required_features),
+    available_features = length(available),
+    missing_features = missing,
+    na_counts = na_counts,
+    completeness_pct = (length(available) / length(required_features)) * 100
+  )
 }

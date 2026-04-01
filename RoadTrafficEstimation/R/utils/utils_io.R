@@ -1,5 +1,5 @@
 # ==============================================================================
-# GLOBAL UTILITIES FOR DISPLAYING LOG MESSAGES
+# GLOBAL UTILITIES - I/O FUNCTIONS
 # ==============================================================================
 #' 
 # -------------------------------------------------------------------------------
@@ -76,8 +76,8 @@ get_arg_value <- function(flag, default = NULL, args) {
 #'            \code{CONFIG_TRAINING}, and \code{CONFIG_PREDICT}. 
 #'            Entries representing paths must follow naming conventions:
 #'            \itemize{
-#'              \item Names ending with \code{_DIR} or \code{_DIRPATH}
-#'              \item Names ending with \code{_FILEPATH}
+#'              \item Names ending with \code{_DIR} or \code{_DIRPATH},
+#'              \item Names ending with \code{_FILEPATH}.
 #'            }
 #' @details The function operates as follows:
 #'          \enumerate{
@@ -155,7 +155,6 @@ setup_directories <- function(cfg) {
 #' # "3,960,671"
 #' fmt(c(1000, 2500000))
 #' # "1,000" "2,500,000"
-#'
 #' @export
 fmt <- function(x){
   format(x, scientific = FALSE, big.mark = ",") 
@@ -164,13 +163,16 @@ fmt <- function(x){
 # ------------------------------------------------------------------------------
 # Internal environment for pipeline timing
 # ------------------------------------------------------------------------------
-#' @keywords internal
+#' @title Internal environment for pipeline timing
 #' @description Internal environment used to store active timers for the 
 #'              pipeline execution.
 #'              Timers are indexed by pipeline hierarchy level (1, 2, 3, ...), 
 #'              allowing nested timing of computation blocks without 
 #'              interference.
 #'              This environment should not be accessed directly by users.
+#' @return An environment object.
+#' @export
+#' @keywords internal
 .pipeline_env <- new.env(parent = emptyenv())
 # Active timers indexed by level (character)
 .pipeline_env$timers <- list()
@@ -407,9 +409,7 @@ pipeline_message <- function(text,
   # Secure process
   process <- if (is.null(process)) {NA_character_} else {process}
   
-  # ----------------------------------------------------------------------------
   # INFO / WARNING / STOP — no level, no timer
-  # ----------------------------------------------------------------------------
   if (process == "info") {
     message("\t\t ", icon, " ", text)
     return(invisible(NULL))
@@ -423,9 +423,8 @@ pipeline_message <- function(text,
   }
   # From here: structural messages only
   progress <- match.arg(progress)
-  # ----------------------------------------------------------------------------
+  
   # LEVEL 0 — Main pipeline sections
-  # ----------------------------------------------------------------------------
   if (level == 0) {
     if (progress == "start") {
       message("\n=== ", text, " ===\n")
@@ -434,9 +433,8 @@ pipeline_message <- function(text,
     }
     return(invisible(NULL))
   }
-  # ----------------------------------------------------------------------------
+  
   # LEVEL 1 — Timed processing steps
-  # ----------------------------------------------------------------------------
   if (level == 1) {
     if (progress == "start") {
       pipeline_timer_start(level = 1)
@@ -449,9 +447,8 @@ pipeline_message <- function(text,
       return(invisible(NULL))
     }
   }
-  # ----------------------------------------------------------------------------
+
   # LEVEL 2 — Timed internal computations
-  # ----------------------------------------------------------------------------
   if (level == 2) {
     if (progress == "start") {
       pipeline_timer_start(level = 2)
