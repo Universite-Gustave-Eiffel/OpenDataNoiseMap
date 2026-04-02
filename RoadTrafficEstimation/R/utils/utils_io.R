@@ -159,6 +159,24 @@ setup_directories <- function(cfg) {
 fmt <- function(x){
   format(x, scientific = FALSE, big.mark = ",") 
 }
+#' 
+# ------------------------------------------------------------------------------
+# Format percentages
+# ------------------------------------------------------------------------------
+#' @title Format percentages for console output
+#' @description This function formats numeric values as percentages with one 
+#'              decimal point. It is mainly intended for logging and progress 
+#'              messages in the console.
+#' @param x numeric A value to format as percentage
+#' @return formatted A character string representing the percentage value.
+#' @examples
+#' fmt_pct(0.5)
+#' # "50.0%"
+#' @export
+fmt_pct <- function(x) {
+  if (is.na(x = x) || !is.finite(x = x)) return("NA")
+  sprintf("%.1f%%", 100 * x)
+}
 #'
 # ------------------------------------------------------------------------------
 # Internal environment for pipeline timing

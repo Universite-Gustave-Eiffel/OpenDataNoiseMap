@@ -1,5 +1,5 @@
 # ==============================================================================
-# UTILITIES: PREDICTION PHASE
+# PREDICTION PHASE UTILITIES
 # ==============================================================================
 #' 
 # -------------------------------------------------------------------------------
@@ -109,8 +109,9 @@ load_network_for_prediction <- function(bbox, cfg) {
     xmax <- as.numeric(x = bbox[3])
     ymax <- as.numeric(x = bbox[4])
     if (anyNA(c(xmin, ymin, xmax, ymax))) {
-      stop("Invalid bbox values for prediction crop: ",
-           paste(bbox, collapse = ", "))
+      pipeline_message(sprintf("Invalid bbox values for prediction crop: %s", 
+                               paste(bbox, collapse = ", ")), 
+                       process = "stop")
     }
     
     # Build WKT polygon for spatial filter at GDAL level
@@ -150,7 +151,8 @@ load_network_for_prediction <- function(bbox, cfg) {
   }
 
   if (nrow(x = osm_network) == 0) {
-    stop("No roads found for prediction after cropping. Check bbox/CRS.")
+    pipeline_message("No roads found for prediction after cropping. Check bbox/CRS.", 
+                     process = "stop")
   }
   
   pipeline_message(sprintf("Network loaded: %s roads", fmt(nrow(x = osm_network))), 
@@ -278,15 +280,15 @@ apply_xgboost_predictions <- function(network_data,
   pipeline_message("Applying XGBoost models to network", 
                    level = 1, progress = "start", process = "calc")
   
-  # Memory check: predictions will create ~n_roads × n_periods × 3 columns
+  # Memory check: predictions will create ~n_roads x n_periods x 3 columns
   n_roads   <- nrow(x = network_data)
   n_periods <- length(x = feature_info$all_periods)
   est_mb    <- round(x = n_roads * n_periods * 3 * 8 / 1024^2)  # 8 bytes / double
   check_memory_available(
-    operation_name = 
-      sprintf("XGBoost prediction (%s roads × %d periods, ~%d MB result)",
+    operation_name = sprintf("XGBoost prediction (%s roads x %d periods, ~%d MB result)",
               fmt(n_roads), n_periods, est_mb),
-    min_gb = 1, warn_gb = 3)
+    min_gb        = 1, 
+    warn_gb       = 3)
 
   # lane_number is an AVATAR-derived directional lane feature used in training.
   # For region-wide prediction (no AVATAR), derive a proxy from OSM lanes.
@@ -408,7 +410,7 @@ apply_xgboost_predictions <- function(network_data,
       fm_cols <- colnames(x = fm)
       
       # Step 1: Add missing columns
-      missing_cols <- setdiff(target_features, fm_cols)
+      missing_cols <- setdiff(x = target_features, y = fm_cols)
       if (length(x = missing_cols) > 0) {
         for (mc in missing_cols) {
           fm[[mc]] <- 0
@@ -420,7 +422,7 @@ apply_xgboost_predictions <- function(network_data,
       }
       
       # Step 2: Identify and handle EXTRA columns
-      extra_cols <- setdiff(fm_cols, target_features)
+      extra_cols <- setdiff(x = fm_cols, y = target_features)
       if (length(x = extra_cols) > 0) {
         # Report extra columns (could indicate factor level mismatch)
         extra_summary   <- paste(head(x = extra_cols, n = 5), collapse = ", ")
@@ -458,7 +460,8 @@ apply_xgboost_predictions <- function(network_data,
   
   # Predict base models (period D)
   if (is.null(x = models_list$flow_D$model)) {
-    stop("Missing base model for period D: flow_D")
+    pipeline_message("Missing base model for period D: flow_D", 
+                     process = "stop")
   }
   flow_D <- predict_with_alignment(models_list$flow_D, 
                                    feature_matrix, 
@@ -640,7 +643,7 @@ apply_xgboost_predictions <- function(network_data,
                                                         na.rm = TRUE)
       for (hw in unique(x = results$highway[bad_idx])) {
         hw_rows <- which(x = results$highway == hw)
-        hw_good <- results[[col]][setdiff(hw_rows, bad_idx)]
+        hw_good <- results[[col]][setdiff(x = hw_rows, y = bad_idx)]
         med_val <- if (length(x = hw_good) > 0) {
           median(x = hw_good, na.rm = TRUE) else NA_real_}
         if (!is.finite(x = med_val)) med_val <- global_med
@@ -770,11 +773,9 @@ validate_predictions <- function(predictions) {
     }
   }
   
-  list(
-    is_valid = length(x = issues) == 0,
-    issues   = issues,
-    n_rows   = nrow(x = predictions)
-  )
+  return(list(is_valid = length(x = issues) == 0,
+              issues   = issues,
+              n_rows   = nrow(x = predictions)))
 }
 #' 
 # ------------------------------------------------------------------------------
@@ -806,12 +807,11 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
     return(predictions_long)
   }
 
-  # Period to datetime
   period_chr <- as.character(x = predictions_long$period)
-  n <- length(x = period_chr)
+  n          <- length(x = period_chr)
 
   datetimestart <- as.POSIXct(x = rep(x = NA_character_, n), tz = "UTC")
-  datetimeend <- as.POSIXct(x = rep(x = NA_character_, n), tz = "UTC")
+  datetimeend   <- as.POSIXct(x = rep(x = NA_character_, n), tz = "UTC")
 
   # Get base year from AVATAR data
   avatar_dir <- if (!is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR)) {
@@ -819,25 +819,25 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
                 else {file.path("data", "avatar", "csv")}
   base_year <- 2023  # fallback
   if (dir.exists(avatar_dir)) {
-    csv_files <- list.files(path = avatar_dir, 
-                            pattern = "\\.csv$", 
+    csv_files <- list.files(path       = avatar_dir, 
+                            pattern    = "\\.csv$", 
                             full.names = TRUE)
     if (length(x = csv_files) > 0) {
       first_csv <- csv_files[1]
       # Read first data line (skip header)
-      con <- file(first_csv, "r")
-      header <- readLines(con, n = 1)
+      con             <- file(first_csv, "r")
+      header          <- readLines(con, n = 1)
       first_data_line <- readLines(con, n = 1)
       close(con)
       if (length(x = first_data_line) > 0) {
         # Split by comma, find measure_datetime column
-        cols <- strsplit(x = header, ",")[[1]]
-        data_cols <- strsplit(x = first_data_line, ",")[[1]]
+        cols        <- strsplit(x = header, ",")[[1]]
+        data_cols   <- strsplit(x = first_data_line, ",")[[1]]
         measure_idx <- which(x = cols == "measure_datetime")
         if (length(x = measure_idx) == 1) {
           measure_datetime <- data_cols[measure_idx]
           # Extract date part: 2023-01-01T00:00:00+01:00 -> 2023-01-01
-          date_str <- substr(x = measure_datetime, start = 1, stop = 10)
+          date_str  <- substr(x = measure_datetime, start = 1, stop = 10)
           base_year <- as.integer(x = format(as.Date(x = date_str), "%Y"))
         }
       }
@@ -847,37 +847,37 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   # D / E / N reference periods (day 01)
   idx_D <- which(x = period_chr == "D")
   if (length(x = idx_D) > 0) {
-    datetimestart[idx_D] <- as.POSIXct(x = sprintf("%d-01-01 06:00:00", 
+    datetimestart[idx_D] <- as.POSIXct(x  = sprintf("%d-01-01 06:00:00", 
                                                    base_year), 
                                        tz = "UTC")
-    datetimeend[idx_D] <- as.POSIXct(x = sprintf("%d-01-01 18:00:00", 
+    datetimeend[idx_D]   <- as.POSIXct(x  = sprintf("%d-01-01 18:00:00", 
                                                  base_year), 
-                                     tz = "UTC")
+                                       tz = "UTC")
   }
 
   idx_E <- which(x = period_chr == "E")
   if (length(x = idx_E) > 0) {
-    datetimestart[idx_E] <- as.POSIXct(x = sprintf("%d-01-01 18:00:00", 
+    datetimestart[idx_E] <- as.POSIXct(x  = sprintf("%d-01-01 18:00:00", 
                                                    base_year), 
                                        tz = "UTC")
-    datetimeend[idx_E] <- as.POSIXct(x = sprintf("%d-01-01 22:00:00", 
+    datetimeend[idx_E]   <- as.POSIXct(x  = sprintf("%d-01-01 22:00:00", 
                                                  base_year), 
-                                     tz = "UTC")
+                                       tz = "UTC")
   }
 
   idx_N <- which(x = period_chr == "N")
   if (length(x = idx_N) > 0) {
-    datetimestart[idx_N] <- as.POSIXct(x = sprintf("%d-01-01 22:00:00", 
+    datetimestart[idx_N] <- as.POSIXct(x  = sprintf("%d-01-01 22:00:00", 
                                                    base_year), 
                                        tz = "UTC")
-    datetimeend[idx_N] <- as.POSIXct(x = sprintf("%d-01-02 06:00:00", 
+    datetimeend[idx_N]   <- as.POSIXct(x  = sprintf("%d-01-02 06:00:00", 
                                                  base_year), 
-                                     tz = "UTC")
+                                       tz = "UTC")
   }
 
   # Generic hourly periods h0..h23 (day 04)
   m_h <- regexec(pattern = "^h([0-9]{1,2})$", 
-                 text = period_chr)
+                 text    = period_chr)
   g_h <- regmatches(x = period_chr, 
                     m = m_h)
   idx_h <- which(x = lengths(g_h) == 2)
@@ -886,40 +886,41 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
                          FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-04 %02d:00:00", base_year, h_vals)
     datetimestart[idx_h] <- as.POSIXct(x = start_str, tz = "UTC")
-    datetimeend[idx_h] <- datetimestart[idx_h] + 3600
+    datetimeend[idx_h]   <- datetimestart[idx_h] + 3600
   }
 
   # Weekday hourly periods h0_wd..h23_wd (day 02)
-  m_wd <- regexec(pattern = "^h([0-9]{1,2})_wd$", 
-                  text = period_chr)
-  g_wd <- regmatches(x = period_chr, 
+  m_wd   <- regexec(pattern = "^h([0-9]{1,2})_wd$", 
+                  text    = period_chr)
+  g_wd   <- regmatches(x = period_chr, 
                      m = m_wd)
   idx_wd <- which(x = lengths(g_wd) == 2)
   if (length(x = idx_wd) > 0) {
-    h_vals <- as.integer(x = vapply(X = g_wd[idx_wd], 
-                         FUN = function(x) x[2], character(1)))
+    h_vals    <- as.integer(x   = vapply(X = g_wd[idx_wd], 
+                            FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-02 %02d:00:00", base_year, h_vals)
     datetimestart[idx_wd] <- as.POSIXct(x = start_str, tz = "UTC")
-    datetimeend[idx_wd] <- datetimestart[idx_wd] + 3600
+    datetimeend[idx_wd]   <- datetimestart[idx_wd] + 3600
   }
 
   # Weekend hourly periods h0_we..h23_we (day 03)
   m_we <- regexec(pattern = "^h([0-9]{1,2})_we$", 
-                  text = period_chr)
+                  text    = period_chr)
   g_we <- regmatches(x = period_chr, 
                      m = m_we)
   idx_we <- which(x = lengths(g_we) == 2)
   if (length(x = idx_we) > 0) {
-    h_vals <- as.integer(x = vapply(X = g_we[idx_we], 
-                         FUN = function(x) x[2], character(1)))
+    h_vals    <- as.integer(x   = vapply(X = g_we[idx_we], 
+                            FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
     datetimestart[idx_we] <- as.POSIXct(x = start_str, tz = "UTC")
-    datetimeend[idx_we] <- datetimestart[idx_we] + 3600
+    datetimeend[idx_we]   <- datetimestart[idx_we] + 3600
   }
 
   predictions_long$datetimestart <- datetimestart
-  predictions_long$datetimeend <- datetimeend
-  predictions_long
+  predictions_long$datetimeend   <- datetimeend
+
+  return(predictions_long)
 }
 #' 
 # ------------------------------------------------------------------------------
@@ -1024,21 +1025,25 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   }
 
   if (!(method %in% c("region", "tiled"))) {
-    stop("method must be one of: 'region', 'tiled', 'auto'")
+    pipeline_message("method must be one of: 'region', 'tiled', 'auto'", 
+                     process = "stop")
   }
 
   # --- Validate output_config ---
   if (is.null(x = output_config) || !is.list(x = output_config)) {
-    stop("output_config must be a non-empty list")
+    pipeline_message("output_config must be a non-empty list", 
+                     process = "stop")
   }
 
   # --- Route to appropriate method ---
   if (method == "region") {
     if (is.null(x = bbox)) {
-      stop("bbox must be provided for method='region'")
+      pipeline_message("bbox must be provided for method='region'", 
+                       process = "stop")
     }
     if (is.null(x = output_config$filepath)) {
-      stop("output_config must contain 'filepath' for method='region'")
+      pipeline_message("bbox must be provided for method='region'", 
+                       process = "stop")
     }
     .predict_region_impl(
       region_name = region_name,
@@ -1155,46 +1160,47 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   check_memory_available(
     operation_name = sprintf("Pivot to long format (%s roads)",
                              fmt(nrow(x = predictions_wide))),
-    min_gb = 2, warn_gb = 4)
+    min_gb         = 2, 
+    warn_gb        = 4)
 
   dt <- data.table::as.data.table(predictions_wide)
 
-  flow_cols <- grep(pattern = "^flow_", x = names(dt), value = TRUE)
+  flow_cols  <- grep(pattern = "^flow_", x = names(dt), value = TRUE)
   truck_cols <- grep(pattern = "^truck_pct_", x = names(dt), value = TRUE)
   speed_cols <- grep(pattern = "^speed_", x = names(dt), value = TRUE)
 
   flow_long <- data.table::melt(
-    data = dt,
-    id.vars = c("osm_id","highway","osm_speed","osm_speed_imputed"),
-    measure.vars = flow_cols,
+    data          = dt,
+    id.vars       = c("osm_id","highway","osm_speed","osm_speed_imputed"),
+    measure.vars  = flow_cols,
     variable.name = "period",
-    value.name = "flow")
+    value.name    = "flow")
   
-  flow_long[, period := sub(pattern = "^flow_", 
+  flow_long[, period := sub(pattern     = "^flow_", 
                             replacement = "", 
-                            x = period)]
+                            x           = period)]
 
   truck_long <- data.table::melt(
-    data = dt,
-    id.vars = c("osm_id"),
-    measure.vars = truck_cols,
+    data          = dt,
+    id.vars       = c("osm_id"),
+    measure.vars  = truck_cols,
     variable.name = "period",
-    value.name = "truck_pct")
+    value.name    = "truck_pct")
 
-  truck_long[, period := sub(pattern = "^truck_pct_", 
+  truck_long[, period := sub(pattern     = "^truck_pct_", 
                              replacement = "", 
-                             x = period)]
+                             x           = period)]
 
   speed_long <- data.table::melt(
-    data = dt,
-    id.vars = c("osm_id"),
-    measure.vars = speed_cols,
+    data          = dt,
+    id.vars       = c("osm_id"),
+    measure.vars  = speed_cols,
     variable.name = "period",
-    value.name = "speed")
+    value.name    = "speed")
 
-  speed_long[, period := sub(pattern = "^speed_", 
+  speed_long[, period := sub(pattern     = "^speed_", 
                              replacement = "", 
-                             x =  period)]
+                             x           =  period)]
 
   predictions_long <- flow_long[
     truck_long, on = c("osm_id","period")
@@ -1206,7 +1212,8 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   predictions_long[, LV := flow - HGV]
   predictions_long[, TV := flow]
 
-  predictions_long[, period := factor(x = period, levels = all_periods)]
+  predictions_long[, period := factor(x      = period, 
+                                      levels = feature_info$all_periods)]
 
   predictions_long <- predictions_long[, .(osm_id, highway, period, TV, HGV, 
                                            LV, speed, osm_speed, 
@@ -1228,7 +1235,7 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
                              length(x = validation$issues)), 
                      process = "warning")
     for (issue_name in names(validation$issues)) {
-      pipeline_message(sprintf("\t - %s: %s cases", 
+      pipeline_message(sprintf("\t- %s: %s cases", 
                                issue_name, validation$issues[[issue_name]]), 
                        process = "warning")
     }
@@ -1241,11 +1248,12 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   check_memory_available(
     operation_name = sprintf("Geometry merge (%s rows)",
                              fmt(nrow(x = predictions_long))),
-    min_gb = 2, warn_gb = 4)
+    min_gb         = 2, 
+    warn_gb        = 4)
 
   predictions_sf <- merge(
-    x = predictions_long,
-    y = osm_region[, c("osm_id", "name", "geom")],
+    x  = predictions_long,
+    y  = osm_region[, c("osm_id", "name", "geom")],
     by = "osm_id", all.x = TRUE)
 
   predictions_sf <- sf::st_as_sf(x = predictions_sf)
@@ -1261,10 +1269,10 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   pipeline_message("Writing GeoPackage file", level = 1,
                    progress = "start", process = "save")
   sf::st_write(
-    obj = predictions_sf,
-    dsn = output_filepath,
+    obj        = predictions_sf,
+    dsn        = output_filepath,
     delete_dsn = TRUE,
-    quiet = FALSE)
+    quiet      = FALSE)
   pipeline_message(sprintf("Written GeoPackage to %s",
                            rel_path(output_filepath)),
                    level = 1, progress = "end", process = "save")
@@ -1276,30 +1284,30 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   # --- Summary ---
   pipeline_message(sprintf("Prediction summary for %s:", region_name),
                    process = "info")
-  pipeline_message(sprintf("\t - Roads: %s", 
+  pipeline_message(sprintf("\t- Roads: %s", 
                            fmt(length(x = 
                                   unique(x = predictions_long$osm_id)))), 
                    process = "info")
-  pipeline_message(sprintf("\t - Periods: %s", length(x = all_periods)), 
+  pipeline_message(sprintf("\t- Periods: %s", length(x = all_periods)), 
                    process = "info")
-  pipeline_message(sprintf("\t - Total predictions: %s", 
+  pipeline_message(sprintf("\t- Total predictions: %s", 
                            fmt(nrow(x = predictions_long))), 
                    process = "info")
 
   period_stats <- predictions_long %>%
     group_by(period) %>%
     summarise(
-      avg_TV = round(x = mean(x = TV, na.rm = TRUE)),
-      avg_speed = round(x = mean(x = speed, na.rm = TRUE), 1),
+      avg_TV        = round(x = mean(x = TV, na.rm = TRUE)),
+      avg_speed     = round(x = mean(x = speed, na.rm = TRUE), 1),
       avg_truck_pct = round(x = mean(x = truck_pct, na.rm = TRUE), 1),
-      .groups = "drop"
+      .groups       = "drop"
     )
 
   for (p in c("D", "E", "N", "h7", "h12", "h18")) {
     if (p %in% period_stats$period) {
       stats <- period_stats[period_stats$period == p, ]
       pipeline_message(
-        sprintf("\t - Period %s: %d veh/h avg, %.1f km/h, %.1f%% trucks", 
+        sprintf("\t- Period %s: %d veh/h avg, %.1f km/h, %.1f%% trucks", 
                 p, stats$avg_TV, stats$avg_speed, stats$avg_truck_pct), 
                 process = "info")
     }
@@ -1355,12 +1363,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
   xs <- seq(from = france_xmin, to = france_xmax, by = tile_size_m)
   ys <- seq(from = france_ymin, to = france_ymax, by = tile_size_m)
 
-  tiles <- expand.grid(x = xs, y = ys, stringsAsFactors = FALSE)
+  tiles         <- expand.grid(x = xs, y = ys, stringsAsFactors = FALSE)
   tiles$tile_id <- seq_len(to = nrow(x = tiles))
-  tiles$xmin <- tiles$x
-  tiles$ymin <- tiles$y
-  tiles$xmax <- tiles$x + tile_size_m
-  tiles$ymax <- tiles$y + tile_size_m
+  tiles$xmin    <- tiles$x
+  tiles$ymin    <- tiles$y
+  tiles$xmax    <- tiles$x + tile_size_m
+  tiles$ymax    <- tiles$y + tile_size_m
   tiles[, c("tile_id", "xmin", "ymin", "xmax", "ymax")]
 }
 #' 
@@ -1413,8 +1421,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                        chunks = c("DEN")) {
   
   # Configuration parameters from cfg
-  osm_roads_path <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
-  xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
+  osm_roads_path   <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  xgb_models_path  <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
   xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
   
   # Output paths from output_config
@@ -1435,7 +1443,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
   if (!file.exists(xgb_models_path)) {
     pipeline_message(sprintf("Models not found: %s", xgb_models_path), 
-    process = "stop")
+                     process = "stop")
   }
   models_list  <- readRDS(file = xgb_models_path)
   feature_info <- readRDS(file = xgb_feature_path)
@@ -1454,7 +1462,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   if (length(x = temporal_chunks) == 0) {
     pipeline_message(paste("No valid temporal chunks requested.", 
                            "Valid: DEN, hourly, hourly_wd, hourly_we"), 
-      process = "stop")
+                     process = "stop")
   }
 
   pipeline_message(sprintf("Temporal chunks to export: %s",
@@ -1463,8 +1471,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     process = "info")
 
   # Verify all periods are covered
-  covered <- unlist(x = temporal_chunks, use.names = FALSE)
-  missing_periods <- setdiff(all_periods, covered)
+  covered         <- unlist(x = temporal_chunks, use.names = FALSE)
+  missing_periods <- setdiff(x = all_periods, y = covered)
   if (length(x = missing_periods) > 0) {
     pipeline_message(
       sprintf("Warning: %d periods not in any temporal chunk: %s",
@@ -1493,13 +1501,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
   }
 
   # --- Process tiles ---
-  total_roads <- 0L
+  total_roads           <- 0L
   total_tiles_with_data <- 0L
-  tile_times <- numeric(length = 0)
+  tile_times            <- numeric(length = 0)
 
   for (i in seq_len(to = nrow(x = tiles))) {
     tile <- tiles[i, ]
-    t0 <- proc.time()["elapsed"]
+    t0   <- proc.time()["elapsed"]
 
     # Load tile from GPKG with spatial filter
     wkt_bbox <- sprintf(
@@ -1511,16 +1519,15 @@ build_france_tiles <- function(tile_size_m = 200000) {
       tile$xmin, tile$ymin)
 
     tile_sf <- tryCatch(
-      sf::st_read(
-        dsn   = osm_roads_path,
-        wkt_filter = wkt_bbox,
-        quiet = TRUE),
-      error = function(e) NULL)
+                  expr = sf::st_read(dsn        = osm_roads_path,
+                                     wkt_filter = wkt_bbox,
+                                     quiet      = TRUE),
+                  error = function(e) NULL)
 
     if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) next
 
-    n_tile <- nrow(x = tile_sf)
-    total_roads <- total_roads + n_tile
+    n_tile                <- nrow(x = tile_sf)
+    total_roads           <- total_roads + n_tile
     total_tiles_with_data <- total_tiles_with_data + 1L
 
     # --- Write geometry (append mode) ---
@@ -1544,13 +1551,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     # Keep geometry for merging with traffic data
     geom_for_merge <- tile_sf[, c("osm_id", "geom")]
-    tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
+    tile_dt        <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
     rm(tile_sf, geom_layer)
 
     predictions_wide <- apply_xgboost_predictions(
-      network_data = tile_dt,
-      models_list  = models_list,
-      feature_info = feature_info,
+      network_data          = tile_dt,
+      models_list           = models_list,
+      feature_info          = feature_info,
       default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
 
     rm(tile_dt)
@@ -1560,18 +1567,19 @@ build_france_tiles <- function(tile_size_m = 200000) {
     check_memory_available(
       operation_name = sprintf("Pivot tile %s (%s roads)", 
                                tile$tile_id, fmt(n_tile)),
-      min_gb = 1, warn_gb = 2)
+      min_gb         = 1, 
+      warn_gb        = 2)
 
     predictions_long <- predictions_wide %>%
       tidyr::pivot_longer(
-        cols = matches("^(flow|truck_pct|speed)_"),
-        names_to = c(".value", "period"),
+        cols          = matches("^(flow|truck_pct|speed)_"),
+        names_to      = c(".value", "period"),
         names_pattern = "^(flow|truck_pct|speed)_(.+)$"
       ) %>%
       mutate(
-        HGV = flow * (truck_pct / 100),
-        LV  = flow - HGV,
-        TV  = flow,
+        HGV    = flow * (truck_pct / 100),
+        LV     = flow - HGV,
+        TV     = flow,
         period = factor(x = period, levels = all_periods)
       ) %>%
       select(osm_id, highway, period, TV, HGV, LV, speed,
@@ -1586,7 +1594,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                tile$tile_id, length(x = validation$issues)),
                        process = "warning")
       for (issue_name in names(x = validation$issues)) {
-        pipeline_message(sprintf("\t - %s: %s cases", 
+        pipeline_message(sprintf("\t- %s: %s cases", 
                                  issue_name, validation$issues[[issue_name]]),
                          process = "warning")
       }
@@ -1596,26 +1604,24 @@ build_france_tiles <- function(tile_size_m = 200000) {
     for (chunk_name in names(x = temporal_chunks)) {
 
       chunk_periods <- temporal_chunks[[chunk_name]]
-
-      chunk_long <- predictions_long %>%
+      chunk_long    <- predictions_long %>%
         dplyr::filter(period %in% chunk_periods) %>%
         mutate(period = as.character(x = period))
 
       if (nrow(x = chunk_long) > 0) {
 
         chunk_long <- add_period_datetime_columns(chunk_long, cfg)
-
         chunk_file <- chunk_paths[[chunk_name]]
 
         # Merge with geometry
-        chunk_sf <- merge(x = chunk_long, 
-                          y = geom_for_merge, 
-                          by = "osm_id", 
-                          all.x = TRUE)
+        chunk_sf   <- merge(x     = chunk_long, 
+                            y     = geom_for_merge, 
+                            by    = "osm_id", 
+                            all.x = TRUE)
         chunk_sf <- sf::st_as_sf(x = chunk_sf)
 
         if (sf::st_crs(x = chunk_sf) != cfg$TARGET_CRS) {
-          chunk_sf <- sf::st_transform(x = chunk_sf, 
+          chunk_sf <- sf::st_transform(x   = chunk_sf, 
                                        crs = cfg$TARGET_CRS)
         }
 
@@ -1627,10 +1633,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
           level = 1, progress = "start", process = "save")
 
         sf::st_write(
-          obj = chunk_sf,
-          dsn = chunk_file,
+          obj    = chunk_sf,
+          dsn    = chunk_file,
           append = TRUE,
-          quiet = TRUE
+          quiet  = TRUE
         )
 
         pipeline_message(
@@ -1645,10 +1651,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
     rm(predictions_wide, predictions_long, geom_for_merge)
     gc(verbose = FALSE)
 
-    dt <- proc.time()["elapsed"] - t0
+    dt         <- proc.time()["elapsed"] - t0
     tile_times <- c(tile_times, dt)
-    avg_time <- mean(x = tile_times)
-    remaining <- (nrow(x = tiles) - i) * avg_time
+    avg_time   <- mean(x = tile_times)
+    remaining  <- (nrow(x = tiles) - i) * avg_time
 
     pipeline_message(
       sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s", 
@@ -1672,7 +1678,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   for (cn in names(x = chunk_paths)) {
     if (file.exists(chunk_paths[[cn]])) {
       sz <- round(x = file.info(chunk_paths[[cn]])$size / 1024^2, 1)
-      pipeline_message(sprintf("\t - Traffic [%s]: %s (%.1f MB)", 
+      pipeline_message(sprintf("\t- Traffic [%s]: %s (%.1f MB)", 
                                cn, rel_path(chunk_paths[[cn]]), sz), 
                    process = "info")
     }
