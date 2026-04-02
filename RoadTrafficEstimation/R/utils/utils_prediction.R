@@ -30,37 +30,46 @@
 #' @return List of file paths for the given extent.
 #' @export
 build_prediction_filepaths <- function(extent, mode = NULL) {
+  # Default mode for prediction is "all"
   if (is.null(x = mode) || !nzchar(x = mode)) {
     mode <- if (exists("MODE") && nzchar(x = MODE)) MODE else "all"
   }
-
+  # Generate file paths
   switch(extent,
     sensors = list(
-      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
-    ),
-    nantes = list(
-      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
-    ),
-    paris = list(
-      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
-    ),
-    pemb = list(
-      all = file.path(PREDICTION_DIR, sprintf("07_predictions_%s.gpkg", mode))
-    ),
-    france = list(
+      all        = file.path(PREDICTION_DIR, 
+                             sprintf("07_predictions_%s.gpkg", mode))),
+    nantes  = list(
+      all        = file.path(PREDICTION_DIR, 
+                             sprintf("07_predictions_%s.gpkg", mode))),
+    paris   = list(
+      all        = file.path(PREDICTION_DIR, 
+                             sprintf("07_predictions_%s.gpkg", mode))),
+    pemb    = list(
+      all        = file.path(PREDICTION_DIR, 
+                             sprintf("07_predictions_%s.gpkg", mode))),
+    france  = list(
       output_dir = file.path(PREDICTION_DIR, mode),
-      geom = file.path(PREDICTION_DIR, mode,
-                       sprintf("07_predictions_%s_network.gpkg", mode)),
-      den = file.path(PREDICTION_DIR, mode,
-                      sprintf("07_predictions_%s_traffic_DEN.gpkg", mode)),
-      hourly = file.path(PREDICTION_DIR, mode,
-                         sprintf("07_predictions_%s_traffic_hourly.gpkg", mode)),
-      hourly_wd = file.path(PREDICTION_DIR, mode,
-                            sprintf("07_predictions_%s_traffic_hourly_wd.gpkg", mode)),
-      hourly_we = file.path(PREDICTION_DIR, mode,
-                            sprintf("07_predictions_%s_traffic_hourly_we.gpkg", mode))
+      geom       = file.path(PREDICTION_DIR, mode,
+                             sprintf("07_predictions_%s_network.gpkg", 
+                                     mode)),
+      den        = file.path(PREDICTION_DIR, mode,
+                             sprintf("07_predictions_%s_traffic_DEN.gpkg", 
+                                     mode)),
+      hourly     = file.path(PREDICTION_DIR, mode,
+                             sprintf("07_predictions_%s_traffic_hourly.gpkg", 
+                                     mode)),
+      hourly_wd  = file.path(PREDICTION_DIR, mode,
+                             sprintf("07_predictions_%s_traffic_hourly_wd.gpkg", 
+                                     mode)),
+      hourly_we  = file.path(PREDICTION_DIR, mode,
+                             sprintf("07_predictions_%s_traffic_hourly_we.gpkg", 
+                                     mode))
     ),
-    stop("Unknown extent: ", extent, ". Valid: sensors, nantes, paris, pemb, france")
+    pipeline_message(sprintf(paste("Unknown extent: ", 
+                             "%s. Valid: sensors, nantes, paris, pemb, france"), 
+                             extent),
+                     process = "stop")
   )
 }
 #'
@@ -76,11 +85,11 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
 load_network_for_prediction <- function(bbox, cfg) {
   
   # Configuration parameters
-  target_crs <- cfg$TARGET_CRS
-  osm_roads_path <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+  target_crs            <- cfg$TARGET_CRS
+  osm_roads_path        <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
   default_vehicle_speed <- cfg$DEFAULT_VEHICLE_SPEED
-  xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
-  xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
+  xgb_models_path       <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
+  xgb_feature_path      <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
 
   pipeline_message(sprintf("Loading OSM France engineered network from %s", 
                            rel_path(osm_roads_path)), 
@@ -89,7 +98,8 @@ load_network_for_prediction <- function(bbox, cfg) {
   # Memory check before loading large GPKG
   check_memory_available(
     operation_name = "Load France engineered network (GPKG)",
-    min_gb = 2, warn_gb = 4)
+    min_gb         = 2, 
+    warn_gb        = 4)
   
   # Use spatial filter at read time (wkt_filter) to avoid loading entire France
   # This is MUCH more memory-efficient than load-all-then-filter
@@ -105,12 +115,16 @@ load_network_for_prediction <- function(bbox, cfg) {
     
     # Build WKT polygon for spatial filter at GDAL level
     wkt_bbox <- sprintf("POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
-                        xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax, xmin, ymin)
+                        xmin, ymin, 
+                        xmax, ymin, 
+                        xmax, ymax, 
+                        xmin, ymax, 
+                        xmin, ymin)
     
     osm_network <- sf::st_read(
-      dsn = osm_roads_path,
+      dsn        = osm_roads_path,
       wkt_filter = wkt_bbox,
-      quiet = TRUE)
+      quiet      = TRUE)
     
     pipeline_message(sprintf("Network loaded with spatial filter: %s roads", 
                              fmt(nrow(x = osm_network))), 
@@ -122,9 +136,10 @@ load_network_for_prediction <- function(bbox, cfg) {
       process = "warning")
     check_memory_available(
       operation_name = "Load entire France network (no bbox)",
-      min_gb = 8, warn_gb = 12)
+      min_gb         = 8, 
+      warn_gb        = 12)
     osm_network <- sf::st_read(
-      dsn = osm_roads_path,
+      dsn   = osm_roads_path,
       quiet = TRUE)
   }
   
@@ -162,7 +177,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
   # Memory check
   check_memory_available(
     operation_name = "Load network around sensor points",
-    min_gb = 2, warn_gb = 4)
+    min_gb         = 2, 
+    warn_gb        = 4)
   
   # Ensure points CRS
   if (sf::st_crs(x = points) != target_crs) {
@@ -186,9 +202,9 @@ load_network_around_points <- function(points, buffer_radius, config) {
   
   # Read only the bbox region from GPKG (much faster + less memory)
   osm_network <- sf::st_read(
-    dsn = osm_roads_path,
+    dsn        = osm_roads_path,
     wkt_filter = wkt_bbox,
-    quiet = TRUE)
+    quiet      = TRUE)
   
   # Ensure correct CRS
   if (sf::st_crs(x = osm_network) != target_crs) {
@@ -197,9 +213,9 @@ load_network_around_points <- function(points, buffer_radius, config) {
   }
   
   # Create buffers and filter precisely
-  buffers <- sf::st_buffer(x = points, dist = buffer_radius)
+  buffers         <- sf::st_buffer(x = points, dist = buffer_radius)
   combined_buffer <- sf::st_union(x = buffers)
-  osm_network <- sf::st_filter(x = osm_network, y = combined_buffer)
+  osm_network     <- sf::st_filter(x = osm_network, y = combined_buffer)
   
   pipeline_message(sprintf("Network filtered: %s roads within buffers", 
                            fmt(nrow(x = osm_network))), 
@@ -231,12 +247,12 @@ load_network_around_points <- function(points, buffer_radius, config) {
       }
     }
     mm_subset <- mm_data[, vars_in_formula, drop = FALSE]
-    cc_idx <- complete.cases(mm_subset)
-    cc_data <- mm_data[cc_idx, , drop = FALSE]
+    cc_idx    <- complete.cases(mm_subset)
+    cc_data   <- mm_data[cc_idx, , drop = FALSE]
     for (v in vars_in_formula) {
       if (is.character(x = mm_data[[v]])) {
         lv <- unique(x = cc_data[[v]])
-        lv <- lv[!is.na(x = x = lv) & nzchar(x = lv)]
+        lv <- lv[!is.na(x = lv) & nzchar(x = lv)]
         if (length(x = lv) <= 1) {
           mm_data[[v]] <- 0
         }
@@ -263,9 +279,9 @@ apply_xgboost_predictions <- function(network_data,
                    level = 1, progress = "start", process = "calc")
   
   # Memory check: predictions will create ~n_roads × n_periods × 3 columns
-  n_roads <- nrow(x = network_data)
+  n_roads   <- nrow(x = network_data)
   n_periods <- length(x = feature_info$all_periods)
-  est_mb <- round(x = n_roads * n_periods * 3 * 8 / 1024^2)  # 8 bytes / double
+  est_mb    <- round(x = n_roads * n_periods * 3 * 8 / 1024^2)  # 8 bytes / double
   check_memory_available(
     operation_name = 
       sprintf("XGBoost prediction (%s roads × %d periods, ~%d MB result)",
@@ -285,7 +301,7 @@ apply_xgboost_predictions <- function(network_data,
     } else {
       network_data$lane_number <- 1
     }
-    network_data$lane_number[is.na(x = x = network_data$lane_number) | 
+    network_data$lane_number[is.na(x = network_data$lane_number) | 
                              !is.finite(x = network_data$lane_number)] <- 1
     pipeline_message(paste("lane_number missing in prediction input;", 
                            "derived proxy from OSM lane attributes"), 
@@ -300,7 +316,7 @@ apply_xgboost_predictions <- function(network_data,
   rownames(x = network_data) <- seq_len(to = nrow(x = network_data))
   feature_matrix_part <- safe_sparse_model_matrix(
     formula_obj = feature_info$road_feature_formula,
-    data_df = network_data)
+    data_df     = network_data)
   rows_used <- as.integer(x = rownames(x = feature_matrix_part))
   if (length(x = rows_used) == 0 || anyNA(rows_used)) {
     rows_used <- seq_len(to = nrow(x = feature_matrix_part))
@@ -308,14 +324,14 @@ apply_xgboost_predictions <- function(network_data,
   rows_used <- rows_used[rows_used >= 1 & rows_used <= nrow(x = network_data)]
   feature_matrix <- matrix(
     NA_real_,
-    nrow = nrow(x = network_data),
-    ncol = ncol(x = feature_matrix_part),
+    nrow     = nrow(x = network_data),
+    ncol     = ncol(x = feature_matrix_part),
     dimnames = list(rownames(x = network_data), 
                     colnames(x = feature_matrix_part))
   )
   if (length(x = rows_used) != nrow(x = feature_matrix_part)) {
     # Fallback alignment when sparse.model.matrix rownames are unavailable
-    n_common <- min(length(x = rows_used), nrow(x = feature_matrix_part))
+    n_common  <- min(length(x = rows_used), nrow(x = feature_matrix_part))
     rows_used <- rows_used[seq_len(to = n_common)]
     feature_matrix[rows_used, ] <- as.matrix(
           x = feature_matrix_part[seq_len(to = n_common), , drop = FALSE])
@@ -351,12 +367,11 @@ apply_xgboost_predictions <- function(network_data,
     # or the list entry stored in models_list (which contains both the booster
     # and the saved feature_names).  This wrapper normalises input.
     if (is.list(x = model_entry) && !is.null(x = model_entry$model)) {
-      model_obj <- model_entry$model
-      model_features <- model_entry$feature_names
+      model_obj       <- model_entry$model
+      model_features  <- model_entry$feature_names
     } else {
-      model_obj <- model_entry
-      # Booster objects do not carry feature_names, so leave NULL.
-      model_features <- NULL
+      model_obj       <- model_entry
+      model_features  <- NULL       # Booster objects do not carry feature_names
     }
     training_features <- feature_info$feature_names_from_training
     
@@ -372,11 +387,11 @@ apply_xgboost_predictions <- function(network_data,
     target_source <- NULL
     if (!is.null(x = model_features) && length(x = model_features) > 0) {
       target_features <- model_features
-      target_source <- "model"
+      target_source   <- "model"
     } else if (!is.null(x = training_features) && 
                length(x = training_features) > 0) {
       target_features <- training_features
-      target_source <- "feature_info"
+      target_source   <- "feature_info"
     }
     
     # Warn if both sources are present but differ substantially
@@ -408,7 +423,7 @@ apply_xgboost_predictions <- function(network_data,
       extra_cols <- setdiff(fm_cols, target_features)
       if (length(x = extra_cols) > 0) {
         # Report extra columns (could indicate factor level mismatch)
-        extra_summary <- paste(head(x = extra_cols, n = 5), collapse = ", ")
+        extra_summary   <- paste(head(x = extra_cols, n = 5), collapse = ", ")
         if (length(x = extra_cols) > 5) {
           extra_summary <- paste0(extra_summary, 
                                   " ... (", length(x = extra_cols) - 5, 
@@ -438,7 +453,7 @@ apply_xgboost_predictions <- function(network_data,
     
     # Create DMatrix and predict
     dmat <- xgboost::xgb.DMatrix(data = as.matrix(x = fm))
-    predict(model_obj, dmat)
+    predict(object = model_obj, newdata = dmat)
   }
   
   # Predict base models (period D)
@@ -472,13 +487,13 @@ apply_xgboost_predictions <- function(network_data,
   }
 
   speed_osm_raw <- suppressWarnings(expr = as.numeric(x = network_data$speed))
-  speed_osm_missing <- is.na(x = x = speed_osm_raw) | speed_osm_raw <= 0
+  speed_osm_missing <- is.na(x = speed_osm_raw) | speed_osm_raw <= 0
 
   if (identical(speed_model_target, "ratio_speed_to_osm")) {
     # New model: speed_D predicts a ratio to OSM speed.
     speed_osm_base <- speed_osm_raw
     speed_osm_base[speed_osm_missing] <- default_vehicle_speed
-    speed_D <- if (all(is.na(x = x = speed_D_raw))) {
+    speed_D <- if (all(is.na(x = speed_D_raw))) {
       rep(x = NA_real_, length(x = speed_D_raw))
     } else {
       pmax(5, speed_D_raw * speed_osm_base)
@@ -497,12 +512,12 @@ apply_xgboost_predictions <- function(network_data,
       sprintf(paste("Prediction-time OSM speed imputation:" , 
                     "%s missing values imputed with %s"), 
               fmt(n_speed_osm_missing), 
-              ifelse(test = all(is.na(x = x = speed_D)), 
+              ifelse(test = all(is.na(x = speed_D)), 
                      yes = "DEFAULT_VEHICLE_SPEED", 
                      no = "speed_D XGBoost predictions")),
       process = "warning"
     )
-    if (all(is.na(x = x = speed_D))) {
+    if (all(is.na(x = speed_D))) {
       speed_osm[speed_osm_missing] <- default_vehicle_speed
     } else {
       speed_osm[speed_osm_missing] <- pmax(5, speed_D[speed_osm_missing])
@@ -511,18 +526,18 @@ apply_xgboost_predictions <- function(network_data,
   
   # Initialize results data.frame
   results <- data.frame(
-    osm_id = network_data$osm_id,
-    highway = network_data$highway,
-    osm_speed = speed_osm,
+    osm_id            = network_data$osm_id,
+    highway           = network_data$highway,
+    osm_speed         = speed_osm,
     osm_speed_imputed = as.integer(x = speed_osm_missing)
   )
   
   # Predict all periods
   for (period in feature_info$all_periods) {
     if (period == "D") {
-      results[[paste0("flow_", period)]] <- 10^flow_D  # Inverse log10
+      results[[paste0("flow_", period)]]      <- 10^flow_D  # Inverse log10
       results[[paste0("truck_pct_", period)]] <- truck_pct_D
-      results[[paste0("speed_", period)]] <- speed_D
+      results[[paste0("speed_", period)]]     <- speed_D
     } else {
       # Predict ratios
       ratio_flow_model <- models_list[[paste0("ratio_flow_", 
@@ -540,7 +555,7 @@ apply_xgboost_predictions <- function(network_data,
                                feature_matrix, 
                                feature_info)
       }
-      ratio_truck_pct <- if (all(is.na(x = x = truck_pct_D))) {
+      ratio_truck_pct <- if (all(is.na(x = truck_pct_D))) {
         rep(x = NA_real_, length(x = truck_pct_D))
       } else if (is.null(x = ratio_truck_model)) {
         rep(x = NA_real_, length(x = truck_pct_D))
@@ -550,7 +565,7 @@ apply_xgboost_predictions <- function(network_data,
                                feature_matrix, 
                                feature_info)
       }
-      ratio_speed <- if (all(is.na(x = x = speed_D))) {
+      ratio_speed <- if (all(is.na(x = speed_D))) {
         rep(x = NA_real_, length(x = speed_D))
       } else if (is.null(x = ratio_speed_model)) {
         rep(x = NA_real_, length(x = speed_D))
@@ -562,14 +577,14 @@ apply_xgboost_predictions <- function(network_data,
       }
       
       # Apply ratios to base predictions
-      results[[paste0("flow_", period)]] <- (10^flow_D) * ratio_flow
+      results[[paste0("flow_", period)]]      <- (10^flow_D) * ratio_flow
       results[[paste0("truck_pct_", period)]] <- truck_pct_D * ratio_truck_pct
-      results[[paste0("speed_", period)]] <- speed_D * ratio_speed
+      results[[paste0("speed_", period)]]     <- speed_D * ratio_speed
     }
   }
 
   # Clamp predictions to sensible ranges
-  highway_chr <- tolower(x = as.character(x = results$highway))
+  highway_chr     <- tolower(x = as.character(x = results$highway))
   speed_min_by_hw <- c(
     motorway = 30, trunk = 20, primary = 15, secondary = 15, tertiary = 12,
     residential = 10, unclassified = 10, service = 5, living_street = 5
@@ -578,7 +593,7 @@ apply_xgboost_predictions <- function(network_data,
     motorway = 130, trunk = 110, primary = 90, secondary = 80, tertiary = 70,
     residential = 50, unclassified = 60, service = 40, living_street = 30
   )
-  flow_max_by_hw <- c(
+  flow_max_by_hw  <- c(
     motorway = 12000, trunk = 9000, primary = 7000, secondary = 5000,
     tertiary = 3000, residential = 1200, unclassified = 1500,
     service = 600, living_street = 300
@@ -586,9 +601,9 @@ apply_xgboost_predictions <- function(network_data,
   speed_min_vec <- as.numeric(x = speed_min_by_hw[highway_chr])
   speed_max_vec <- as.numeric(x = speed_max_by_hw[highway_chr])
   flow_max_vec  <- as.numeric(x = flow_max_by_hw[highway_chr])
-  speed_min_vec[is.na(x = x = speed_min_vec)] <- 5
-  speed_max_vec[is.na(x = x = speed_max_vec)] <- 130
-  flow_max_vec[is.na(x = x = flow_max_vec)]   <- 15000
+  speed_min_vec[is.na(x = speed_min_vec)] <- 5
+  speed_max_vec[is.na(x = speed_max_vec)] <- 130
+  flow_max_vec[is.na(x = flow_max_vec)]   <- 15000
 
   flow_cols <- grep(pattern = "^flow_", x = names(x = results), value = TRUE)
   if (length(x = flow_cols) > 0) {
@@ -663,8 +678,8 @@ validate_predictions <- function(predictions) {
   issues <- list()
 
   is_long_format <- all(c("period", "speed") %in% names(x = predictions))
-  has_tv <- "TV" %in% names(x = predictions)
-  has_truck <- "truck_pct" %in% names(x = predictions)
+  has_tv         <- "TV" %in% names(x = predictions)
+  has_truck      <- "truck_pct" %in% names(x = predictions)
   
   if (is_long_format) {
     if (has_tv) {
@@ -757,8 +772,8 @@ validate_predictions <- function(predictions) {
   
   list(
     is_valid = length(x = issues) == 0,
-    issues = issues,
-    n_rows = nrow(x = predictions)
+    issues   = issues,
+    n_rows   = nrow(x = predictions)
   )
 }
 #' 
@@ -791,6 +806,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
     return(predictions_long)
   }
 
+  # Period to datetime
   period_chr <- as.character(x = predictions_long$period)
   n <- length(x = period_chr)
 

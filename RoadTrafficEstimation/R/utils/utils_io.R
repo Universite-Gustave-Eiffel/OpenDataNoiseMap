@@ -111,7 +111,7 @@ setup_directories <- function(cfg) {
   
   # Keep only path-like entries based on naming convention
   path_idx <- grepl(pattern = "(_DIR$|_DIRPATH$|_FILEPATH$)", 
-                    x = names(all_values))
+                    x       = names(all_values))
   paths <- all_values[path_idx]
   
   if (length(paths) == 0) {
@@ -477,7 +477,7 @@ rel_path <- function(path) {
   if (!exists("PROJECT_ROOT", envir = .GlobalEnv)) {
     return(path)
   }
-  path <- normalizePath(path = path, winslash = "/", mustWork = FALSE)
+  path     <- normalizePath(path = path, winslash = "/", mustWork = FALSE)
   rel_path <- fs::path_rel(path = path, start = PROJECT_ROOT)
   paste0("./", rel_path)
 }
@@ -491,7 +491,7 @@ rel_path <- function(path) {
 #' @export
 get_available_memory_gb <- function() {
   if (file.exists("/proc/meminfo")) {
-    meminfo <- readLines("/proc/meminfo", warn = FALSE)
+    meminfo  <- readLines("/proc/meminfo", warn = FALSE)
     mem_line <- meminfo[grepl("^MemAvailable:", meminfo)]
     pipeline_message(sprintf("Available memory: %s", mem_line), process = "info")
     if (length(mem_line) == 1) {
@@ -558,9 +558,9 @@ format_duration <- function(seconds) {
     return("unknown")
   }
 
-  hours <- floor(seconds / 3600)
+  hours   <- floor(seconds / 3600)
   minutes <- floor((seconds %% 3600) / 60)
-  secs <- round(seconds %% 60, 1)
+  secs    <- round(seconds %% 60, 1)
 
   parts <- c()
   if (hours > 0) {
