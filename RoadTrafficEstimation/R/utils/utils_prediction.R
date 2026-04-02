@@ -32,8 +32,9 @@
 build_prediction_filepaths <- function(extent, mode = NULL) {
   # Default mode for prediction is "all"
   if (is.null(x = mode) || !nzchar(x = mode)) {
-    mode <- if (exists("MODE") && nzchar(x = MODE)) MODE else "all"
-  }
+    mode <- ifelse(test = exists("MODE") && nzchar(x = MODE), 
+                   yes  = MODE, 
+                   no   = "all")
   # Generate file paths
   switch(extent,
     sensors = list(
@@ -496,11 +497,9 @@ apply_xgboost_predictions <- function(network_data,
     # New model: speed_D predicts a ratio to OSM speed.
     speed_osm_base <- speed_osm_raw
     speed_osm_base[speed_osm_missing] <- default_vehicle_speed
-    speed_D <- if (all(is.na(x = speed_D_raw))) {
-      rep(x = NA_real_, length(x = speed_D_raw))
-    } else {
-      pmax(5, speed_D_raw * speed_osm_base)
-    }
+    speed_D <- ifelse(test = all(is.na(x = speed_D_raw)), 
+                      yes   = rep(x = NA_real_, length(x = speed_D_raw)), 
+                      no    = pmax(5, speed_D_raw * speed_osm_base))
   } else {
     # Legacy model: speed_D already predicts absolute speed (km/h).
     speed_D <- speed_D_raw
@@ -610,23 +609,22 @@ apply_xgboost_predictions <- function(network_data,
 
   flow_cols <- grep(pattern = "^flow_", x = names(x = results), value = TRUE)
   if (length(x = flow_cols) > 0) {
-    results[flow_cols] <- lapply(
-      results[flow_cols],
-      function(x) pmin(flow_max_vec, pmax(0, x))
+    results[flow_cols] <- lapply(X   = results[flow_cols], 
+                                 FUN = function(x) pmin(flow_max_vec, pmax(0, x))
     )
   }
   truck_cols <- grep(pattern = "^truck_pct_", 
                      x = names(x = results), 
                      value = TRUE)
   if (length(x = truck_cols) > 0) {
-    results[truck_cols] <- lapply(X = results[truck_cols], 
+    results[truck_cols] <- lapply(X   = results[truck_cols], 
                                   FUN = function(x) pmin(100, pmax(0, x)))
   }
   speed_cols <- grep(pattern = "^speed_", x = names(x = results), value = TRUE)
   if (length(x = speed_cols) > 0) {
     results[speed_cols] <- lapply(
-      X = results[speed_cols], 
-      FUN =function(x) pmin(speed_max_vec, pmax(speed_min_vec, x))
+      X   = results[speed_cols], 
+      FUN = function(x) pmin(speed_max_vec, pmax(speed_min_vec, x))
     )
   }
   
@@ -644,8 +642,9 @@ apply_xgboost_predictions <- function(network_data,
       for (hw in unique(x = results$highway[bad_idx])) {
         hw_rows <- which(x = results$highway == hw)
         hw_good <- results[[col]][setdiff(x = hw_rows, y = bad_idx)]
-        med_val <- if (length(x = hw_good) > 0) {
-          median(x = hw_good, na.rm = TRUE) else NA_real_}
+        med_val <- ifelse(test = length(x = hw_good) > 0, 
+                          yes  = median(x = hw_good, na.rm = TRUE), 
+                          no   = NA_real_)
         if (!is.finite(x = med_val)) med_val <- global_med
         results[[col]][intersect(x = bad_idx, y = hw_rows)] <- med_val
       }
@@ -814,20 +813,20 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   datetimeend   <- as.POSIXct(x = rep(x = NA_character_, n), tz = "UTC")
 
   # Get base year from AVATAR data
-  avatar_dir <- if (!is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR)) {
-                  cfg$AVATAR_CSV_DIR} 
-                else {file.path("data", "avatar", "csv")}
+  avatar_dir <- ifelse(test = !is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR), 
+                       yes  = cfg$AVATAR_CSV_DIR}, 
+                       no   = file.path("data", "avatar", "csv")}
   base_year <- 2023  # fallback
-  if (dir.exists(avatar_dir)) {
+  if (dir.exists(paths = avatar_dir)) {
     csv_files <- list.files(path       = avatar_dir, 
                             pattern    = "\\.csv$", 
                             full.names = TRUE)
     if (length(x = csv_files) > 0) {
       first_csv <- csv_files[1]
       # Read first data line (skip header)
-      con             <- file(first_csv, "r")
-      header          <- readLines(con, n = 1)
-      first_data_line <- readLines(con, n = 1)
+      con             <- file(description = first_csv, open = "r")
+      header          <- readLines(con = con, n = 1)
+      first_data_line <- readLines(con = con, n = 1)
       close(con)
       if (length(x = first_data_line) > 0) {
         # Split by comma, find measure_datetime column
@@ -882,8 +881,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
                     m = m_h)
   idx_h <- which(x = lengths(g_h) == 2)
   if (length(x = idx_h) > 0) {
-    h_vals <- as.integer(x = vapply(X = g_h[idx_h], 
-                         FUN = function(x) x[2], character(1)))
+    h_vals <- as.integer(x = vapply(X   = g_h[idx_h], 
+                                    FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-04 %02d:00:00", base_year, h_vals)
     datetimestart[idx_h] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_h]   <- datetimestart[idx_h] + 3600
@@ -896,8 +895,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
                      m = m_wd)
   idx_wd <- which(x = lengths(g_wd) == 2)
   if (length(x = idx_wd) > 0) {
-    h_vals    <- as.integer(x   = vapply(X = g_wd[idx_wd], 
-                            FUN = function(x) x[2], character(1)))
+    h_vals    <- as.integer(x   = vapply(X   = g_wd[idx_wd], 
+                                         FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-02 %02d:00:00", base_year, h_vals)
     datetimestart[idx_wd] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_wd]   <- datetimestart[idx_wd] + 3600
@@ -910,8 +909,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
                      m = m_we)
   idx_we <- which(x = lengths(g_we) == 2)
   if (length(x = idx_we) > 0) {
-    h_vals    <- as.integer(x   = vapply(X = g_we[idx_we], 
-                            FUN = function(x) x[2], character(1)))
+    h_vals    <- as.integer(x   = vapply(X   = g_we[idx_we], 
+                                         FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
     datetimestart[idx_we] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_we]   <- datetimestart[idx_we] + 3600
@@ -1021,7 +1020,9 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
 
   # --- Auto-detect method ---
   if (method == "auto") {
-    method <- if (is.null(x = bbox)) "tiled" else "region"
+    method <- if (is.null(x = bbox)) "tiled"
+  } else {
+    "region"
   }
 
   if (!(method %in% c("region", "tiled"))) {
@@ -1484,8 +1485,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
   # --- Output paths (use provided output_config) ---
   geom_dir <- dirname(geom_path)
-  if (!dir.exists(geom_dir)) dir.create(path = geom_dir, 
-      recursive = TRUE)
+  if (!dir.exists(paths = geom_dir)) {
+    dir.create(path      = geom_dir, 
+               recursive = TRUE)
+  }
 
   chunk_paths <- chunk_paths_all[names(x = temporal_chunks)]
 

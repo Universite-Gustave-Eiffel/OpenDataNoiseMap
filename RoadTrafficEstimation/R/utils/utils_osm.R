@@ -34,9 +34,7 @@
 download_geofabrik_pbf <- function(region    = "France", 
                                    dest_dir  = ".", 
                                    overwrite = FALSE) {
-  # ----------------------------------------------------------------------------
   # Supported regions
-  # ----------------------------------------------------------------------------
   available_regions <- c(
     "France",
     "Alsace", "Aquitaine", "Auvergne", "Basse-Normandie", "Bourgogne",
@@ -53,9 +51,7 @@ download_geofabrik_pbf <- function(region    = "France",
   pipeline_message("Verification of the zone name entered", level = 2, 
                    progress = "start", process = "search")
   
-  # ---------------------------------------------------------------------------
   # Validation
-  # ---------------------------------------------------------------------------
   if (region %in% unavailable_regions) {
     pipeline_message(
       sprintf("OSM data for region '%s' are not available on Geofabrik", 
@@ -70,9 +66,7 @@ download_geofabrik_pbf <- function(region    = "France",
       process = "stop")
   }
   
-  # ---------------------------------------------------------------------------
   # Build URL
-  # ---------------------------------------------------------------------------
   base_url <- "https://download.geofabrik.de/europe/"
   # Format region name for the URL
   region_slug <- function(x) {
@@ -106,27 +100,30 @@ download_geofabrik_pbf <- function(region    = "France",
     return(invisible(dest_file))
   }
   
-  dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
+  dir.create(path = dest_dir, recursive = TRUE, showWarnings = FALSE)
   
-  # ---------------------------------------------------------------------------
   # Retrieve file size (HEAD request)
-  # ---------------------------------------------------------------------------
   
   file_size_mb <- NA_real_
-  head_cmd <- sprintf("curl -sI %s", shQuote(url))
-  headers <- try(system(head_cmd, intern = TRUE), silent = TRUE)
+  head_cmd     <- sprintf("curl -sI %s", shQuote(string = url))
+  headers      <- try(expr   = system(command       = head_cmd, 
+                                      ignore.stderr = TRUE, 
+                                      intern        = TRUE), 
+                      silent = TRUE)
   
   if (!inherits(headers, "try-error")) {
     size_line <- headers[grepl("Content-Length", headers)]
-    if (length(size_line) == 1) {
-      size_bytes <- as.numeric(gsub(".*: ", "", size_line))
+    if (length(x = size_line) == 1) {
+      size_bytes <- as.numeric(x = gsub(pattern     = ".*: ", 
+                                        replacement = "", 
+                                        x           = size_line))
       file_size_mb <- size_bytes / 1024^2
       pipeline_message(sprintf("File size: %.1f MB", file_size_mb), 
                        level = 3, process = "pack")
     }
   }
   
-  if (is.na(file_size_mb)) {
+  if (is.na(x = file_size_mb)) {
     pipeline_message(
       "File size: unavailable (server did not provide Content-Length)", 
       level = 3, process = "pack")
@@ -149,11 +146,11 @@ download_geofabrik_pbf <- function(region    = "France",
   
   cmd <- sprintf(
     "curl -L --fail --retry 5 --retry-delay 10 --continue-at - -o %s %s",
-    shQuote(dest_file),
-    shQuote(url)
+    shQuote(string = dest_file),
+    shQuote(string = url)
   )
   
-  status <- system(cmd)
+  status <- system(command = cmd)
   
   if (status != 0) {
     pipeline_message("Download failed (curl returned a non-zero status)", 
@@ -186,9 +183,8 @@ download_geofabrik_pbf <- function(region    = "France",
 convert_pbf_to_gpkg <- function(pbf_file,
                                 gpkg_file,
                                 overwrite = FALSE) {
-  pipeline_message(
-    "Conversion of the OSM PBF file to GeoPackage format",  
-    level = 2, progress = "start", process = "calc")
+  pipeline_message("Conversion of the OSM PBF file to GeoPackage format", 
+                   level = 2, progress = "start", process = "calc")
   
   if (!file.exists(pbf_file)) {
     pipeline_message(sprintf("Input PBF file %s does not exist", 
@@ -207,7 +203,9 @@ convert_pbf_to_gpkg <- function(pbf_file,
   }
   
   # Check GDAL availability
-  if (system("ogr2ogr --version", intern = TRUE, ignore.stderr = TRUE) |> length() == 0) {
+  if (system(command       = "ogr2ogr --version", 
+             intern        = TRUE, 
+             ignore.stderr = TRUE) |> length() == 0) {
     pipeline_message(
       "GDAL (ogr2ogr) is not available in the system environment", 
       process = "stop")
@@ -217,20 +215,18 @@ convert_pbf_to_gpkg <- function(pbf_file,
                            \t\tOutput: %s", pbf_file, gpkg_file), 
                    level = 3, process = "convert")
   
-  cmd <- sprintf(
-    'ogr2ogr -f GPKG %s %s',
-    shQuote(gpkg_file),
-    shQuote(pbf_file)
-  )
+  cmd <- sprintf('ogr2ogr -f GPKG %s %s', 
+                 shQuote(string = gpkg_file), 
+                 shQuote(string = pbf_file))
   
-  status <- system(cmd)
+  status <- system(command = cmd)
   
   if (status != 0) {
     pipeline_message("ogr2ogr conversion failed", process = "stop")
   }
   
   pipeline_message(
-    text =sprintf("Conversion of the file %s to %s successfully completed", 
+    sprintf("Conversion of the file %s to %s successfully completed", 
                   pbf_file, gpkg_file), 
     level = 2, progress = "end", process = "valid")
   
@@ -288,10 +284,10 @@ extract_osm_other_tags <- function(other_tags_vector,
   result <- matrix(data = NA_character_, nrow = n_rows, ncol = n_cols)
   colnames(result) <- keys
   # Replace NA with empty strings for pattern matching
-  other_tags_vector[is.na(other_tags_vector)] <- ""
+  other_tags_vector[is.na(x = other_tags_vector)] <- ""
   # Progress bar setup
   if (show_progress) {
-    pb_width <- 90
+    pb_width     <- 90
     last_printed <- 0
     if (IS_TTY) {
       pipeline_message("Extracting OSM tags", process = "info")
@@ -303,17 +299,17 @@ extract_osm_other_tags <- function(other_tags_vector,
     }
   }
   # Extract all keys at once
-  for (i in seq_along(keys)) {
+  for (i in seq_along(along.with = keys)) {
     key <- keys[i]
     # Escape special regex characters in key (e.g., "turn:lanes")
-    key_escaped <- gsub(pattern = "([:|.])", 
+    key_escaped <- gsub(pattern     = "([:|.])", 
                         replacement = "\\\\\\1", 
-                        x= key)
+                        x           = key)
     pattern <- paste0('"', key_escaped, '"=>"([^"]*)"')
     # Vectorized regex extraction
     match_positions <- regexpr(pattern = pattern, 
-                               text = other_tags_vector, 
-                               perl = TRUE)
+                               text    = other_tags_vector, 
+                               perl    = TRUE)
     # Extract matched strings
     matches <- regmatches(x = other_tags_vector, 
                           m = match_positions)
@@ -321,14 +317,14 @@ extract_osm_other_tags <- function(other_tags_vector,
     result[, i] <- NA_character_
     # Extract values only from matched rows (remove the key part, keep only 
     # value)
-    matched_indices <- which(match_positions > 0)
+    matched_indices <- which(x = match_positions > 0)
     if (length(x = matched_indices) > 0) {
-      values <- sub(pattern = paste0('^"', key_escaped, '"=>"'), 
+      values <- sub(pattern     = paste0('^"', key_escaped, '"=>"'), 
                     replacement = '', 
-                    x = matches)
-      values <- sub(pattern = '"$', 
+                    x           = matches)
+      values <- sub(pattern     = '"$', 
                     replacement = '', 
-                    x = values)
+                    x           = values)
       result[matched_indices, i] <- values
     }
     # Progress update
@@ -336,8 +332,8 @@ extract_osm_other_tags <- function(other_tags_vector,
       pct <- i / n_cols
       if (IS_TTY) {
         bar_len <- floor(x = pb_width * pct)
-        bar <- paste0(strrep("=", bar_len), 
-                      strrep(" ", pb_width - bar_len))
+        bar <- paste0(strrep(x = "=", times = bar_len), 
+                      strrep(x = " ", times = pb_width - bar_len))
         pipeline_message(
           sprintf("[%s] %3.0f%% (%d/%d)", bar, 100 * pct, i, n_cols), 
           level = 3, process = "wait")
@@ -354,7 +350,7 @@ extract_osm_other_tags <- function(other_tags_vector,
     }
   }
   # Convert to data.frame with proper column names
-  return(as.data.frame(x = result, 
+  return(as.data.frame(x                = result, 
                        stringsAsFactors = FALSE))
 }
 #' 
@@ -406,7 +402,7 @@ process_network_features <- function(data, rules,
                                      default_degre = 1, 
                                      default_number_of_lanes = 2, 
                                      default_vehicle_speed = 50) {
-  data.table::setDT(data)
+  data.table::setDT(x= data)
   # ------------------------------------------- #
   # Highway type normalization (ordered factor) #
   # ------------------------------------------- #
@@ -416,15 +412,15 @@ process_network_features <- function(data, rules,
     "motorway_link", "unclassified"
   )
   data[, highway := as.character(x = highway)]
-  data[is.na(highway) | highway == "", highway := "unclassified"]
-  data[, highway := factor(x = highway,
-                           levels = c(highway_levels, "missing"),
+  data[is.na(x = highway) | highway == "", highway := "unclassified"]
+  data[, highway := factor(x       = highway,
+                           levels  = c(highway_levels, "missing"),
                            ordered = TRUE)]
   # ----------------------------------------- #
   # Commune density class (DEGRE - INSEE)     #
   # ----------------------------------------- #
   data[, DEGRE := as.integer(x = DEGRE)]
-  n_missing_degre <- sum(is.na(data$DEGRE))
+  n_missing_degre <- sum(is.na(x = data$DEGRE))
   if (n_missing_degre > 0) {
     pipeline_message(
       sprintf("Imputing %s missing DEGRE values → %d (urban default)", 
@@ -445,17 +441,17 @@ process_network_features <- function(data, rules,
   valid_ref_letters <- c("A", "N", "D", "M", "C", "VC", "CR")
   data[, ref_letter := {
     ref_val <- as.character(x = get(x = ref_col))
-    ref_val[is.na(ref_val) | ref_val == ""] <- "missing"
+    ref_val[is.na(x = ref_val) | ref_val == ""] <- "missing"
     # Keep first reference when multiple refs are present (e.g. "D906;N7")
     ref_val <- sub(pattern = "[;,].*$", replacement = "", x = ref_val)
     # Extract alphabetic prefix (e.g. "D906" → "D", "CR12" → "CR", "VC3" → "VC")
-    prefix <- toupper(gsub(pattern = "^([A-Za-z]+).*$",
+    prefix <- toupper(gsub(pattern     = "^([A-Za-z]+).*$",
                            replacement = "\\1",
-                           x = ref_val))
+                           x           = ref_val))
     # Remap equivalent prefixes
-    prefix[prefix == "RD"] <- "D"   # Route Départementale → D
-    prefix[prefix == "E"]  <- "A"   # Européenne → Autoroute
-    prefix[prefix == "B"]  <- "A"   # Bretelle -> class proche autoroutière
+    prefix[prefix == "RD"] <- "D"   # County Road → D
+    prefix[prefix == "E"]  <- "A"   # European Route → Highway
+    prefix[prefix == "B"]  <- "A"   # Ramp -> near the highway
     prefix[!prefix %in% valid_ref_letters] <- "missing"
     prefix
   }]
@@ -465,12 +461,14 @@ process_network_features <- function(data, rules,
   # ------------------------------------------ #
   data[, first_word := {
     name_val <- as.character(x = name)
-    name_val[is.na(name_val) | name_val == "" | name_val == "NA"] <- "missing"
+    name_val[is.na(x = name_val) | 
+                       name_val == "" | 
+                       name_val == "NA"] <- "missing"
     fw <- tolower(
       x = trimws(
-        x = sub(pattern = "\\s+.*$", 
+        x = sub(pattern     = "\\s+.*$", 
                 replacement = "", 
-                x = name_val)))
+                x           = name_val)))
     fw[fw == "" | fw == "na"] <- "missing"
     fw
   }]
@@ -503,11 +501,11 @@ process_network_features <- function(data, rules,
     } else {
         NA_character_
     }
-    ow[is.na(ow) | ow == ""] <- "no"
-    ow[ow == "-1"] <- "yes"  # reverse oneway
-    ow[!ow %in% c("yes", "no")] <- "no"
+    ow[is.na(x = ow) | ow == ""] <- "no"
+    ow[ow == "-1"]               <- "yes"  # reverse oneway
+    ow[!ow %in% c("yes", "no")]  <- "no"
     # motorway and motorway_link are implicitly one-way in OSM
-    ow[as.character(highway) %in% c("motorway", "motorway_link")] <- "yes"
+    ow[as.character(x = highway) %in% c("motorway", "motorway_link")] <- "yes"
     ow
   }]
   data[, oneway_osm := factor(x = oneway_osm, 
@@ -521,7 +519,7 @@ process_network_features <- function(data, rules,
       "lanes"
   }
   data[, lanes_osm := as.numeric(x = get(x = lanes_col))]
-  missing_lanes <- is.na(data$lanes_osm) | data$lanes_osm <= 0
+  missing_lanes <- is.na(x = data$lanes_osm) | data$lanes_osm <= 0
   n_missing_lanes <- sum(missing_lanes)
   if (n_missing_lanes > 0) {
     pipeline_message(
@@ -531,7 +529,7 @@ process_network_features <- function(data, rules,
     lanes_lookup <- setNames(object = rules$median_lanes, 
                              rules$highway)
     data[missing_lanes, lanes_osm :=
-           ifelse(test = is.na(lanes_lookup[as.character(x = highway)]),
+           ifelse(test = is.na(x = lanes_lookup[as.character(x = highway)]),
                   yes = default_number_of_lanes,
                   no = lanes_lookup[as.character(x = highway)])]
   }
@@ -544,7 +542,7 @@ process_network_features <- function(data, rules,
       "maxspeed"
   }
   data[, speed := as.numeric(x = get(x = maxspeed_col))]
-  missing_speed <- is.na(data$speed) | data$speed <= 0
+  missing_speed <- is.na(x = data$speed) | data$speed <= 0
   n_missing_speed <- sum(missing_speed)
   if (n_missing_speed > 0) {
     pipeline_message(
@@ -554,7 +552,7 @@ process_network_features <- function(data, rules,
     speed_lookup <- setNames(object = rules$median_speed, 
                              rules$highway)
     data[missing_speed, speed :=
-           ifelse(test = is.na(speed_lookup[as.character(x = highway)]),
+           ifelse(test = is.na(x = speed_lookup[as.character(x = highway)]),
                   yes = default_vehicle_speed, 
                   no = speed_lookup[as.character(x = highway)])]
   }
@@ -562,7 +560,7 @@ process_network_features <- function(data, rules,
   # Junction type (roundabout, etc.) #
   # -------------------------------- #
   if ("junction_osm" %in% names(data)) {
-    data[, junction_osm := as.character(junction_osm)]
+    data[, junction_osm := as.character(x = junction_osm)]
     data[is.na(junction_osm) | junction_osm == "", junction_osm := "none"]
     data[, junction_osm := factor(junction_osm)]
     pipeline_message(
@@ -577,7 +575,7 @@ process_network_features <- function(data, rules,
   # Avatar measures traffic in ONE direction only
   # → Derive lanes_directional: lanes serving one direction of traffic
   data[, lanes_directional := ifelse(
-    as.character(oneway_osm) == "yes",
+    as.character(x = oneway_osm) == "yes",
     lanes_osm,                        # one-way: all lanes serve one direction
     pmax(1, round(lanes_osm / 2))     # two-way: half the lanes per direction
   )]
@@ -610,7 +608,7 @@ process_network_features <- function(data, rules,
 validate_osm_network <- function(osm_network) {
   required_cols <- c("osm_id", "highway", "geom")
   missing_cols <- setdiff(x = required_cols, y = names(osm_network))
-  if (length(missing_cols) > 0) {
+  if (length(x = missing_cols) > 0) {
     pipeline_message(
       sprintf("Missing required columns: %s", 
               paste(missing_cols, collapse = ", ")),
@@ -619,7 +617,7 @@ validate_osm_network <- function(osm_network) {
   }
   
   if (nrow(osm_network) == 0) {
-    pipeline_message(text = "OSM network is empty", process = "error")
+    pipeline_message("OSM network is empty", process = "error")
     return(FALSE)
   }
   
