@@ -37,35 +37,40 @@ download_file <- function(
     use_auth = FALSE,
     as = "raw",        # "raw" (default) or "text"
     timeout = 30) {
-  if (use_auth && nchar(AVATAR_API_TOKEN) > 0) {
+  pipeline_message("Downloading data...", 
+                   level = 2, progress = "start", process = "load")
+  if (use_auth && nchar(x = AVATAR_API_TOKEN) > 0) {
     # Use Authorization header (Bearer token)
     response <- httr::GET(
-      url = url, 
-      httr::add_headers(
+      url    = url, 
+      config = httr::add_headers(
         Authorization = paste("Bearer", AVATAR_API_TOKEN)), 
       httr::timeout(timeout))
   } else {
     response <- httr::GET(
-      url = url, 
-      httr::timeout(timeout))
+      url    = url, 
+      config = httr::timeout(timeout))
   }
   # Converts http errors to R errors or warnings
   httr::stop_for_status(x = response)
   if (as == "raw") {
     writeBin(
       object = httr::content(response, as = "raw"), 
-      con = target)
-    message("\t\t ✓ Data downloaded successfully in raw format! \n")
+      con    = target)
+    pipeline_message("Data downloaded successfully in raw format!", 
+                   level = 2, progress = "end", process = "valid")
   } else if (as == "text") {
     txt <- httr::content(
-      response, 
-      as = "text", 
+      x        = response, 
+      as       = "text", 
       encoding = "UTF-8")
     writeLines(text = txt, 
-               con = target)
-    message("\t\t ✓ Data downloaded successfully in text format! \n")
+               con  = target)
+    pipeline_message("Data downloaded successfully in text format!", 
+                     level = 2, progress = "end", process = "valid")
   } else {
-    stop("\t\t ⛔ Unsupported content type: .", as)
+    pipeline_message("Data downloaded successfully in text format!", 
+                     process = "stop")
   }
 }
 #' 
@@ -106,8 +111,8 @@ download_with_retry <- function(
   for (i in 1:max_retries) {
     tryCatch({
       # Download attempt
-      download_file(url = url, 
-                    target = target, 
+      download_file(url      = url, 
+                    target   = target, 
                     use_auth = use_auth)
       # Success check
       if (file.exists(target) && file.size(target) > 0) {
@@ -116,8 +121,11 @@ download_with_retry <- function(
     }, error = function(e) {
       msg <- e$message
       # HTTP 429 handling
-      if (grepl(pattern = "429", x = msg) ||
-          grepl(pattern = "Too Many Requests", x = msg, ignore.case = TRUE)) {
+      if (grepl(pattern     = "429", 
+                x           = msg) || 
+          grepl(pattern     = "Too Many Requests", 
+                x           = msg, 
+                ignore.case = TRUE)) {
         wait_time <- 60
         pipeline_message(
           sprintf("Rate limit reached. Waiting %s sec", wait_time), 
@@ -180,36 +188,37 @@ validate_chunk <- function(
     file_path, 
     expected_points) {
   if (!file.exists(file_path)){
-    return(list(valid = FALSE, 
+    return(list(valid  = FALSE, 
                 reason = "missing"))
   }
   # Check file size
   file_size <- file.size(file_path)
   if (file_size == 0){
-    return(list(valid = FALSE, 
+    return(list(valid  = FALSE, 
                 reason = "empty (0 bytes)"))
   }
   # Count lines (1 line = header only, empty chunk)
   lines <- tryCatch({
-    length(x = readLines(con = file_path, warn = FALSE))
+    length(x = readLines(con  = file_path, 
+                         warn = FALSE))
   }, error = function(e){0})
   if (lines <= 1){
-    return(list(valid = FALSE, 
+    return(list(valid  = FALSE, 
                 reason = "empty (header only)"))
   }
   # Check if file is corrupted (can't be parsed)
   data_valid <- tryCatch({
-    df <- read.csv(file = file_path, 
-                   sep = ";", 
+    df <- read.csv(file             = file_path, 
+                   sep              = ";", 
                    stringsAsFactors = FALSE, 
-                   nrows = 1)
+                   nrows            = 1)
     TRUE
   }, error = function(e) FALSE)
   if (!data_valid){
-    return(list(valid = FALSE, 
+    return(list(valid  = FALSE, 
                 reason = "corrupted"))
   }
-  return(list(valid = TRUE, 
+  return(list(valid  = TRUE, 
               reason = "ok"))
 }
 #' 
@@ -287,10 +296,10 @@ download_avatar_count_points <- function(
   AVATAR_API_TOKEN <<- api_token
   # Download Avatar data ain text format
   download_with_retry(
-    url = url,
-    target = target,
+    url         = url,
+    target      = target,
     max_retries = max_retries,
-    use_auth = (nchar(api_token) > 0))
+    use_auth    = (nchar(x = api_token) > 0))
 }
 #' 
 # -------------------------------------------------------------------------------
@@ -313,66 +322,67 @@ download_avatar_count_points <- function(
 aggregate_avatar_hourly <- function(dt) {
   # Ensure POSIXct datetime
   if (!inherits(x = dt$measure_datetime, what = "POSIXct")) {
-    dt[, measure_datetime := as.POSIXct(x = measure_datetime,
+    dt[, measure_datetime := as.POSIXct(x      = measure_datetime,
                                         format = "%Y-%m-%dT%H:%M:%S")]}
   # Create temporal features
   dt[, hour := lubridate::hour(measure_datetime)]
   dt[, period := data.table::fifelse(test = hour >= 6 & hour < 18, 
-                                     yes = "D", 
-                                     no = data.table::fifelse(
-                                       test = hour >= 18 & hour < 22, 
-                                       yes = "E", 
-                                       no = "N"))]
+                                     yes  = "D", 
+                                     no   = data.table::fifelse(
+                                              test = hour >= 18 & hour < 22, 
+                                              yes  = "E", 
+                                              no   = "N"))]
   # Day type: weekday (Mon-Fri) vs weekend (Sat-Sun)
   # lubridate::wday(): 1=Sun, 2=Mon, ..., 6=Fri, 7=Sat
   dt[, day_type := data.table::fifelse(
-    test = lubridate::wday(measure_datetime) %in% c(1, 7),
-    yes = "we", no = "wd")]
+    test = lubridate::wday(x = measure_datetime) %in% c(1, 7),
+    yes  = "we", 
+    no   = "wd")]
   dt[, .(
     hourly_flow =
       ifelse(test = sum(!is.na(flow.veh.h.)) > 0,
-             yes = as.double(x = median(x = flow.veh.h., 
-                                        na.rm = TRUE)), 
-             no = NA_real_),
+             yes  = as.double(x = median(x = flow.veh.h., 
+                                         na.rm = TRUE)), 
+             no   = NA_real_),
     hourly_flow_trucks =
       ifelse(test = sum(!is.na(flow_trucks.veh.h.)) > 0,
-             yes = as.double(x = median(x = flow_trucks.veh.h., 
-                                        na.rm = TRUE)), 
-             no = NA_real_),
+             yes  = as.double(x = median(x = flow_trucks.veh.h., 
+                                         na.rm = TRUE)), 
+             no   = NA_real_),
     hourly_occupancy =
       ifelse(test = sum(!is.na(occupancy...)) > 0,
-             yes = as.double(x = median(x = occupancy..., 
-                                        na.rm = TRUE)), 
-             no = NA_real_),
+             yes  = as.double(x = median(x = occupancy..., 
+                                         na.rm = TRUE)), 
+             no   = NA_real_),
     hourly_speed =
       ifelse(test = sum(!is.na(speed.km.h.)) > 0,
-             yes = as.double(x = median(x = speed.km.h., 
-                                        na.rm = TRUE)), 
-             no = NA_real_),
+             yes  = as.double(x = median(x = speed.km.h., 
+                                         na.rm = TRUE)), 
+             no   = NA_real_),
     perc_flow_predicted =
-      ifelse(test = sum(!is.na(perc_flow_predicted)) > 0,
-             yes = as.double(x = mean(x = perc_flow_predicted, 
-                                      na.rm = TRUE)), 
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_flow_predicted)) > 0,
+             yes  = as.double(x = mean(x = perc_flow_predicted, 
+                                       na.rm = TRUE)), 
+             no   = NA_real_),
     perc_flow_trucks_predicted =
-      ifelse(test = sum(!is.na(perc_flow_trucks_predicted)) > 0,
-             yes = as.double(x = mean(x = perc_flow_trucks_predicted, 
-                                      na.rm = TRUE)), 
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_flow_trucks_predicted)) > 0,
+             yes  = as.double(x = mean(x = perc_flow_trucks_predicted, 
+                                       na.rm = TRUE)), 
+             no   = NA_real_),
     perc_occupancy_predicted =
-      ifelse(test = sum(!is.na(perc_occupancy_predicted)) > 0,
-             yes = as.double(x = mean(x = perc_occupancy_predicted, 
-                                      na.rm = TRUE)), 
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_occupancy_predicted)) > 0,
+             yes  = as.double(x = mean(x = perc_occupancy_predicted, 
+                                       na.rm = TRUE)), 
+             no   = NA_real_),
     perc_speed_predicted =
-      ifelse(test = sum(!is.na(perc_speed_predicted)) > 0,
-             yes = as.double(x = mean(x = perc_speed_predicted, 
-                                      na.rm = TRUE)), 
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_speed_predicted)) > 0,
+             yes  = as.double(x = mean(x = perc_speed_predicted, 
+                                       na.rm = TRUE)), 
+             no   = NA_real_),
     n_obs_this_hour = as.double(x = .N),
-    first_timestamp = as.double(x = min(x = measure_datetime, 
+    first_timestamp = as.double(x = min(measure_datetime, 
                                         na.rm = TRUE)),
-    last_timestamp  = as.double(x = max(x = measure_datetime, 
+    last_timestamp  = as.double(x = max(measure_datetime, 
                                         na.rm = TRUE))
   ), by = .(count_point_id, period, hour, day_type)]
 }
@@ -441,66 +451,61 @@ aggregate_avatar_metrics <- function(dt, by_vars) {
   res <- dt[, .(
     # Mean traffic flow (vehicles/hour)
     aggregate_flow =
-      ifelse(test = sum(!is.na(hourly_flow)) > 0,
-             yes = mean(x = hourly_flow, na.rm = TRUE), no = NA_real_),
+      ifelse(test = sum(!is.na(x = hourly_flow)) > 0,
+             yes  = mean(x = hourly_flow, na.rm = TRUE), 
+             no   = NA_real_),
     # Mean truck traffic flow (vehicles/hour)
     aggregate_flow_trucks =
-      ifelse(test = sum(!is.na(hourly_flow_trucks)) > 0,
-             yes = mean(x = hourly_flow_trucks, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = hourly_flow_trucks)) > 0,
+             yes  = mean(x = hourly_flow_trucks, na.rm = TRUE),
+             no   = NA_real_),
     # Mean occupancy rate
     aggregate_occupancy =
-      ifelse(test = sum(!is.na(hourly_occupancy)) > 0,
-             yes = mean(x = hourly_occupancy, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = hourly_occupancy)) > 0,
+             yes  = mean(x = hourly_occupancy, na.rm = TRUE),
+             no   = NA_real_),
     # Mean speed (km/h)
     aggregate_speed =
-      ifelse(test = sum(!is.na(hourly_speed)) > 0,
-             yes = mean(x = hourly_speed, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = hourly_speed)) > 0,
+             yes  = mean(x = hourly_speed, na.rm = TRUE),
+             no   = NA_real_),
     # Quality indicators: average percentage of predicted data
     perc_flow_predicted =
-      ifelse(test = sum(!is.na(perc_flow_predicted)) > 0,
-             yes = mean(x = perc_flow_predicted, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_flow_predicted)) > 0,
+             yes  = mean(x = perc_flow_predicted, na.rm = TRUE),
+             no   = NA_real_),
     perc_flow_trucks_predicted =
-      ifelse(test = sum(!is.na(perc_flow_trucks_predicted)) > 0,
-             yes = mean(x = perc_flow_trucks_predicted, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_flow_trucks_predicted)) > 0,
+             yes  = mean(x = perc_flow_trucks_predicted, na.rm = TRUE),
+             no   = NA_real_),
     perc_occupancy_predicted =
-      ifelse(test = sum(!is.na(perc_occupancy_predicted)) > 0,
-             yes = mean(x = perc_occupancy_predicted, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_occupancy_predicted)) > 0,
+             yes  = mean(x = perc_occupancy_predicted, na.rm = TRUE),
+             no   = NA_real_),
     perc_speed_predicted =
-      ifelse(test = sum(!is.na(perc_speed_predicted)) > 0, 
-             yes = mean(x = perc_speed_predicted, na.rm = TRUE),
-             no = NA_real_),
+      ifelse(test = sum(!is.na(x = perc_speed_predicted)) > 0, 
+             yes  = mean(x = perc_speed_predicted, na.rm = TRUE),
+             no   = NA_real_),
     # Number of hours with at least one valid flow observation
-    n_hours_with_data =
-      sum(!is.na(hourly_flow)),
+    n_hours_with_data = sum(!is.na(x = hourly_flow)),
     # Number of hours with trucks
-    n_hours_with_trucks = as.double(
-      x = sum(!is.na(hourly_flow_trucks))),
+    n_hours_with_trucks = as.double(x = sum(!is.na(x = hourly_flow_trucks))), 
     # Number of hours with occupancy
-    n_hours_with_occupancy = as.double(
-      x = sum(!is.na(hourly_occupancy))),
+    n_hours_with_occupancy = as.double(x = sum(!is.na(x = hourly_occupancy))), 
     # Number of hours with speed
-    n_hours_with_speed = as.double(
-      x = sum(!is.na(hourly_speed))),
+    n_hours_with_speed = as.double(x = sum(!is.na(x = hourly_speed))), 
     # Total number of raw observations across all hours
-    n_total_observations =
-      sum(n_obs_this_hour, na.rm = TRUE),
+    n_total_observations = sum(n_obs_this_hour, na.rm = TRUE), 
     # Temporal coverage
-    first_timestamp =
-      min(x = first_timestamp, na.rm = TRUE),
-    last_timestamp =
-      max(x = last_timestamp, na.rm = TRUE)
+    first_timestamp = min(first_timestamp, na.rm = TRUE), 
+    last_timestamp = max(last_timestamp, na.rm = TRUE)
     ), 
     by = by_vars]
   
-  res[, truck_pct := ifelse(test = !is.na(aggregate_flow) & aggregate_flow > 0, 
-                            yes = 100 * aggregate_flow_trucks / aggregate_flow, 
-                            no = NA_real_)]
+  res[, truck_pct := ifelse(test = !is.na(x = aggregate_flow) & 
+                                              aggregate_flow > 0, 
+                            yes  = 100 * aggregate_flow_trucks / aggregate_flow, 
+                            no   = NA_real_)]
   return(res)
 }
 #' 
@@ -535,40 +540,40 @@ aggregate_avatar_metrics <- function(dt, by_vars) {
 #' @export
 compute_avatar_relative_metrics <- function(dt) {
   # Baseline D
-  baseline_D <- dt[period == "D" & !is.na(aggregate_flow),
-                   .(flow_D = aggregate_flow, 
+  baseline_D <- dt[period == "D" & !is.na(x = aggregate_flow),
+                   .(flow_D        = aggregate_flow, 
                      flow_trucks_D = aggregate_flow_trucks, 
-                     speed_D = aggregate_speed, 
-                     occupancy_D = aggregate_occupancy), 
+                     speed_D       = aggregate_speed, 
+                     occupancy_D   = aggregate_occupancy), 
                    by = count_point_id]
   # Join baseline
   dt <- baseline_D[dt, on = "count_point_id"]
   # Compute metrics
   dt[, truck_pct := fifelse(test = aggregate_flow > 0, 
-                            yes = 100 * aggregate_flow_trucks / aggregate_flow, 
-                            no = NA_real_)]
+                            yes  = 100 * aggregate_flow_trucks / aggregate_flow, 
+                            no   = NA_real_)]
   dt[, truck_pct_D := fifelse(test = flow_D > 0, 
-                              yes = 100 * flow_trucks_D / flow_D, 
-                              no = NA_real_)]
-  dt[, ratio_flow := fifelse(test = !is.na(flow_D) & 
-                                    flow_D > 0, 
-                             yes = aggregate_flow / flow_D, 
-                             no = NA_real_)]
-  dt[, ratio_flow_trucks := fifelse(test = !is.na(flow_trucks_D) & 
-                                           flow_trucks_D > 0, 
-                                    yes = aggregate_flow_trucks / 
-                                      flow_trucks_D, 
-                                    no = NA_real_)]
+                              yes  = 100 * flow_trucks_D / flow_D, 
+                              no   = NA_real_)]
+  dt[, ratio_flow := fifelse(test = !is.na(x = flow_D) & 
+                                               flow_D > 0, 
+                             yes  = aggregate_flow / flow_D, 
+                             no   = NA_real_)]
+  dt[, ratio_flow_trucks := fifelse(test = !is.na(x = flow_trucks_D) & 
+                                                      flow_trucks_D > 0, 
+                                    yes  = aggregate_flow_trucks / 
+                                           flow_trucks_D, 
+                                    no   = NA_real_)]
   
-  dt[, ratio_speed := fifelse(test = !is.na(speed_D) & 
-                                     speed_D > 0, 
-                              yes = aggregate_speed / speed_D, 
-                              no = NA_real_)]
+  dt[, ratio_speed := fifelse(test = !is.na(x = speed_D) & 
+                                                speed_D > 0, 
+                              yes  = aggregate_speed / speed_D, 
+                              no   = NA_real_)]
   
-  dt[, ratio_occupancy := fifelse(test = !is.na(occupancy_D) & 
-                                         occupancy_D > 0, 
-                                  yes = aggregate_occupancy / occupancy_D, 
-                                  no = NA_real_)]
+  dt[, ratio_occupancy := fifelse(test = !is.na(x = occupancy_D) & 
+                                                    occupancy_D > 0, 
+                                  yes  = aggregate_occupancy / occupancy_D, 
+                                  no   = NA_real_)]
   
   return(dt)
 }
@@ -604,33 +609,34 @@ compute_avatar_relative_metrics <- function(dt) {
 #' @export
 apply_avatar_quality_rules <- function(dt) {
   if (!inherits(x = dt, what = "data.table")) {
-    stop("apply_avatar_quality_rules() expects a data.table")
+    pipeline_message("apply_avatar_quality_rules() expects a data.table", 
+                     process = "stop")
   }
   # Recompute truck percentage (current period)
-  dt[, truck_pct := fifelse(test = !is.na(aggregate_flow) & 
-                                   !is.na(aggregate_flow_trucks) & 
-                                   aggregate_flow > 0, 
-                            yes = pmin(100, 
-                                       100 * aggregate_flow_trucks / 
-                                         aggregate_flow), 
-                            no = NA_real_)]
+  dt[, truck_pct := fifelse(test = !is.na(x = aggregate_flow) & 
+                                   !is.na(x = aggregate_flow_trucks) & 
+                                              aggregate_flow > 0, 
+                            yes  = pmin(100, 
+                                        100 * aggregate_flow_trucks / 
+                                        aggregate_flow), 
+                            no   = NA_real_)]
   # Recompute truck percentage for baseline period D
-  dt[, truck_pct_D := fifelse(test = !is.na(flow_D) & 
-                                     !is.na(flow_trucks_D) & 
-                                     flow_D > 0, 
-                              yes = pmin(100, 100 * flow_trucks_D / flow_D), 
-                              no = NA_real_)]
+  dt[, truck_pct_D := fifelse(test = !is.na(x = flow_D) & 
+                                     !is.na(x = flow_trucks_D) & 
+                                                flow_D > 0, 
+                              yes  = pmin(100, 100 * flow_trucks_D / flow_D), 
+                              no   = NA_real_)]
   # Recompute ratio of truck percentage (with safeguards)
-  dt[, ratio_truck_pct := fifelse(test = !is.na(truck_pct) & 
-                                         !is.na(truck_pct_D) & 
-                                         truck_pct_D > 0.1,                     # Avoid near-zero division
-                                  yes = pmin(5.0, truck_pct / truck_pct_D),     # Cap at 5x
-                                  no = NA_real_)]
+  dt[, ratio_truck_pct := fifelse(test = !is.na(x = truck_pct) & 
+                                         !is.na(x = truck_pct_D) & 
+                                                    truck_pct_D > 0.1,          # Avoid near-zero division
+                                  yes  = pmin(5.0, truck_pct / truck_pct_D),    # Cap at 5x
+                                  no   = NA_real_)]
   # Cap ratio of truck flows
-  dt[, ratio_flow_trucks := fifelse(test = !is.na(ratio_flow_trucks), 
-                                    yes = pmin(5.0, 
-                                               pmax(0.0, ratio_flow_trucks)),   # Cap between 0 and 5
-                                    no = NA_real_)]
+  dt[, ratio_flow_trucks := fifelse(test = !is.na(x = ratio_flow_trucks), 
+                                    yes  = pmin(5.0, 
+                                                pmax(0.0, ratio_flow_trucks)),  # Cap between 0 and 5
+                                    no   = NA_real_)]
   invisible(dt)
 }
 #' 
@@ -658,7 +664,7 @@ validate_avatar_data <- function(avatar_data) {
   required_cols <- c("count_point_id", "period", "aggregate_flow")
   missing_cols <- setdiff(x = required_cols, y = names(avatar_data))
   
-  if (length(missing_cols) > 0) {
+  if (length(x = missing_cols) > 0) {
     pipeline_message(sprintf("Missing required columns: %s", 
                              paste(missing_cols, collapse = ", ")),
                      process = "fail")
@@ -687,9 +693,10 @@ validate_avatar_data <- function(avatar_data) {
 #' @export
 validate_avatar_data <- function(avatar_data) {
   required_cols <- c("count_point_id", "period", "aggregate_flow")
-  missing_cols <- setdiff(required_cols, names(avatar_data))
+  missing_cols  <- setdiff(x = required_cols, 
+                           y = names(avatar_data))
   
-  if (length(missing_cols) > 0) {
+  if (length(x = missing_cols) > 0) {
     pipeline_message(
       text = sprintf("Missing required columns: %s", 
                      paste(missing_cols, collapse = ", ")),
@@ -733,20 +740,21 @@ check_feature_completeness <- function(network) {
   )
   
   # Check for missing features
-  available <- intersect(required_features, names(network))
-  missing <- setdiff(required_features, names(network))
+  available <- intersect(x = required_features, y = names(network))
+  missing   <- setdiff(x = required_features, y = names(network))
   
   # Check for NA values in available features
-  na_counts <- sapply(available, function(col) {
-    sum(is.na(network[[col]]))
-  })
+  na_counts <- sapply(X   = available, 
+                      FUN = function(col) {
+                              sum(is.na(x = network[[col]]))})
   
   # Return completeness statistics
-  list(
-    total_features = length(required_features),
-    available_features = length(available),
-    missing_features = missing,
-    na_counts = na_counts,
-    completeness_pct = (length(available) / length(required_features)) * 100
-  )
+  return(
+    list(
+      total_features     = length(x = required_features),
+      available_features = length(x = available),
+      missing_features   = missing,
+      na_counts          = na_counts,
+      completeness_pct   = (length(x = available) / 
+                            length(x = required_features)) * 100))
 }

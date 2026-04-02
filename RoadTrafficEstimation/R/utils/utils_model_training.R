@@ -189,7 +189,7 @@ compute_model_metrics <- function(y_true, y_pred) {
               mae  = mae,
               rmse = rmse,
               mape = mape,
-              n    = length(x = y_true))
+              n    = length(x = y_true)))
 }
 #' 
 # ------------------------------------------------------------------------------
@@ -222,7 +222,8 @@ validate_training_data <- function(training_data) {
   required_cols <- c("osm_id", "count_point_id", "period", 
                      "aggregate_flow", "highway", "DEGRE")
   
-  missing_cols <- setdiff(x = required_cols, y = names(x = training_data))
+  missing_cols <- setdiff(x = required_cols, 
+                          y = names(x = training_data))
   
   if (length(x = missing_cols) > 0) {
     pipeline_message(
