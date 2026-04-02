@@ -498,7 +498,7 @@ aggregate_avatar_metrics <- function(dt, by_vars) {
     n_total_observations = sum(n_obs_this_hour, na.rm = TRUE), 
     # Temporal coverage
     first_timestamp = min(first_timestamp, na.rm = TRUE), 
-    last_timestamp = max(last_timestamp, na.rm = TRUE)
+    last_timestamp  = max(last_timestamp, na.rm = TRUE)
     ), 
     by = by_vars]
   

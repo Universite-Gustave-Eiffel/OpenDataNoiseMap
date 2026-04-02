@@ -1,3 +1,10 @@
+# ==============================================================================
+# OPENSTREETMAP (OSM) DATA DOWNLOADING AND PROCESSING UTILITIES
+# ==============================================================================
+#' 
+# -------------------------------------------------------------------------------
+# Download an OpenStreetMap PBF file from Geofabrik
+# -------------------------------------------------------------------------------
 #' @title Download an OpenStreetMap PBF file from Geofabrik
 #' @description This function downloads a `.osm.pbf` file from the Geofabrik 
 #'              download server for France or one of its regions. Before 
@@ -24,8 +31,8 @@
 #' download_geofabrik_pbf(dest_dir = "data/osm", region = "Bretagne")
 #' }
 #' @export
-download_geofabrik_pbf <- function(region = "France", 
-                                   dest_dir = ".", 
+download_geofabrik_pbf <- function(region    = "France", 
+                                   dest_dir  = ".", 
                                    overwrite = FALSE) {
   # ----------------------------------------------------------------------------
   # Supported regions
@@ -78,11 +85,11 @@ download_geofabrik_pbf <- function(region = "France",
   }
   if (region == "France") {
     pbf_name <- "france-latest.osm.pbf"
-    url <- paste0(base_url, pbf_name)
+    url      <- paste0(base_url, pbf_name)
   } else {
-    slug <- region_slug(region)
+    slug     <- region_slug(region)
     pbf_name <- paste0(slug, "-latest.osm.pbf")
-    url <- paste0(base_url, "france/", pbf_name)
+    url      <- paste0(base_url, "france/", pbf_name)
   }
   
   pipeline_message(sprintf("URL: %s", url), level = 3, 

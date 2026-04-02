@@ -287,7 +287,7 @@ validate_model_suite <- function(models_list) {
               missing_base_models  = missing_base, 
               missing_ratio_models = missing_ratio, 
               is_complete          = length(x = missing_base) == 0 && 
-                                     length(x = missing_ratio) == 0)
+                                     length(x = missing_ratio) == 0))
 }
 #' 
 # ------------------------------------------------------------------------------
@@ -313,8 +313,8 @@ summarize_group_metrics <- function(df, group_col) {
                 mae_osm  = ifelse(test = "abs_db_error_osm" %in% names(x = .SD), 
                                   yes  = mean(x     = abs_db_error_osm, 
                                               na.rm = TRUE), 
-                                  no   = NA_real_),
-            by = .(group = as.character(x = get(group_col)))]
+                                  no   = NA_real_)
+                ), by = .(group = as.character(x = get(group_col)))]
   out[!is.na(x = group) & group != ""]
 }
 #' 
@@ -354,7 +354,7 @@ compute_subset_metrics <- function(mask, label) {
                                                                 na.rm = TRUE)),
                     within_1db       = mean(x = abse <= 1, na.rm = TRUE),
                     within_2db       = mean(x = abse <= 2, na.rm = TRUE),
-                    stringsAsFactors = FALSE)
+                    stringsAsFactors = FALSE))
 }
 #' 
 # ------------------------------------------------------------------------------
@@ -395,5 +395,5 @@ compute_db_stats <- function(df) {
   return(list(n    = nrow(x = df),
               bias = mean(x = df$db_error, na.rm = TRUE),
               mae  = mean(x = abs(x = df$db_error), na.rm = TRUE),
-              rmse = sqrt(x = mean(x = df$db_error^2, na.rm = TRUE)))
+              rmse = sqrt(x = mean(x = df$db_error^2, na.rm = TRUE))))
 }
