@@ -575,9 +575,9 @@ process_network_features <- function(data, rules,
   # Avatar measures traffic in ONE direction only
   # → Derive lanes_directional: lanes serving one direction of traffic
   data[, lanes_directional := ifelse(
-    as.character(x = oneway_osm) == "yes",
-    lanes_osm,                        # one-way: all lanes serve one direction
-    pmax(1, round(lanes_osm / 2))     # two-way: half the lanes per direction
+    test = as.character(x = oneway_osm) == "yes",
+    yes  = lanes_osm,                        # one-way: all lanes serve one direction
+    no   = pmax(1, round(lanes_osm / 2))     # two-way: half the lanes per direction
   )]
   return(as.data.frame(data))
 }
@@ -607,7 +607,7 @@ process_network_features <- function(data, rules,
 #' @export 
 validate_osm_network <- function(osm_network) {
   required_cols <- c("osm_id", "highway", "geom")
-  missing_cols <- setdiff(x = required_cols, y = names(x = osm_network))
+  missing_cols  <- setdiff(x = required_cols, y = names(x = osm_network))
   if (length(x = missing_cols) > 0) {
     pipeline_message(
       sprintf("Missing required columns: %s", 

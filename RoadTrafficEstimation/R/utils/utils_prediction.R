@@ -1632,7 +1632,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         pipeline_message(
           sprintf("Writing chunk '%s' (%d rows with geometry)", 
-                  chunk_name, nrow(x = to = chunk_sf)),
+                  chunk_name, nrow(x = chunk_sf)),
           level = 1, progress = "start", process = "save")
 
         sf::st_write(

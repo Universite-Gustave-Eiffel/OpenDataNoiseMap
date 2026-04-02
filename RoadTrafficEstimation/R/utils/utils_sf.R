@@ -1,3 +1,10 @@
+# ==============================================================================
+# SPATIAL FEATURE UTILITIES
+# ==============================================================================
+#' 
+# -------------------------------------------------------------------------------
+# Standardize columns across a list of data frames
+# -------------------------------------------------------------------------------
 #' @title Standardize columns across a list of data frames
 #' @description Ensures that all data frames in a list share the same set of 
 #'              columns. Missing columns are added and filled with `NA`, and 
@@ -22,8 +29,8 @@
 #' @export
 standardize_columns <- function(data_list) {
   # Compute the union of all column names across the data frames
-  all_columns <- unique(unlist(lapply(X = data_list, 
-                                      FUN = names)))
+  all_columns <- unique(x = unlist(x = lapply(X   = data_list, 
+                                              FUN = names)))
   # For each data frame:
   # - add missing columns filled with NA
   # - reorder columns consistently
@@ -39,6 +46,9 @@ standardize_columns <- function(data_list) {
   })
 }
 #' 
+# -------------------------------------------------------------------------------
+# Compute hourly traffic patterns (24h profile)
+# -------------------------------------------------------------------------------
 #' @title Compute hourly traffic patterns (24h profile)
 #' @description Computes descriptive traffic statistics for each hour of the day 
 #'              (h0–h23) based on aggregated traffic measures. Only hourly 
@@ -52,35 +62,41 @@ standardize_columns <- function(data_list) {
 #' @export
 compute_hourly_patterns <- function(aggregated_measures_df) {
   aggregated_measures_df %>%
-    dplyr::filter(grepl(pattern = "^h\\d+$", x = period)) %>% 
-    dplyr::mutate(hour = as.integer(gsub(pattern = "h", 
-                                         replacement = "", 
-                                         x = period))) %>% 
+    dplyr::filter(grepl(pattern = "^h\\d+$", 
+                        x       = period)) %>% 
+    dplyr::mutate(hour = as.integer(
+                            x= gsub(pattern     = "h", 
+                                    replacement = "", 
+                                    x           = period))) %>% 
     dplyr::group_by(hour) %>%
     dplyr::summarise(
-      avg_flow = mean(x = aggregate_flow, 
+      avg_flow = mean(x     = aggregate_flow, 
                       na.rm = TRUE),
-      sd_flow = sd(x = aggregate_flow, 
+      sd_flow = sd(x     = aggregate_flow, 
                    na.rm = TRUE),
-      median_flow = median(x = aggregate_flow, 
+      median_flow = median(x     = aggregate_flow, 
                            na.rm = TRUE),
-      q25_flow = quantile(x = aggregate_flow, 
+      q25_flow = quantile(x     = aggregate_flow, 
                           probs = 0.25, 
                           na.rm = TRUE),
-      q75_flow = quantile(x = aggregate_flow, 
+      q75_flow = quantile(x     = aggregate_flow, 
                           probs = 0.75, 
                           na.rm = TRUE),
-      avg_speed = mean(x = aggregate_speed, 
+      avg_speed = mean(x     = aggregate_speed, 
                        na.rm = TRUE),
-      pct_trucks = mean(x = ifelse(aggregate_flow > 0, 
-                   100 * aggregate_flow_trucks / aggregate_flow, 
-                   NA_real_), 
-            na.rm = TRUE),
+      pct_trucks = mean(x     = ifelse(test = aggregate_flow > 0, 
+                                       yes  = 100 * aggregate_flow_trucks / 
+                                              aggregate_flow, 
+                                       no    = NA_real_), 
+                        na.rm = TRUE),
       n_observations = dplyr::n(),
       .groups = "drop") %>%
     dplyr::arrange(hour)
 }
 #' 
+# -------------------------------------------------------------------------------
+# Convert hourly patterns to long format
+# -------------------------------------------------------------------------------
 #' @title Convert hourly patterns to long format
 #' @description Transforms hourly traffic patterns into a long format suitable 
 #'              for multi-metric plotting (e.g. average speed and truck 
@@ -93,16 +109,19 @@ compute_hourly_long_format <- function(hourly_patterns) {
   hourly_patterns %>%
     dplyr::select(hour, avg_speed, pct_trucks) %>%
     tidyr::pivot_longer(
-      cols = c(avg_speed, pct_trucks),
-      names_to = "metric",
-      values_to = "value") %>%
+      cols         = c(avg_speed, pct_trucks),
+      names_to     = "metric",
+      values_to    = "value") %>%
     dplyr::mutate(
       metric_label = factor(
-        x = metric,
-        levels = c("avg_speed", "pct_trucks"),
-        labels = c("Average Speed (km/h)", "Truck Percentage (%)")))
+                    x      = metric,
+                    levels = c("avg_speed", "pct_trucks"),
+                    labels = c("Average Speed (km/h)", "Truck Percentage (%)")))
 }
 #' 
+# -------------------------------------------------------------------------------
+# Compute traffic statistics by period (Day / Evening / Night)
+# -------------------------------------------------------------------------------
 #' @title Compute traffic statistics by period (Day / Evening / Night)
 #' @description Computes aggregated traffic statistics for the main daily 
 #'              periods (D = Day, E = Evening, N = Night).
@@ -115,19 +134,20 @@ compute_period_statistics <- function(aggregated_measures_df) {
     dplyr::filter(period %in% c("D", "E", "N")) %>%
     dplyr::group_by(period) %>%
     dplyr::summarise(
-      avg_flow = mean(x = aggregate_flow, 
-                      na.rm = TRUE),
-      avg_speed = mean(x = aggregate_speed, 
+      avg_flow = mean(x      = aggregate_flow, 
+                      na.rm  = TRUE),
+      avg_speed = mean(x     = aggregate_speed, 
                        na.rm = TRUE),
-      pct_trucks = mean(x = ifelse(aggregate_flow > 0, 
-                   100 * aggregate_flow_trucks / aggregate_flow, 
-                   NA_real_), 
-            na.rm = TRUE),
+      pct_trucks = mean(x    = ifelse(test = aggregate_flow > 0, 
+                                      yes  = 100 * aggregate_flow_trucks / 
+                                             aggregate_flow, 
+                                      no   = NA_real_), 
+                        na.rm = TRUE),
       n_observations = dplyr::n(),
       .groups = "drop") %>%
     dplyr::mutate(
       period_label = factor(
-        x = period,
+        x      = period,
         levels = c("D", "E", "N"),
         labels = c("Day\n(6-18h)", "Evening\n(18-22h)", "Night\n(22-6h)")))
 }
