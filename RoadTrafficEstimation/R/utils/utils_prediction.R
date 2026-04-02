@@ -1186,11 +1186,9 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
     speed_long, on = c("osm_id","period")
   ]
 
-  predictions_long[, `:=`(
-    HGV = flow * (truck_pct/100),
-    LV  = flow - HGV,
-    TV  = flow
-  )]
+  predictions_long[, HGV := flow * (truck_pct / 100)]
+  predictions_long[, LV := flow - HGV]
+  predictions_long[, TV := flow]
 
   predictions_long[, period := factor(x = period, levels = all_periods)]
 
