@@ -282,7 +282,7 @@ extract_osm_other_tags <- function(other_tags_vector,
   n_cols <- length(x = keys)
   # Pre-allocate result matrix
   result <- matrix(data = NA_character_, nrow = n_rows, ncol = n_cols)
-  colnames(result) <- keys
+  colnames(x = result) <- keys
   # Replace NA with empty strings for pattern matching
   other_tags_vector[is.na(x = other_tags_vector)] <- ""
   # Progress bar setup
@@ -429,11 +429,11 @@ process_network_features <- function(data, rules,
     # Set default value when missing DEGRE
     data[is.na(DEGRE), DEGRE := default_degre]
   }
-  data[, DEGRE := factor(DEGRE)]
+  data[, DEGRE := factor(x = DEGRE)]
   # ------------------------------------- #
   # Road reference letter (A, D, N, etc.) #
   # ------------------------------------- #
-  ref_col <- if ("ref_osm" %in% names(data)){
+  ref_col <- if ("ref_osm" %in% names(x = data)){
     "ref_osm"
     } else{
       "ref"
@@ -445,9 +445,9 @@ process_network_features <- function(data, rules,
     # Keep first reference when multiple refs are present (e.g. "D906;N7")
     ref_val <- sub(pattern = "[;,].*$", replacement = "", x = ref_val)
     # Extract alphabetic prefix (e.g. "D906" → "D", "CR12" → "CR", "VC3" → "VC")
-    prefix <- toupper(gsub(pattern     = "^([A-Za-z]+).*$",
-                           replacement = "\\1",
-                           x           = ref_val))
+    prefix <- toupper(x = gsub(pattern     = "^([A-Za-z]+).*$",
+                               replacement = "\\1",
+                               x           = ref_val))
     # Remap equivalent prefixes
     prefix[prefix == "RD"] <- "D"   # County Road → D
     prefix[prefix == "E"]  <- "A"   # European Route → Highway
@@ -490,13 +490,13 @@ process_network_features <- function(data, rules,
   # -------------------- #
   # Oneway normalization #
   # -------------------- #
-  oneway_col <- if ("oneway_osm" %in% names(data)){
+  oneway_col <- if ("oneway_osm" %in% names(x = data)){
     "oneway_osm"
     } else {
       "oneway"
     }
   data[, oneway_osm := {
-    ow <- if (oneway_col %in% names(data)){
+    ow <- if (oneway_col %in% names(x = data)){
       as.character(x = get(x = oneway_col))
     } else {
         NA_character_
@@ -508,7 +508,7 @@ process_network_features <- function(data, rules,
     ow[as.character(x = highway) %in% c("motorway", "motorway_link")] <- "yes"
     ow
   }]
-  data[, oneway_osm := factor(x = oneway_osm, 
+  data[, oneway_osm := factor(x      = oneway_osm, 
                               levels = c("yes", "no"))]
   # ---------------------------------------------- #
   # Lane count handling (both directions combined) #
@@ -519,7 +519,7 @@ process_network_features <- function(data, rules,
       "lanes"
   }
   data[, lanes_osm := as.numeric(x = get(x = lanes_col))]
-  missing_lanes <- is.na(x = data$lanes_osm) | data$lanes_osm <= 0
+  missing_lanes   <- is.na(x = data$lanes_osm) | data$lanes_osm <= 0
   n_missing_lanes <- sum(missing_lanes)
   if (n_missing_lanes > 0) {
     pipeline_message(
@@ -527,22 +527,22 @@ process_network_features <- function(data, rules,
                      fmt(n_missing_lanes)), 
       process = "warning")
     lanes_lookup <- setNames(object = rules$median_lanes, 
-                             rules$highway)
+                             nm     = rules$highway)
     data[missing_lanes, lanes_osm :=
-           ifelse(test = is.na(x = lanes_lookup[as.character(x = highway)]),
-                  yes = default_number_of_lanes,
-                  no = lanes_lookup[as.character(x = highway)])]
+           ifelse(test = is.na(x = lanes_lookup[as.character(x = highway)]), 
+                  yes  = default_number_of_lanes, 
+                  no   = lanes_lookup[as.character(x = highway)])]
   }
   # ---------------------- #
   # Speed limit imputation #
   # ---------------------- #
-  maxspeed_col <- if ("maxspeed_osm" %in% names(data)){
+  maxspeed_col <- if ("maxspeed_osm" %in% names(x = data)){
     "maxspeed_osm"
   } else {
       "maxspeed"
   }
   data[, speed := as.numeric(x = get(x = maxspeed_col))]
-  missing_speed <- is.na(x = data$speed) | data$speed <= 0
+  missing_speed   <- is.na(x = data$speed) | data$speed <= 0
   n_missing_speed <- sum(missing_speed)
   if (n_missing_speed > 0) {
     pipeline_message(
@@ -550,22 +550,22 @@ process_network_features <- function(data, rules,
                      fmt(n_missing_speed)), 
       process = "warning")
     speed_lookup <- setNames(object = rules$median_speed, 
-                             rules$highway)
+                             nm     = rules$highway)
     data[missing_speed, speed :=
            ifelse(test = is.na(x = speed_lookup[as.character(x = highway)]),
-                  yes = default_vehicle_speed, 
-                  no = speed_lookup[as.character(x = highway)])]
+                  yes  = default_vehicle_speed, 
+                  no   = speed_lookup[as.character(x = highway)])]
   }
   # -------------------------------- #
   # Junction type (roundabout, etc.) #
   # -------------------------------- #
-  if ("junction_osm" %in% names(data)) {
+  if ("junction_osm" %in% names(x = data)) {
     data[, junction_osm := as.character(x = junction_osm)]
     data[is.na(junction_osm) | junction_osm == "", junction_osm := "none"]
-    data[, junction_osm := factor(junction_osm)]
+    data[, junction_osm := factor(x = junction_osm)]
     pipeline_message(
       sprintf("Junction types: %s",
-                     paste(levels(data$junction_osm), collapse = ", ")),
+              paste(levels(data$junction_osm), collapse = ", ")),
       process = "info")
   }
   # ------------------------------------------------- #
@@ -607,7 +607,7 @@ process_network_features <- function(data, rules,
 #' @export 
 validate_osm_network <- function(osm_network) {
   required_cols <- c("osm_id", "highway", "geom")
-  missing_cols <- setdiff(x = required_cols, y = names(osm_network))
+  missing_cols <- setdiff(x = required_cols, y = names(x = osm_network))
   if (length(x = missing_cols) > 0) {
     pipeline_message(
       sprintf("Missing required columns: %s", 

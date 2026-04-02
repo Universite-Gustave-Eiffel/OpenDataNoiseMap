@@ -814,8 +814,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
 
   # Get base year from AVATAR data
   avatar_dir <- ifelse(test = !is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR), 
-                       yes  = cfg$AVATAR_CSV_DIR}, 
-                       no   = file.path("data", "avatar", "csv")}
+                       yes  = cfg$AVATAR_CSV_DIR, 
+                       no   = file.path("data", "avatar", "csv"))
   base_year <- 2023  # fallback
   if (dir.exists(paths = avatar_dir)) {
     csv_files <- list.files(path       = avatar_dir, 
