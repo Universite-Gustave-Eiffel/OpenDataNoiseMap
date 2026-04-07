@@ -796,8 +796,8 @@ validate_predictions <- function(predictions) {
 #'              CSV data.
 #' @param predictions_long data.frame with a `period` column
 #' @param cfg Configuration list (optional, for AVATAR_CSV_DIR)
-#' @return data.frame with added `datetimestart` and `datetimeend` POSIXct 
-#'         columns
+#' @return data.frame with added `datetimestart` and `datetimeend` character 
+#'         columns in YYYY-MM-DD HH:MM:SS format
 #' @examples 
 #' \dontrun{
 #' add_period_datetime_columns(predictions_long)
@@ -811,8 +811,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   period_chr <- as.character(x = predictions_long$period)
   n          <- length(x = period_chr)
 
-  datetimestart <- as.POSIXct(x = rep(x = NA_character_, n), tz = "UTC")
-  datetimeend   <- as.POSIXct(x = rep(x = NA_character_, n), tz = "UTC")
+  datetimestart <- rep(x = NA_character_, n)
+  datetimeend   <- rep(x = NA_character_, n)
 
   # Get base year from AVATAR data
   avatar_dir <- ifelse(test = !is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR), 
@@ -848,32 +848,20 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   # D / E / N reference periods (day 01)
   idx_D <- which(x = period_chr == "D")
   if (length(x = idx_D) > 0) {
-    datetimestart[idx_D] <- as.POSIXct(x  = sprintf("%d-01-01 06:00:00", 
-                                                   base_year), 
-                                       tz = "UTC")
-    datetimeend[idx_D]   <- as.POSIXct(x  = sprintf("%d-01-01 18:00:00", 
-                                                 base_year), 
-                                       tz = "UTC")
+    datetimestart[idx_D] <- sprintf("%d-01-01 06:00:00", base_year)
+    datetimeend[idx_D]   <- sprintf("%d-01-01 18:00:00", base_year)
   }
 
   idx_E <- which(x = period_chr == "E")
   if (length(x = idx_E) > 0) {
-    datetimestart[idx_E] <- as.POSIXct(x  = sprintf("%d-01-01 18:00:00", 
-                                                   base_year), 
-                                       tz = "UTC")
-    datetimeend[idx_E]   <- as.POSIXct(x  = sprintf("%d-01-01 22:00:00", 
-                                                 base_year), 
-                                       tz = "UTC")
+    datetimestart[idx_E] <- sprintf("%d-01-01 18:00:00", base_year)
+    datetimeend[idx_E]   <- sprintf("%d-01-01 22:00:00", base_year)
   }
 
   idx_N <- which(x = period_chr == "N")
   if (length(x = idx_N) > 0) {
-    datetimestart[idx_N] <- as.POSIXct(x  = sprintf("%d-01-01 22:00:00", 
-                                                   base_year), 
-                                       tz = "UTC")
-    datetimeend[idx_N]   <- as.POSIXct(x  = sprintf("%d-01-02 06:00:00", 
-                                                 base_year), 
-                                       tz = "UTC")
+    datetimestart[idx_N] <- sprintf("%d-01-01 22:00:00", base_year)
+    datetimeend[idx_N]   <- sprintf("%d-01-02 06:00:00", base_year)
   }
 
   # Generic hourly periods h0..h23 (day 04)
@@ -886,8 +874,10 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
     h_vals <- as.integer(x = vapply(X   = g_h[idx_h], 
                                     FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-04 %02d:00:00", base_year, h_vals)
-    datetimestart[idx_h] <- as.POSIXct(x = start_str, tz = "UTC")
-    datetimeend[idx_h]   <- datetimestart[idx_h] + 3600
+    start_posix <- as.POSIXct(x = start_str, tz = "UTC")
+    end_posix <- start_posix + 3600
+    datetimestart[idx_h] <- format(start_posix, "%Y-%m-%d %H:%M:%S")
+    datetimeend[idx_h]   <- format(end_posix, "%Y-%m-%d %H:%M:%S")
   }
 
   # Weekday hourly periods h0_wd..h23_wd (day 02)
@@ -900,8 +890,10 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
     h_vals    <- as.integer(x   = vapply(X   = g_wd[idx_wd], 
                                          FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-02 %02d:00:00", base_year, h_vals)
-    datetimestart[idx_wd] <- as.POSIXct(x = start_str, tz = "UTC")
-    datetimeend[idx_wd]   <- datetimestart[idx_wd] + 3600
+    start_posix <- as.POSIXct(x = start_str, tz = "UTC")
+    end_posix <- start_posix + 3600
+    datetimestart[idx_wd] <- format(start_posix, "%Y-%m-%d %H:%M:%S")
+    datetimeend[idx_wd]   <- format(end_posix, "%Y-%m-%d %H:%M:%S")
   }
 
   # Weekend hourly periods h0_we..h23_we (day 03)
@@ -914,8 +906,10 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
     h_vals    <- as.integer(x   = vapply(X   = g_we[idx_we], 
                                          FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
-    datetimestart[idx_we] <- as.POSIXct(x = start_str, tz = "UTC")
-    datetimeend[idx_we]   <- datetimestart[idx_we] + 3600
+    start_posix <- as.POSIXct(x = start_str, tz = "UTC")
+    end_posix <- start_posix + 3600
+    datetimestart[idx_we] <- format(start_posix, "%Y-%m-%d %H:%M:%S")
+    datetimeend[idx_we]   <- format(end_posix, "%Y-%m-%d %H:%M:%S")
   }
 
   predictions_long$datetimestart <- datetimestart
