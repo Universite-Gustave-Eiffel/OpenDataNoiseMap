@@ -1280,7 +1280,7 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
 
   pipeline_message(sprintf("Predictions exported to %s",
                            rel_path(output_filepath)), 
-                   level = 1, progress = "info", process = "save")
+                   level = 1, progress = "end", process = "save")
 
   # --- Summary ---
   pipeline_message(sprintf("Prediction summary for %s:", region_name),
