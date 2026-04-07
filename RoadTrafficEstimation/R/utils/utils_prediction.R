@@ -72,6 +72,7 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
                              extent),
                      process = "stop")
   )
+  }
 }
 #'
 # ------------------------------------------------------------------------------
