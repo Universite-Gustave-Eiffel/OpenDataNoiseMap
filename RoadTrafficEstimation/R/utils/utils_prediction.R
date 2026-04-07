@@ -1214,7 +1214,7 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
   predictions_long[, TV := flow]
 
   predictions_long[, period := factor(x      = period, 
-                                      levels = feature_info$all_periods)]
+                                      levels = all_periods)]
 
   predictions_long <- predictions_long[, .(osm_id, highway, period, TV, HGV, 
                                            LV, speed, osm_speed, 
