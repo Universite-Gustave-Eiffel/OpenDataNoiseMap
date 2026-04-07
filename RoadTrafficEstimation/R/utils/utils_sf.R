@@ -152,6 +152,9 @@ compute_period_statistics <- function(aggregated_measures_df) {
         labels = c("Day\n(6-18h)", "Evening\n(18-22h)", "Night\n(22-6h)")))
 }
 #' 
+# -------------------------------------------------------------------------------
+# Categorize traffic flow values
+# -------------------------------------------------------------------------------
 #' @title Categorize traffic flow values
 #' @description Categorizes aggregated traffic flow values into predefined flow 
 #'              classes to support distribution analysis and data quality 
@@ -164,13 +167,16 @@ compute_flow_distribution <- function(aggregated_measures_df) {
   aggregated_measures_df %>%
     dplyr::filter(!is.na(aggregate_flow)) %>%
     dplyr::mutate(
-      flow_category = cut(x = aggregate_flow, 
-                          breaks = c(0, 500, 1000, 2000, 5000, Inf),
-                          labels = c("0-500", "501-1000", "1001-2000", 
-                                     "2001-5000", ">5000"),
+      flow_category = cut(x              = aggregate_flow, 
+                          breaks         = c(0, 500, 1000, 2000, 5000, Inf),
+                          labels         = c("0-500", "501-1000", "1001-2000", 
+                                             "2001-5000", ">5000"),
                           include.lowest = TRUE))
 }
 #' 
+# -------------------------------------------------------------------------------
+# Compute data quality metrics
+# -------------------------------------------------------------------------------
 #' @title Compute data quality metrics
 #' @description This function extracts prediction quality indicators from 
 #'              aggregated traffic measures and reshapes them into a tidy long 
@@ -212,14 +218,14 @@ compute_quality_metrics_long <- function(aggregated_measures_df) {
       perc_occupancy_predicted
     ) %>%
     tidyr::pivot_longer(
-      cols = dplyr::everything(),
-      names_to = "metric",
+      cols      = dplyr::everything(),
+      names_to  = "metric",
       values_to = "pct_predicted"
     ) %>%
     dplyr::filter(!is.na(pct_predicted)) %>%
     dplyr::mutate(
       metric_label = factor(
-        x = metric,
+        x      = metric,
         levels = c("perc_flow_predicted", "perc_flow_trucks_predicted", 
                    "perc_speed_predicted", "perc_occupancy_predicted"),
         labels = c("Flow", "Trucks", "Speed", "Occupancy")))
