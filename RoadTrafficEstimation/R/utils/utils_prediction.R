@@ -40,16 +40,16 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
   # Generate file paths
   switch(extent,
     sensors = list(
-      filepath   = file.path(PREDICTION_DIR, 
+      filepath   = file.path(PREDICTION_DIR, mode,
                               sprintf("07_predictions_%s.gpkg", mode)) ),
     nantes  = list(
-      filepath   = file.path(PREDICTION_DIR, 
+      filepath   = file.path(PREDICTION_DIR, mode,
                               sprintf("07_predictions_%s.gpkg", mode)) ),
     paris   = list(
-      filepath   = file.path(PREDICTION_DIR, 
+      filepath   = file.path(PREDICTION_DIR, mode,
                               sprintf("07_predictions_%s.gpkg", mode)) ),
     pemb    = list(
-      filepath   = file.path(PREDICTION_DIR, 
+      filepath   = file.path(PREDICTION_DIR, mode,
                               sprintf("07_predictions_%s.gpkg", mode)) ),
     france  = list(
       output_dir = file.path(PREDICTION_DIR, mode),
@@ -1252,6 +1252,13 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
     min_gb         = 2, 
     warn_gb        = 4)
 
+  # Create output directory if needed
+  output_dir <- dirname(output_filepath)
+  if (!dir.exists(paths = output_dir)) {
+    dir.create(path      = output_dir, 
+               recursive = TRUE)
+  }
+
   predictions_sf <- merge(
     x  = predictions_long,
     y  = osm_region[, c("osm_id", "name", "geom")],
@@ -1413,7 +1420,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 #'   chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")
 #' )
 #' }
-#' @return Invisible NULL (side effects: writes GPKG file(s) to disk)
+#' @return Invisible NULL L d(side effects: writes GPKG file(s) to disk)
 #' @export
 #' @keywords internal
 .predict_france_tiled_impl <- function(cfg, region_name = "France",
