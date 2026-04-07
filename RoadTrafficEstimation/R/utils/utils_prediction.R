@@ -1021,9 +1021,7 @@ predict_traffic <- function(region_name, cfg, bbox = NULL,
 
   # --- Auto-detect method ---
   if (method == "auto") {
-    method <- if (is.null(x = bbox)) "tiled"
-  } else {
-    "region"
+    method <- if (is.null(x = bbox)) "tiled" else "region"
   }
 
   if (!(method %in% c("region", "tiled"))) {
