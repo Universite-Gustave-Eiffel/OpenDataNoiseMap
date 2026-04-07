@@ -436,8 +436,8 @@ apply_xgboost_predictions <- function(network_data,
         }
         pipeline_message(
           sprintf(paste("Removing %d extra feature columns", 
-                       "(factor level mismatch?): %s", 
-                  length(x = extra_cols), extra_summary)),
+                       "(factor level mismatch?): %s"),
+                  length(x = extra_cols), extra_summary),
           process = "warning")
       }
       
