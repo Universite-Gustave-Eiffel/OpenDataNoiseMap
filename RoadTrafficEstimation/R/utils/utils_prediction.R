@@ -35,20 +35,22 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
     mode <- ifelse(test = exists("MODE") && nzchar(x = MODE), 
                    yes  = MODE, 
                    no   = "all")
+  }
+
   # Generate file paths
   switch(extent,
     sensors = list(
-      all        = file.path(PREDICTION_DIR, 
-                             sprintf("07_predictions_%s.gpkg", mode))),
+      filepath   = file.path(PREDICTION_DIR, 
+                              sprintf("07_predictions_%s.gpkg", mode)) ),
     nantes  = list(
-      all        = file.path(PREDICTION_DIR, 
-                             sprintf("07_predictions_%s.gpkg", mode))),
+      filepath   = file.path(PREDICTION_DIR, 
+                              sprintf("07_predictions_%s.gpkg", mode)) ),
     paris   = list(
-      all        = file.path(PREDICTION_DIR, 
-                             sprintf("07_predictions_%s.gpkg", mode))),
+      filepath   = file.path(PREDICTION_DIR, 
+                              sprintf("07_predictions_%s.gpkg", mode)) ),
     pemb    = list(
-      all        = file.path(PREDICTION_DIR, 
-                             sprintf("07_predictions_%s.gpkg", mode))),
+      filepath   = file.path(PREDICTION_DIR, 
+                              sprintf("07_predictions_%s.gpkg", mode)) ),
     france  = list(
       output_dir = file.path(PREDICTION_DIR, mode),
       geom       = file.path(PREDICTION_DIR, mode,
@@ -72,7 +74,6 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
                              extent),
                      process = "stop")
   )
-  }
 }
 #'
 # ------------------------------------------------------------------------------

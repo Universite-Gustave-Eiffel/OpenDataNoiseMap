@@ -11,6 +11,6 @@ predict_traffic(
   region_name = "Nantes Métropole",
   cfg = CFG,
   bbox = c(xmin = 332000, ymin = 6674000, xmax = 362000, ymax = 6704000),
-  output_config = list(filepath = nantes_output_config$all),
+  output_config = list(filepath = nantes_output_config$filepath),
   method = "region"
 )

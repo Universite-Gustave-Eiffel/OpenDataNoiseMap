@@ -11,6 +11,6 @@ predict_traffic(
   region_name = "Paris Metropolitan Area",
   cfg = CFG,
   bbox = c(xmin = 625000, ymin = 6832000, xmax = 685000, ymax = 6892000),
-  output_config = list(filepath = paris_output_config$all),
+  output_config = list(filepath = paris_output_config$filepath),
   method = "region"
 )
