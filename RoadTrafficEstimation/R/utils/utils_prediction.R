@@ -145,7 +145,8 @@ load_network_for_prediction <- function(bbox, cfg) {
   }
   
   # Ensure correct CRS
-  if (sf::st_crs(x = osm_network) != target_crs) {
+  if (is.na(sf::st_crs(x = osm_network)) || 
+      sf::st_crs(x = osm_network) != target_crs) {
     osm_network <- osm_network %>% 
       st_transform(crs = target_crs)
   }
@@ -209,7 +210,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
     quiet      = TRUE)
   
   # Ensure correct CRS
-  if (sf::st_crs(x = osm_network) != target_crs) {
+  if (is.na(sf::st_crs(x = osm_network)) || 
+      sf::st_crs(x = osm_network) != target_crs) {
     osm_network <- osm_network %>% 
       st_transform(crs = target_crs)
   }
@@ -1554,6 +1556,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
                   error = function(e) NULL)
 
     if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) next
+
+    # Ensure correct CRS
+    if (is.na(sf::st_crs(x = tile_sf)) || 
+        sf::st_crs(x = tile_sf) != cfg$TARGET_CRS) {
+      tile_sf <- sf::st_transform(x   = tile_sf, 
+                                  crs = cfg$TARGET_CRS)
+    }
 
     n_tile                <- nrow(x = tile_sf)
     total_roads           <- total_roads + n_tile
