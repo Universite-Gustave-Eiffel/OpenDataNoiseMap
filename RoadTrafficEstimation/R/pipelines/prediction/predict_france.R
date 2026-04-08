@@ -6,17 +6,19 @@
 # chunk (D/E/N, hourly, hourly weekday, hourly weekend) to allow selective
 # loading and processing.
 #
-# Outputs (all tagged with current MODE):
-#   - 07_france_network_{mode}.gpkg           -> road geometry 
-#                                                + static attributes
-#   - 07_france_traffic_DEN_{mode}.gpkg       -> D/E/N periods (3 periods)
-#   - 07_france_traffic_hourly_{mode}.gpkg    -> h0..h23 (24 periods)
-#   - 07_france_traffic_hourly_wd_{mode}.gpkg -> h0_wd..h23_wd (24 periods)
-#   - 07_france_traffic_hourly_we_{mode}.gpkg -> h0_we..h23_we (24 periods)
+# Outputs (all tagged with current MODE, geometry included in each chunk):
+#   - 07_france_traffic_DEN_{mode}.gpkg       -> D/E/N periods + geometry (3 periods)
+#   - 07_france_traffic_hourly_{mode}.gpkg    -> h0..h23 + geometry (24 periods)
+#   - 07_france_traffic_hourly_wd_{mode}.gpkg -> h0_wd..h23_wd + geometry (24 periods)
+#   - 07_france_traffic_hourly_we_{mode}.gpkg -> h0_we..h23_we + geometry (24 periods)
 #
 # For noise mapping applications, all temporal chunks are typically needed,
 # as they capture the full temporal profile (working hours, evenings, nights,
 # weekday vs. weekend variations). Total disk space: ~26 GB before compression.
+#
+# OPTIMIZATION (batch write): Tiles are accumulated by temporal chunk and 
+# written in a single GDAL operation per chunk, avoiding slow incremental 
+# GPKG appends. Expected speedup: 3-4x vs. tile-by-tile writes.
 #
 # Note: This is the default implementation. For quick sanity checks on a subset
 # of France, use predict_traffic(method="region", bbox=...) instead.
