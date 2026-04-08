@@ -796,7 +796,7 @@ validate_predictions <- function(predictions) {
 #'              CSV data.
 #' @param predictions_long data.frame with a `period` column
 #' @param cfg Configuration list (optional, for AVATAR_CSV_DIR)
-#' @return data.frame with added `datetimestart` and `datetimeend` character 
+#' @return data.frame with added `datetimestart` and `datetimeend` POSIXct 
 #'         columns in YYYY-MM-DD HH:MM:SS format
 #' @examples 
 #' \dontrun{
@@ -811,8 +811,12 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   period_chr <- as.character(x = predictions_long$period)
   n          <- length(x = period_chr)
 
-  datetimestart <- rep(x = NA_character_, n)
-  datetimeend   <- rep(x = NA_character_, n)
+  datetimestart <- as.POSIXct(x = rep(x = NA_character_, n),
+                              format = "%Y-%m-%d %H:%M:%S",
+                              tz     = "UTC")
+  datetimeend   <- as.POSIXct(x = rep(x = NA_character_, n),
+                              format = "%Y-%m-%d %H:%M:%S",
+                              tz     = "UTC")
 
   # Get base year from AVATAR data
   avatar_dir <- ifelse(test = !is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR), 

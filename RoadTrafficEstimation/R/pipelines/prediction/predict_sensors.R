@@ -1,18 +1,18 @@
 # ==============================================================================
 # PREDICTION: NOISE SENSORS (800M RADIUS AROUND ALL SENSORS)
 # ==============================================================================
-# Prédit le trafic pour les routes dans un rayon de 800m autour de capteurs de
-# bruit (BRUITPARIF, ACOUCITE, CHILD). Utilise la couche France engineered.
+# Predicts traffic on roads within an 800-meter radius of noise sensors 
+# (Bruitparif, Acoucité, Child project). Uses the "France engineered" layer.
 #
-# Entrées:
-#   - 02_osm_network_france_engineered.gpkg (couche France avec features)
-#   - 06_xgboost_trained_models.rds (modèles XGBoost)
-#   - 06_xgboost_feature_info.rds (formule et périodes)
-#   - data/POINT_NOISE_*.shp (capteurs bruit)
-#   - data/CHILD_*.shp (capteurs CHILD)
-# Sorties:
-#   - 07_predictions_sensors_all.gpkg (toutes les prédictions combinées)
-#   - 07_predictions_sensors_{SOURCE}.gpkg (x13 fichiers par source)
+# Input:
+#   - 02_osm_network_france_engineered.gpkg : France layer with features
+#   - 06_xgboost_trained_models.rds : XGBoost models
+#   - 06_xgboost_feature_info.rds : XGBoost feature info (formula and periods)
+#   - data/POINT_NOISE_*.shp : acoustic sensors
+#   - data/CHILD_*.shp : Child project sensors
+# Output:
+#   - 07_predictions_sensors_all.gpkg : all combined predictions
+#   - 07_predictions_sensors_{SOURCE}.gpkg : predictions for each source
 # ==============================================================================
 
 pipeline_message("Noise sensors traffic prediction", level = 0, 
@@ -35,7 +35,8 @@ if (!file.exists(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
                    process = "stop")
 }
 
-models_list <- readRDS(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+# Load models and feature info
+models_list  <- readRDS(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
 feature_info <- readRDS(CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 pipeline_message(sprintf("Models loaded: %s models for %s periods", 
@@ -51,35 +52,35 @@ pipeline_message("Loading noise sensors", level = 1,
 
 sensors_list <- list()
 
-# BRUITPARIF sensors
+# Bruitparif sensors
 if (file.exists("data/POINT_NOISE_BRUITPARIF_COMPARE.shp")) {
   sensors_list[["BRUITPARIF"]] <- sf::st_read(
-    dsn = "data/POINT_NOISE_BRUITPARIF_COMPARE.shp", 
+    dsn   = "data/POINT_NOISE_BRUITPARIF_COMPARE.shp", 
     quiet = TRUE) %>% 
     st_transform(CFG$TARGET_CRS)
 }
 
-# ACOUCITE sensors
+# Acoucité sensors
 if (file.exists("data/POINT_NOISE_ACOUCITE_COMPARE.shp")) {
   sensors_list[["ACOUCITE"]] <- sf::st_read(
-    dsn = "data/POINT_NOISE_ACOUCITE_COMPARE.shp", 
+    dsn   = "data/POINT_NOISE_ACOUCITE_COMPARE.shp", 
     quiet = TRUE) %>% 
     st_transform(CFG$TARGET_CRS)
 }
 
-# CHILD sensors (11 sources)
+# Child project sensors (11 sources)
 child_files <- list(
-  CHILD_HOME_BORDEAUX = "data/CHILD_HOME_BORDEAUXrfhome/CHILD_HOME_BORDEAUX_CBS.shp",
-  CHILD_HOME_BREST = "data/CHILD_HOME_BRESTrfhome/CHILD_HOME_BREST_CBS.shp",
-  CHILD_HOME_LYON = "data/CHILD_HOME_LYONrfhome/CHILD_HOME_LYON_CBS.shp",
-  CHILD_HOME_STRASBOURG_GEO = "data/CHILD_HOME_STRASBOURGgeoclimateHome/CHILD_HOME_STRASBOURG_CBS.shp",
-  CHILD_HOME_STRASBOURG_RF = "data/CHILD_HOME_STRASBOURGrfhome/CHILD_HOME_STRASBOURG_CBS.shp",
-  CHILD_RANDOM_BORDEAUX_GEO = "data/CHILD_RANDOM_BORDEAUXgeoclimate/CHILD_RANDOM_BORDEAUX_CBS.shp",
-  CHILD_RANDOM_BORDEAUX_RF = "data/CHILD_RANDOM_BORDEAUXrf/CHILD_RANDOM_BORDEAUX_CBS.shp",
-  CHILD_RANDOM_BREST = "data/CHILD_RANDOM_BRESTrf/CHILD_RANDOM_BREST_CBS.shp",
-  CHILD_RANDOM_LYON = "data/CHILD_RANDOM_LYONrf/CHILD_RANDOM_LYON_CBS.shp",
+  CHILD_HOME_BORDEAUX        = "data/CHILD_HOME_BORDEAUXrfhome/CHILD_HOME_BORDEAUX_CBS.shp",
+  CHILD_HOME_BREST           = "data/CHILD_HOME_BRESTrfhome/CHILD_HOME_BREST_CBS.shp",
+  CHILD_HOME_LYON =          "data/CHILD_HOME_LYONrfhome/CHILD_HOME_LYON_CBS.shp",
+  CHILD_HOME_STRASBOURG_GEO  = "data/CHILD_HOME_STRASBOURGgeoclimateHome/CHILD_HOME_STRASBOURG_CBS.shp",
+  CHILD_HOME_STRASBOURG_RF   = "data/CHILD_HOME_STRASBOURGrfhome/CHILD_HOME_STRASBOURG_CBS.shp",
+  CHILD_RANDOM_BORDEAUX_GEO  = "data/CHILD_RANDOM_BORDEAUXgeoclimate/CHILD_RANDOM_BORDEAUX_CBS.shp",
+  CHILD_RANDOM_BORDEAUX_RF   = "data/CHILD_RANDOM_BORDEAUXrf/CHILD_RANDOM_BORDEAUX_CBS.shp",
+  CHILD_RANDOM_BREST         = "data/CHILD_RANDOM_BRESTrf/CHILD_RANDOM_BREST_CBS.shp",
+  CHILD_RANDOM_LYON          = "data/CHILD_RANDOM_LYONrf/CHILD_RANDOM_LYON_CBS.shp",
   CHILD_RANDOM_STRASBOURG_RF = "data/CHILD_RANDOM_STRASBOURGrf/CHILD_RANDOM_STRASBOURG_CBS.shp",
-  CHILD_STRASBOURG_GEO = "data/CHILD_STRASBOURGgeoclimate/CHILD_RANDOM_STRASBOURG_CBS.shp"
+  CHILD_STRASBOURG_GEO       = "data/CHILD_STRASBOURGgeoclimate/CHILD_RANDOM_STRASBOURG_CBS.shp"
 )
 
 for (source_name in names(child_files)) {
