@@ -1438,13 +1438,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                        tile_size_m = 200000,
                                        chunks = c("DEN")) {
   
-  # Default mode if not provided
-  if (is.null(x = mode) || !nzchar(x = mode)) {
-    mode <- ifelse(test = exists("mode_suffix") && nzchar(x = mode_suffix), 
-                   yes  = mode_suffix, 
-                   no   = ifelse(test = exists("MODE") && nzchar(x = MODE), 
-                                 yes  = MODE, 
-                                 no   = "france"))
+  # Ensure mode is a valid character string (not NULL or empty)
+  if (is.null(x = mode) || length(x = mode) == 0L || !is.character(x = mode)) {
+    mode <- "france"
+  }
+  if (!nzchar(x = mode)) {
+    mode <- "france"
   }
   
   # Configuration parameters from cfg
@@ -1623,6 +1622,15 @@ build_france_tiles <- function(tile_size_m = 200000) {
         dplyr::filter(period %in% chunk_periods) %>%
         mutate(period = as.character(x = period))
 
+      # Debug logging for tile 1
+      if (i == 1L) {
+        pipeline_message(
+          sprintf("DEBUG Tile %d chunk '%s': %d rows after filter (periods: %s)",
+                  i, chunk_name, nrow(x = chunk_long),
+                  paste(chunk_periods, collapse = ", ")),
+          level = 2, process = "info")
+      }
+
       if (nrow(x = chunk_long) > 0) {
         # Join attributes with geometry
         tile_chunk_sf <- dplyr::left_join(
@@ -1630,6 +1638,16 @@ build_france_tiles <- function(tile_size_m = 200000) {
           y  = geom_for_merge,
           by = "osm_id"
         )
+        
+        # Debug: check for NA geometries after join
+        if (i == 1L) {
+          n_na_geom <- sum(is.na(sf::st_geometry(tile_chunk_sf)))
+          pipeline_message(
+            sprintf("DEBUG Tile %d chunk '%s': %d NA geometries after join",
+                    i, chunk_name, n_na_geom),
+            level = 2, process = "info")
+        }
+        
         tile_chunk_sf <- sf::st_as_sf(
           x              = tile_chunk_sf,
           sf_column_name = attr(geom_for_merge, "sf_column")
@@ -1645,12 +1663,35 @@ build_france_tiles <- function(tile_size_m = 200000) {
         tile_file <- file.path(tile_dir, 
                                sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
                                        mode, chunk_name, tile_id_str))
+        
+        # Debug logging before write
+        if (i == 1L) {
+          pipeline_message(
+            sprintf("DEBUG Tile %d: writing to %s", i, basename(path = tile_file)),
+            level = 2, process = "info")
+        }
+        
         sf::st_write(
           obj        = tile_chunk_sf,
           dsn        = tile_file,
           delete_dsn = TRUE,
           quiet      = TRUE
         )
+        
+        # Debug logging after write
+        if (i == 1L) {
+          file_exists_after <- file.exists(tile_file)
+          pipeline_message(
+            sprintf("DEBUG Tile %d: file exists after write = %s",
+                    i, file_exists_after),
+            level = 2, process = "info")
+        }
+      } else if (i == 1L) {
+        # Debug: no rows to write
+        pipeline_message(
+          sprintf("DEBUG Tile %d chunk '%s': SKIPPED (0 rows)",
+                  i, chunk_name),
+          level = 2, process = "info")
       }
     }
 
