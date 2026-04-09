@@ -1647,7 +1647,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
     dt         <- proc.time()["elapsed"] - t0
     tile_times <- c(tile_times, dt)
     avg_time   <- mean(x = tile_times)
-    remaining  <- (nrow(x = tiles) - i) * avg_time
+    remaining  <- (n_tiles - i) * avg_time
 
     pipeline_message(
       sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s", 
