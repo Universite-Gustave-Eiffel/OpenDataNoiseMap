@@ -1692,12 +1692,25 @@ build_france_tiles <- function(tile_size_m = 200000) {
                list(make.row.names = FALSE)))
     combined_geom <- sf::st_as_sf(object = combined_geom)
 
-    # Single merge (all tiles at once, not per-tile)
-    chunk_sf <- merge(x     = combined_chunk, 
-                      y     = combined_geom, 
-                      by    = "osm_id", 
-                      all.x = TRUE)
-    chunk_sf <- sf::st_as_sf(x = chunk_sf)
+    # Ensure combined geometry has the target CRS before joining
+    if (is.na(sf::st_crs(x = combined_geom))) {
+      sf::st_crs(x = combined_geom) <- cfg$TARGET_CRS
+    }
+    if (sf::st_crs(x = combined_geom) != cfg$TARGET_CRS) {
+      combined_geom <- sf::st_transform(x   = combined_geom, 
+                                       crs = cfg$TARGET_CRS)
+    }
+
+    # Join attributes with geometry by osm_id and preserve sf geometry
+    chunk_sf <- dplyr::left_join(
+      x  = combined_chunk,
+      y  = combined_geom,
+      by = "osm_id"
+    )
+    chunk_sf <- sf::st_as_sf(
+      x              = chunk_sf,
+      sf_column_name = attr(combined_geom, "sf_column")
+    )
 
     if (sf::st_crs(x = chunk_sf) != cfg$TARGET_CRS) {
       chunk_sf <- sf::st_transform(x   = chunk_sf, 
