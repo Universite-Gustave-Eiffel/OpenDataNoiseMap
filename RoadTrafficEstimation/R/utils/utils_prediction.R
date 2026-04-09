@@ -1512,32 +1512,21 @@ build_france_tiles <- function(tile_size_m = 200000) {
                           nrow(x = tiles), tile_size_m / 1000),
                    process = "info")
 
-  # --- Clean output files (overwrite mode) ---
-  for (fp in unlist(x = chunk_paths)) {
-    if (file.exists(fp)) file.remove(fp)
-  }
-
-  # --- Initialize batch storage by chunk (memory-efficient) ---
-  # OPTIMIZATION: Instead of writing each tile immediately (incremental append),
-  # accumulate tiles in memory by chunk and batch-write. This reduces I/O calls
-  # to GDAL/GPKG and avoids expensive incremental appends.
-  batch_data_by_chunk <- lapply(
-    X = names(temporal_chunks),
-    FUN = function(cn) list(
-      chunk_long_list  = list(),
-      geom_list        = list(),
-      count            = 0L
-    )
-  )
-  names(batch_data_by_chunk) <- names(temporal_chunks)
+  # Calculate number of digits for tile numbering
+  n_tiles <- nrow(x = tiles)
+  n_digits <- floor(log10(n_tiles)) + 1L
 
   # --- Process tiles ---
   total_roads           <- 0L
   total_tiles_with_data <- 0L
   tile_times            <- numeric(length = 0)
 
-  for (i in seq_len(to = nrow(x = tiles))) {
+  for (i in seq_len(to = n_tiles)) {
     tile <- tiles[i, ]
+    tile_id_str <- sprintf("%0*d", n_digits, i)
+    tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+    dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
+    
     t0   <- proc.time()["elapsed"]
 
     # Load tile from GPKG with spatial filter
@@ -1603,7 +1592,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
       select(osm_id, highway, period, TV, HGV, LV, speed,
              osm_speed, osm_speed_imputed, truck_pct)
 
-    # OPTIMIZATION: add_period_datetime_columns once per tile
+    # Add period datetime columns once per tile
     predictions_long <- add_period_datetime_columns(predictions_long, cfg)
 
     # validate predictions for this tile
@@ -1614,8 +1603,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                        process = "warning")
     }
 
-    # --- Batch accumulation: Add this tile's data to each chunk ---
-    # OPTIMIZATION: Instead of writing immediately, accumulate by chunk
+    # Write each tile per chunk immediately
     for (chunk_name in names(x = temporal_chunks)) {
       chunk_periods <- temporal_chunks[[chunk_name]]
       chunk_long    <- predictions_long %>%
@@ -1623,17 +1611,33 @@ build_france_tiles <- function(tile_size_m = 200000) {
         mutate(period = as.character(x = period))
 
       if (nrow(x = chunk_long) > 0) {
-        # Store chunk data and geometry for batch write
-        batch_data_by_chunk[[chunk_name]]$chunk_long_list[[
-          batch_data_by_chunk[[chunk_name]]$count + 1L
-        ]] <- chunk_long
-        
-        batch_data_by_chunk[[chunk_name]]$geom_list[[
-          batch_data_by_chunk[[chunk_name]]$count + 1L
-        ]] <- geom_for_merge
-        
-        batch_data_by_chunk[[chunk_name]]$count <- 
-          batch_data_by_chunk[[chunk_name]]$count + 1L
+        # Join attributes with geometry
+        tile_chunk_sf <- dplyr::left_join(
+          x  = chunk_long,
+          y  = geom_for_merge,
+          by = "osm_id"
+        )
+        tile_chunk_sf <- sf::st_as_sf(
+          x              = tile_chunk_sf,
+          sf_column_name = attr(geom_for_merge, "sf_column")
+        )
+
+        # Ensure CRS
+        if (sf::st_crs(x = tile_chunk_sf) != cfg$TARGET_CRS) {
+          tile_chunk_sf <- sf::st_transform(x   = tile_chunk_sf, 
+                                           crs = cfg$TARGET_CRS)
+        }
+
+        # Write tile file
+        tile_file <- file.path(tile_dir, 
+                               sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+                                       mode, chunk_name, tile_id_str))
+        sf::st_write(
+          obj        = tile_chunk_sf,
+          dsn        = tile_file,
+          delete_dsn = TRUE,
+          quiet      = TRUE
+        )
       }
     }
 
@@ -1647,7 +1651,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     pipeline_message(
       sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s", 
-              i, nrow(x = tiles), fmt(n_tile), dt, 
+              i, n_tiles, fmt(n_tile), dt, 
               fmt(total_roads), 
               format_duration(remaining)), 
       level = 2, process = "calc")
@@ -1656,75 +1660,65 @@ build_france_tiles <- function(tile_size_m = 200000) {
   rm(models_list, feature_info)
   gc(verbose = FALSE)
 
-  # --- Batch write phase: Write all tiles per chunk in a single GPKG write ---
-  pipeline_message("Batch writing accumulated chunk data to GPKG files", 
+  # Merge tiles per chunk
+  pipeline_message("Merging tiles into final chunk files", 
                    level = 1, progress = "start", process = "save")
 
-  for (chunk_name in names(x = batch_data_by_chunk)) {
-    batch <- batch_data_by_chunk[[chunk_name]]
+  for (chunk_name in names(x = temporal_chunks)) {
+    chunk_file <- chunk_paths[[chunk_name]]
     
-    if (batch$count == 0L) {
-      pipeline_message(sprintf("No data for chunk '%s' to write", chunk_name),
-                       process = "info")
+    # Collect all tile files for this chunk
+    tile_files <- list()
+    for (i in seq_len(to = n_tiles)) {
+      tile_id_str <- sprintf("%0*d", n_digits, i)
+      tile_dir    <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+      tile_file   <- file.path(tile_dir, 
+                          sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+                                  mode, chunk_name, tile_id_str))
+      if (file.exists(tile_file)) {
+        tile_files <- c(tile_files, tile_file)
+      }
+    }
+    
+    if (length(tile_files) == 0) {
+      pipeline_message(sprintf("No tile files found for chunk '%s'", 
+                               chunk_name),
+                       process = "warning")
       next
     }
 
-    chunk_file <- chunk_paths[[chunk_name]]
-
-    # Combine all chunk data from all tiles at once
+    # Read and combine all tile sf objects
     check_memory_available(
-      operation_name = sprintf("Combine and write chunk '%s' (%d tiles)", 
-                               chunk_name, batch$count),
-      min_gb         = 2, 
-      warn_gb        = 4)
+      operation_name = sprintf("Merge %d tiles for chunk '%s'", 
+                               length(tile_files), chunk_name),
+      min_gb         = 4, 
+      warn_gb        = 8)
 
-    # Bind all chunk_long data.frames
-    combined_chunk <- do.call(
-      what = rbind,
-      args = c(batch$chunk_long_list, 
-               list(make.row.names   = FALSE, 
-                    stringsAsFactors = FALSE)))
-
-    # Bind all geometry
-    combined_geom <- do.call(
-      what = rbind,
-      args = c(batch$geom_list, 
-               list(make.row.names = FALSE)))
-    combined_geom <- sf::st_as_sf(object = combined_geom)
-
-    # Ensure combined geometry has the target CRS before joining
-    if (is.na(sf::st_crs(x = combined_geom))) {
-      sf::st_crs(x = combined_geom) <- cfg$TARGET_CRS
-    }
-    if (sf::st_crs(x = combined_geom) != cfg$TARGET_CRS) {
-      combined_geom <- sf::st_transform(x   = combined_geom, 
-                                       crs = cfg$TARGET_CRS)
-    }
-
-    # Join attributes with geometry by osm_id and preserve sf geometry
-    chunk_sf <- dplyr::left_join(
-      x  = combined_chunk,
-      y  = combined_geom,
-      by = "osm_id"
-    )
-    chunk_sf <- sf::st_as_sf(
-      x              = chunk_sf,
-      sf_column_name = attr(combined_geom, "sf_column")
-    )
-
-    if (sf::st_crs(x = chunk_sf) != cfg$TARGET_CRS) {
-      chunk_sf <- sf::st_transform(x   = chunk_sf, 
+    tile_sf_list <- lapply(tile_files, function(tf) {
+      sf_obj <- sf::st_read(dsn   = tf, 
+                            quiet = TRUE)
+      if (sf::st_crs(x = sf_obj) != cfg$TARGET_CRS) {
+        sf_obj <- sf::st_transform(x   = sf_obj, 
                                    crs = cfg$TARGET_CRS)
-    }
+      }
+      sf_obj
+    })
 
-    # Single st_write call for entire batch (much faster than incremental append)
+    # Combine all tiles
+    combined_sf <- do.call(
+      what = rbind,
+      args = c(tile_sf_list, 
+               list(make.row.names = FALSE))
+    )
+
+    # Write final chunk file
     pipeline_message(
-      sprintf("Writing chunk '%s': %d rows with geometry", 
-              chunk_name, nrow(x = chunk_sf)),
+      sprintf("Writing merged chunk '%s': %d rows with geometry", 
+              chunk_name, nrow(x = combined_sf)),
       level = 2, progress = "start", process = "save")
 
     sf::st_write(
-      obj        = chunk_sf,
+      obj        = combined_sf,
       dsn        = chunk_file,
       delete_dsn = TRUE,
       quiet      = FALSE
@@ -1735,11 +1729,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
               chunk_name, rel_path(chunk_file)),
       level = 2, progress = "end", process = "save")
 
-    rm(combined_chunk, combined_geom, chunk_sf)
+    rm(tile_sf_list, combined_sf)
     gc(verbose = FALSE)
   }
 
-  pipeline_message("Batch write phase completed", 
+  pipeline_message("Tile merging phase completed", 
                    level = 1, progress = "end", process = "save")
 
   rm(models_list, feature_info)
