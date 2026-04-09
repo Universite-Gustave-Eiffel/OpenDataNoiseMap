@@ -7,18 +7,22 @@
 # loading and processing.
 #
 # Outputs (all tagged with current MODE, geometry included in each chunk):
-#   - 07_france_traffic_DEN_{mode}.gpkg       -> D/E/N periods + geometry (3 periods)
-#   - 07_france_traffic_hourly_{mode}.gpkg    -> h0..h23 + geometry (24 periods)
-#   - 07_france_traffic_hourly_wd_{mode}.gpkg -> h0_wd..h23_wd + geometry (24 periods)
-#   - 07_france_traffic_hourly_we_{mode}.gpkg -> h0_we..h23_we + geometry (24 periods)
+#   - 07_france_traffic_DEN_{mode}.gpkg       -> D/E/N periods + geometry 
+#                                               (3 periods)
+#   - 07_france_traffic_hourly_{mode}.gpkg    -> h0..h23 + geometry 
+#                                               (24 periods)
+#   - 07_france_traffic_hourly_wd_{mode}.gpkg -> h0_wd..h23_wd + geometry 
+#                                               (24 periods)
+#   - 07_france_traffic_hourly_we_{mode}.gpkg -> h0_we..h23_we + geometry 
+#                                               (24 periods)
 #
 # For noise mapping applications, all temporal chunks are typically needed,
 # as they capture the full temporal profile (working hours, evenings, nights,
-# weekday vs. weekend variations). Total disk space: ~26 GB before compression.
+# weekday vs. weekend variations).
 #
-# OPTIMIZATION (batch write): Tiles are accumulated by temporal chunk and 
-# written in a single GDAL operation per chunk, avoiding slow incremental 
-# GPKG appends. Expected speedup: 3-4x vs. tile-by-tile writes.
+# Tiles are accumulated by temporal chunk and written in a single GDAL operation 
+# per chunk, avoiding slow incremental GPKG appends. Expected speedup: 3-4x vs. 
+# tile-by-tile writes.
 #
 # Note: This is the default implementation. For quick sanity checks on a subset
 # of France, use predict_traffic(method="region", bbox=...) instead.
@@ -33,13 +37,13 @@ france_output_config <- build_prediction_filepaths(extent = "france",
 
 # Run tiled prediction with all temporal chunks
 # Chunks:
-#   - "DEN": Day/Evening/Night periods (compact, ~1 GB, recommended minimum)
-#   - "hourly": Generic hourly h0..h23 (all days combined, ~8.5 GB)
-#   - "hourly_wd": Weekday hourly h0_wd..h23_wd (~8.5 GB)
-#   - "hourly_we": Weekend hourly h0_we..h23_we (~8.5 GB)
+#   - "DEN": Day/Evening/Night periods
+#   - "hourly": Generic hourly h0..h23
+#   - "hourly_wd": Weekday hourly h0_wd..h23_wd
+#   - "hourly_we": Weekend hourly h0_we..h23_we
 #
 # For full temporal detail, include all chunks: c("DEN", "hourly", "hourly_wd", 
-# "hourly_we")
+# "hourly_we").
 # For disk/memory constrained environments, use: c("DEN") only
 #
 predict_traffic(
@@ -48,6 +52,7 @@ predict_traffic(
   bbox          = NULL,
   output_config = france_output_config,
   method        = "tiled",
+  mode          = mode_suffix,
   chunks        = c("DEN", "hourly", "hourly_wd", "hourly_we"),
   tile_size_m = 200000)  # 200 km tiles
 

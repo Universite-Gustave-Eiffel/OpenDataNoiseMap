@@ -1009,6 +1009,7 @@ predict_traffic <- function(region_name,
                             bbox = NULL,
                             output_config = NULL,
                             method = "auto",
+                            mode = NULL,
                             chunks = c("DEN"),
                             tile_size_m = 200000) {
 
@@ -1054,6 +1055,7 @@ predict_traffic <- function(region_name,
       cfg           = cfg,
       region_name   = region_name,
       output_config = output_config,
+      mode          = mode,
       tile_size_m   = tile_size_m,
       chunks        = chunks
     )
@@ -1432,8 +1434,18 @@ build_france_tiles <- function(tile_size_m = 200000) {
 .predict_france_tiled_impl <- function(cfg, 
                                        region_name = "France",
                                        output_config,
+                                       mode = NULL,
                                        tile_size_m = 200000,
                                        chunks = c("DEN")) {
+  
+  # Default mode if not provided
+  if (is.null(x = mode) || !nzchar(x = mode)) {
+    mode <- ifelse(test = exists("mode_suffix") && nzchar(x = mode_suffix), 
+                   yes  = mode_suffix, 
+                   no   = ifelse(test = exists("MODE") && nzchar(x = MODE), 
+                                 yes  = MODE, 
+                                 no   = "france"))
+  }
   
   # Configuration parameters from cfg
   osm_roads_path   <- cfg$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
@@ -1441,6 +1453,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
   
   # Output paths from output_config
+  output_dir <- output_config$output_dir  # Base directory for tile subdirs
   chunk_paths_all <- list(
     DEN       = output_config$den,
     hourly    = output_config$hourly,
