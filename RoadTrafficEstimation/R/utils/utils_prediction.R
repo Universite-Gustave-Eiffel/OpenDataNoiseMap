@@ -78,25 +78,25 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
 #' @param crs_a First CRS object or numeric EPSG code to compare (reference).
 #' @param crs_b Second CRS object or numeric EPSG code to compare (target).
 #' @return Logical scalar. TRUE if the CRS definitions are equivalent.
-sf_crs_matches <- function(crs_a, crs_b) {
-  crs_a <- sf::st_crs(crs_a)
-  crs_b <- sf::st_crs(crs_b)
-  if (is.na(x = crs_a) || is.na(x = crs_b)) {
+sf_crs_matches <- function(x, y) {
+  x <- sf::st_crs(x)
+  y <- sf::st_crs(y)
+  if (is.na(x = x) || is.na(x = y)) {
     return(FALSE)
   }
-  if (!is.null(x = crs_a$epsg) && !is.null(x = crs_b$epsg) &&
-      !is.na(x = crs_a$epsg) && !is.na(x = crs_b$epsg)) {
-    return(crs_a$epsg == crs_b$epsg)
+  if (!is.null(x = x$epsg) && !is.null(x = y$epsg) &&
+      !is.na(x = x$epsg) && !is.na(x = y$epsg)) {
+    return(x$epsg == y$epsg)
   }
-  if (!is.null(x = crs_a$wkt) && !is.null(x = crs_b$wkt) &&
-      nzchar(x = crs_a$wkt) && nzchar(x = crs_b$wkt)) {
-    return(crs_a$wkt == crs_b$wkt)
+  if (!is.null(x = x$wkt) && !is.null(x = y$wkt) &&
+      nzchar(x = x$wkt) && nzchar(x = y$wkt)) {
+    return(x$wkt == y$wkt)
   }
-  if (!is.null(x = crs_a$proj4string) && !is.null(x = crs_b$proj4string) &&
-      nzchar(x = crs_a$proj4string) && nzchar(x = crs_b$proj4string)) {
-    return(crs_a$proj4string == crs_b$proj4string)
+  if (!is.null(x = x$proj4string) && !is.null(x = y$proj4string) &&
+      nzchar(x = x$proj4string) && nzchar(x = y$proj4string)) {
+    return(x$proj4string == y$proj4string)
   }
-  return(identical(crs_a, crs_b))
+  return(identical(x, y))
 }
 #' 
 #' @title Ensure an sf object uses the target CRS
