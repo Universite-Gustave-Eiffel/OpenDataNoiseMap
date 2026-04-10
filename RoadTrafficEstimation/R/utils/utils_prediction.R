@@ -1653,8 +1653,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
           sf_column_name = attr(geom_for_merge, "sf_column")
         )
 
-        # Ensure CRS
-        if (sf::st_crs(x = tile_chunk_sf) != cfg$TARGET_CRS) {
+        # Ensure CRS is explicit and consistent
+        if (is.na(sf::st_crs(x = tile_chunk_sf))) {
+          sf::st_crs(tile_chunk_sf) <- cfg$TARGET_CRS
+        } else if (sf::st_crs(x = tile_chunk_sf) != cfg$TARGET_CRS) {
           tile_chunk_sf <- sf::st_transform(x   = tile_chunk_sf, 
                                            crs = cfg$TARGET_CRS)
         }
@@ -1751,7 +1753,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
     tile_sf_list <- lapply(tile_files, function(tf) {
       sf_obj <- sf::st_read(dsn   = tf, 
                             quiet = TRUE)
-      if (sf::st_crs(x = sf_obj) != cfg$TARGET_CRS) {
+      if (is.na(sf::st_crs(x = sf_obj))) {
+        sf::st_crs(sf_obj) <- cfg$TARGET_CRS
+      } else if (sf::st_crs(x = sf_obj) != cfg$TARGET_CRS) {
         sf_obj <- sf::st_transform(x   = sf_obj, 
                                    crs = cfg$TARGET_CRS)
       }
