@@ -1533,10 +1533,28 @@ build_france_tiles <- function(tile_size_m = 200000) {
   total_tiles_with_data <- 0L
   tile_times            <- numeric(length = 0)
 
+  force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
+
   for (i in seq_len(to = n_tiles)) {
     tile <- tiles[i, ]
     tile_id_str <- sprintf("%0*d", n_digits, i)
     tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+
+    if (!force_reprocess) {
+      expected_files <- file.path(
+        tile_dir,
+        sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+                mode, names(x = temporal_chunks), tile_id_str)
+      )
+      if (all(file.exists(expected_files))) {
+        pipeline_message(
+          sprintf("Skipping tile %s: all %d chunk files already exist", 
+                  tile_id_str, length(x = expected_files)),
+          level = 2, process = "info")
+        next
+      }
+    }
+
     dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
     
     t0   <- proc.time()["elapsed"]

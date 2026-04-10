@@ -14,6 +14,9 @@ CONFIG_PREDICT <- list(
   # Directories
   PREDICTION_DIR    = PREDICTION_DIR,
   FRANCE_OUTPUT_DIR = file.path(PREDICTION_DIR, mode_suffix),
+
+  # Force reprocessing of all French tiled output files even when existing
+  FORCE_REPROCESS_ALL_TILES = FALSE,
   
   # ============================================================================
   # Regional predictions (single file per extent)
