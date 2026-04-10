@@ -79,8 +79,8 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
 #' @param crs_b Second CRS object or numeric EPSG code to compare (target).
 #' @return Logical scalar. TRUE if the CRS definitions are equivalent.
 sf_crs_matches <- function(x, y) {
-  x <- sf::st_crs(x)
-  y <- sf::st_crs(y)
+  x <- sf::st_crs(x = x)
+  y <- sf::st_crs(x = y)
   if (is.na(x = x) || is.na(x = y)) {
     return(FALSE)
   }
@@ -128,25 +128,50 @@ ensure_target_crs <- function(sf_obj, target_crs) {
 #' @param target_crs Target CRS (numeric EPSG code or crs object).
 #' @return Logical scalar. TRUE if all files exist and match the target CRS.
 tile_chunk_files_valid <- function(tile_files, target_crs) {
-  if (length(x = tile_files) == 0L) {
-    return(FALSE)
-  }
-  if (!all(file.exists(tile_files))) {
-    return(FALSE)
-  }
-  crs_ok <- vapply(X = tile_files, FUN = function(tile_fp) {
-    sf_obj <- tryCatch(
-      sf::st_read(dsn = tile_fp, quiet = TRUE, n_max = 0),
-      error = function(e) NULL)
-    if (is.null(x = sf_obj)) {
-      return(FALSE)
-    }
-    sf_crs_matches(x = sf::st_crs(x = sf_obj), y = target_crs)
-  }, FUN.VALUE = logical(1))
-  all(crs_ok)
+  validate_tile_chunk_files(tile_files = tile_files, target_crs = target_crs)$is_valid
 }
-#'
-# ------------------------------------------------------------------------------
+
+validate_tile_chunk_files <- function(tile_files, target_crs) {
+  issues <- list()
+  if (length(x = tile_files) == 0L) {
+    issues[["no_files"]] <- "No expected tile chunk files were provided."
+    return(list(is_valid = FALSE, issues = issues))
+  }
+
+  missing_files <- tile_files[!file.exists(tile_files)]
+  if (length(x = missing_files) > 0L) {
+    issues[["missing_files"]] <- sprintf(
+      "Missing %d file(s): %s",
+      length(x = missing_files),
+      paste(basename(missing_files), collapse = ", ")
+    )
+    return(list(is_valid = FALSE, issues = issues))
+  }
+
+  for (tile_fp in tile_files) {
+    sf_obj <- tryCatch(
+      sf::st_read(dsn   = tile_fp,
+                  quiet = TRUE,
+                  n_max = 0),
+      error = function(e) e)
+
+    if (inherits(sf_obj, "error")) {
+      issues[[basename(tile_fp)]] <- sprintf("cannot read (%s)", sf_obj$message)
+      next
+    }
+
+    if (!sf_crs_matches(x = sf::st_crs(x = sf_obj), y = target_crs)) {
+      issues[[basename(tile_fp)]] <- sprintf(
+        "CRS mismatch (%s)",
+        as.character(sf::st_crs(x = sf_obj))
+      )
+    }
+  }
+
+  list(is_valid = length(x = issues) == 0L, issues = issues)
+}
+
+#' ------------------------------------------------------------------------------
 # Load and crop France engineered network
 # ------------------------------------------------------------------------------
 #' @title Load and crop France engineered network to bounding box
@@ -1614,17 +1639,24 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 mode, names(x = temporal_chunks), tile_id_str)
       )
       if (all(file.exists(expected_files))) {
-        if (tile_chunk_files_valid(expected_files, cfg$TARGET_CRS)) {
+        validation <- validate_tile_chunk_files(expected_files, cfg$TARGET_CRS)
+        if (validation$is_valid) {
           pipeline_message(
             sprintf("Skipping tile %s: all %d chunk files already exist", 
                     tile_id_str, length(x = expected_files)),
             level = 2, process = "info")
           next
         }
+        invalid_reasons <- paste(
+          sprintf("- %s: %s",
+                  names(x = validation$issues),
+                  unlist(validation$issues)),
+          collapse = "\n")
         pipeline_message(
-          sprintf("Reprocessing tile %s: existing chunk files present but not valid", 
-                  tile_id_str),
-          level = 2, process = "info")
+          sprintf("Reprocessing tile %s: existing chunk files present but not valid\n%s",
+                  tile_id_str, invalid_reasons),
+          process = "warning")
+        file.remove(expected_files)
       }
     }
 
