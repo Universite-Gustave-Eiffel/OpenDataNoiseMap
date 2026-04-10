@@ -72,6 +72,55 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
                      process = "stop")
   )
 }
+#' 
+#' @title Compare sf CRS objects safely
+#' @description Compare two sf CRS objects by EPSG or WKT when available.
+#' @param crs_a First CRS object or numeric EPSG code.
+#' @param crs_b Second CRS object or numeric EPSG code.
+#' @return Logical scalar. TRUE if the CRS definitions are equivalent.
+sf_crs_matches <- function(crs_a, crs_b) {
+  crs_a <- sf::st_crs(crs_a)
+  crs_b <- sf::st_crs(crs_b)
+  if (is.na(crs_a) || is.na(crs_b)) {
+    return(FALSE)
+  }
+  if (!is.null(crs_a$epsg) && !is.null(crs_b$epsg) &&
+      !is.na(crs_a$epsg) && !is.na(crs_b$epsg)) {
+    return(crs_a$epsg == crs_b$epsg)
+  }
+  if (!is.null(crs_a$wkt) && !is.null(crs_b$wkt) &&
+      nzchar(crs_a$wkt) && nzchar(crs_b$wkt)) {
+    return(crs_a$wkt == crs_b$wkt)
+  }
+  if (!is.null(crs_a$proj4string) && !is.null(crs_b$proj4string) &&
+      nzchar(crs_a$proj4string) && nzchar(crs_b$proj4string)) {
+    return(crs_a$proj4string == crs_b$proj4string)
+  }
+  identical(crs_a, crs_b)
+}
+
+#' @title Ensure an sf object uses the target CRS
+#' @description Assigns the target CRS if missing, or transforms the object if
+#'              the current CRS is different.
+#' @param sf_obj An sf object.
+#' @param target_crs Target CRS (numeric EPSG code or crs object).
+#' @return sf object with the target CRS.
+ensure_target_crs <- function(sf_obj, target_crs) {
+  if (!inherits(sf_obj, "sf")) {
+    return(sf_obj)
+  }
+  target_crs <- sf::st_crs(target_crs)
+  current_crs <- sf::st_crs(sf_obj)
+  if (is.na(current_crs)) {
+    sf::st_crs(sf_obj) <- target_crs
+    return(sf_obj)
+  }
+  if (!sf_crs_matches(current_crs, target_crs)) {
+    sf_obj <- sf::st_transform(x = sf_obj, crs = target_crs)
+  }
+  sf_obj
+}
+
 #'
 # ------------------------------------------------------------------------------
 # Load and crop France engineered network
@@ -145,11 +194,8 @@ load_network_for_prediction <- function(bbox, cfg) {
   }
   
   # Ensure correct CRS
-  if (is.na(sf::st_crs(x = osm_network)) || 
-      sf::st_crs(x = osm_network) != target_crs) {
-    osm_network <- osm_network %>% 
-      st_transform(crs = target_crs)
-  }
+  osm_network <- ensure_target_crs(sf_obj = osm_network, 
+                                  target_crs = target_crs)
 
   if (nrow(x = osm_network) == 0) {
     pipeline_message("No roads found for prediction after cropping. Check bbox/CRS.", 
@@ -173,6 +219,9 @@ load_network_for_prediction <- function(bbox, cfg) {
 #' @param config CONFIG list with file paths
 #' @return sf data.frame with filtered network by point buffers 
 load_network_around_points <- function(points, buffer_radius, config) {
+  target_crs     <- config$TARGET_CRS
+  osm_roads_path <- config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+
   pipeline_message(sprintf("Loading network within %sm of %s points", 
                            buffer_radius, nrow(x = points)), 
                    level = 1, progress = "start", process = "load")
@@ -184,7 +233,7 @@ load_network_around_points <- function(points, buffer_radius, config) {
     warn_gb        = 4)
   
   # Ensure points CRS
-  if (sf::st_crs(x = points) != target_crs) {
+  if (!sf_crs_matches(sf::st_crs(x = points), target_crs)) {
     points <- points %>% 
       st_transform(crs = target_crs)
   }
@@ -210,11 +259,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
     quiet      = TRUE)
   
   # Ensure correct CRS
-  if (is.na(sf::st_crs(x = osm_network)) || 
-      sf::st_crs(x = osm_network) != target_crs) {
-    osm_network <- osm_network %>% 
-      st_transform(crs = target_crs)
-  }
+  osm_network <- ensure_target_crs(sf_obj = osm_network, 
+                                  target_crs = target_crs)
   
   # Create buffers and filter precisely
   buffers         <- sf::st_buffer(x = points, dist = buffer_radius)
@@ -1259,11 +1305,8 @@ predict_traffic <- function(region_name,
     by = "osm_id", all.x = TRUE)
 
   predictions_sf <- sf::st_as_sf(x = predictions_sf)
-
-  if (sf::st_crs(x = predictions_sf) != target_crs) {
-    predictions_sf <- sf::st_transform(x = predictions_sf, 
-                                       crs = target_crs)
-  }
+  predictions_sf <- ensure_target_crs(sf_obj = predictions_sf, 
+                                      target_crs = target_crs)
 
   predictions_sf <- add_period_datetime_columns(predictions_sf, cfg)
 
@@ -1577,11 +1620,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) next
 
     # Ensure correct CRS
-    if (is.na(sf::st_crs(x = tile_sf)) || 
-        sf::st_crs(x = tile_sf) != cfg$TARGET_CRS) {
-      tile_sf <- sf::st_transform(x   = tile_sf, 
-                                  crs = cfg$TARGET_CRS)
-    }
+    tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
+                                  target_crs = cfg$TARGET_CRS)
 
     n_tile                <- nrow(x = tile_sf)
     total_roads           <- total_roads + n_tile
@@ -1672,12 +1712,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
         )
 
         # Ensure CRS is explicit and consistent
-        if (is.na(sf::st_crs(x = tile_chunk_sf))) {
-          sf::st_crs(tile_chunk_sf) <- cfg$TARGET_CRS
-        } else if (sf::st_crs(x = tile_chunk_sf) != cfg$TARGET_CRS) {
-          tile_chunk_sf <- sf::st_transform(x   = tile_chunk_sf, 
-                                           crs = cfg$TARGET_CRS)
-        }
+        tile_chunk_sf <- ensure_target_crs(sf_obj     = tile_chunk_sf, 
+                                           target_crs = cfg$TARGET_CRS)
 
         # Write tile file
         tile_file <- file.path(tile_dir, 
@@ -1771,13 +1807,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     tile_sf_list <- lapply(tile_files, function(tf) {
       sf_obj <- sf::st_read(dsn   = tf, 
                             quiet = TRUE)
-      if (is.na(sf::st_crs(x = sf_obj))) {
-        sf::st_crs(sf_obj) <- cfg$TARGET_CRS
-      } else if (sf::st_crs(x = sf_obj) != cfg$TARGET_CRS) {
-        sf_obj <- sf::st_transform(x   = sf_obj, 
-                                   crs = cfg$TARGET_CRS)
-      }
-      sf_obj
+      ensure_target_crs(sf_obj     = sf_obj, 
+                        target_crs = cfg$TARGET_CRS)
     })
 
     # Combine all tiles
