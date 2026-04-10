@@ -75,52 +75,76 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
 #' 
 #' @title Compare sf CRS objects safely
 #' @description Compare two sf CRS objects by EPSG or WKT when available.
-#' @param crs_a First CRS object or numeric EPSG code.
-#' @param crs_b Second CRS object or numeric EPSG code.
+#' @param crs_a First CRS object or numeric EPSG code to compare (reference).
+#' @param crs_b Second CRS object or numeric EPSG code to compare (target).
 #' @return Logical scalar. TRUE if the CRS definitions are equivalent.
 sf_crs_matches <- function(crs_a, crs_b) {
   crs_a <- sf::st_crs(crs_a)
   crs_b <- sf::st_crs(crs_b)
-  if (is.na(crs_a) || is.na(crs_b)) {
+  if (is.na(x = crs_a) || is.na(x = crs_b)) {
     return(FALSE)
   }
-  if (!is.null(crs_a$epsg) && !is.null(crs_b$epsg) &&
-      !is.na(crs_a$epsg) && !is.na(crs_b$epsg)) {
+  if (!is.null(x = crs_a$epsg) && !is.null(x = crs_b$epsg) &&
+      !is.na(x = crs_a$epsg) && !is.na(x = crs_b$epsg)) {
     return(crs_a$epsg == crs_b$epsg)
   }
-  if (!is.null(crs_a$wkt) && !is.null(crs_b$wkt) &&
-      nzchar(crs_a$wkt) && nzchar(crs_b$wkt)) {
+  if (!is.null(x = crs_a$wkt) && !is.null(x = crs_b$wkt) &&
+      nzchar(x = crs_a$wkt) && nzchar(x = crs_b$wkt)) {
     return(crs_a$wkt == crs_b$wkt)
   }
-  if (!is.null(crs_a$proj4string) && !is.null(crs_b$proj4string) &&
-      nzchar(crs_a$proj4string) && nzchar(crs_b$proj4string)) {
+  if (!is.null(x = crs_a$proj4string) && !is.null(x = crs_b$proj4string) &&
+      nzchar(x = crs_a$proj4string) && nzchar(x = crs_b$proj4string)) {
     return(crs_a$proj4string == crs_b$proj4string)
   }
-  identical(crs_a, crs_b)
+  return(identical(crs_a, crs_b))
 }
-
+#' 
 #' @title Ensure an sf object uses the target CRS
 #' @description Assigns the target CRS if missing, or transforms the object if
 #'              the current CRS is different.
-#' @param sf_obj An sf object.
+#' @param sf_obj An sf object to transform if necessary.
 #' @param target_crs Target CRS (numeric EPSG code or crs object).
 #' @return sf object with the target CRS.
 ensure_target_crs <- function(sf_obj, target_crs) {
-  if (!inherits(sf_obj, "sf")) {
+  if (!inherits(x = sf_obj, what = "sf")) {
     return(sf_obj)
   }
-  target_crs <- sf::st_crs(target_crs)
-  current_crs <- sf::st_crs(sf_obj)
-  if (is.na(current_crs)) {
-    sf::st_crs(sf_obj) <- target_crs
+  target_crs <- sf::st_crs(x = target_crs)
+  current_crs <- sf::st_crs(x = sf_obj)
+  if (is.na(x = current_crs)) {
+    sf::st_crs(x = sf_obj) <- target_crs
     return(sf_obj)
   }
-  if (!sf_crs_matches(current_crs, target_crs)) {
-    sf_obj <- sf::st_transform(x = sf_obj, crs = target_crs)
+  if (!sf_crs_matches(x = current_crs, y = target_crs)) {
+    sf_obj <- sf::st_transform(x   = sf_obj, 
+                               crs = target_crs)
   }
-  sf_obj
+  return(sf_obj)
 }
 
+#' @title Validate tile chunk GeoPackage files
+#' @description Check that all expected tile chunk files exist and use the target CRS.
+#' @param tile_files Character vector of GeoPackage file paths.
+#' @param target_crs Target CRS (numeric EPSG code or crs object).
+#' @return Logical scalar. TRUE if all files exist and match the target CRS.
+tile_chunk_files_valid <- function(tile_files, target_crs) {
+  if (length(x = tile_files) == 0L) {
+    return(FALSE)
+  }
+  if (!all(file.exists(tile_files))) {
+    return(FALSE)
+  }
+  crs_ok <- vapply(X = tile_files, FUN = function(tile_fp) {
+    sf_obj <- tryCatch(
+      sf::st_read(dsn = tile_fp, quiet = TRUE, n_max = 0),
+      error = function(e) NULL)
+    if (is.null(x = sf_obj)) {
+      return(FALSE)
+    }
+    sf_crs_matches(x = sf::st_crs(x = sf_obj), y = target_crs)
+  }, FUN.VALUE = logical(1))
+  all(crs_ok)
+}
 #'
 # ------------------------------------------------------------------------------
 # Load and crop France engineered network
@@ -1590,11 +1614,17 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 mode, names(x = temporal_chunks), tile_id_str)
       )
       if (all(file.exists(expected_files))) {
+        if (tile_chunk_files_valid(expected_files, cfg$TARGET_CRS)) {
+          pipeline_message(
+            sprintf("Skipping tile %s: all %d chunk files already exist", 
+                    tile_id_str, length(x = expected_files)),
+            level = 2, process = "info")
+          next
+        }
         pipeline_message(
-          sprintf("Skipping tile %s: all %d chunk files already exist", 
-                  tile_id_str, length(x = expected_files)),
+          sprintf("Reprocessing tile %s: existing chunk files present but not valid", 
+                  tile_id_str),
           level = 2, process = "info")
-        next
       }
     }
 
