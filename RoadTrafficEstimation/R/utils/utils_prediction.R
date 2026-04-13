@@ -1679,7 +1679,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                      quiet      = TRUE),
                   error = function(e) NULL)
 
-    if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) next
+    if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+      pipeline_message(
+        sprintf("Tile %s/%s: empty tile, no roads found", i, n_tiles),
+        level = 2, process = "info")
+      next
+    }
 
     # Ensure correct CRS
     tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
@@ -1869,9 +1874,30 @@ build_france_tiles <- function(tile_size_m = 200000) {
     tile_sf_list <- lapply(tile_files, function(tf) {
       sf_obj <- sf::st_read(dsn   = tf, 
                             quiet = TRUE)
-      ensure_target_crs(sf_obj     = sf_obj, 
-                        target_crs = cfg$TARGET_CRS)
+      sf_obj <- ensure_target_crs(sf_obj     = sf_obj, 
+                                  target_crs = cfg$TARGET_CRS)
+      if (is.na(x = sf::st_crs(sf_obj))) {
+        pipeline_message(
+          sprintf("Tile chunk file %s has missing CRS after read", basename(tf)),
+          process = "warning")
+      }
+      sf_obj
     })
+
+    # Ensure all tiles share the same target CRS before bind
+    tile_crs <- vapply(tile_sf_list, function(x) {
+      as.character(sf::st_crs(x))
+    }, character(1))
+    if (length(x = unique(x = tile_crs)) > 1) {
+      pipeline_message(
+        sprintf("CRS mismatch detected across tile chunk files: %s",
+                paste(unique(tile_crs), collapse = " | ")),
+        process = "warning")
+      tile_sf_list <- lapply(tile_sf_list, function(sf_obj) {
+        ensure_target_crs(sf_obj     = sf_obj,
+                          target_crs = cfg$TARGET_CRS)
+      })
+    }
 
     # Combine all tiles
     combined_sf <- do.call(
@@ -1879,6 +1905,14 @@ build_france_tiles <- function(tile_size_m = 200000) {
       args = c(tile_sf_list, 
                list(make.row.names = FALSE))
     )
+
+    if (any(duplicated(combined_sf$osm_id))) {
+      pipeline_message(
+        sprintf("Removing %d duplicated osm_id rows from merged chunk '%s'",
+                sum(duplicated(combined_sf$osm_id)), chunk_name),
+        process = "warning")
+      combined_sf <- combined_sf[!duplicated(combined_sf$osm_id), ]
+    }
 
     # Write final chunk file
     pipeline_message(
