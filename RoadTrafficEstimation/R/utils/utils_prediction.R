@@ -1913,7 +1913,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         finished <- parallel::mccollect(jobs, wait = FALSE)
         if (length(x = finished) == 0) {
           if (as.numeric(difftime(Sys.time(), last_heartbeat, 
-                                  units = "secs")) >= 30) {
+                                  units = "secs")) >= 180) {
             cat(sprintf("[DEBUG] Waiting for %d tile jobs to finish...\n", 
                         length(x = jobs)),
                 file = stderr())
