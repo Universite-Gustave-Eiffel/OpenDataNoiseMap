@@ -1765,15 +1765,23 @@ build_france_tiles <- function(tile_size_m = 200000) {
         error = function(e) NULL)
 
       if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+        elapsed <- proc.time()["elapsed"] - t0
+        pipeline_message(
+          sprintf("Tile %s has no roads; skipping", tile_id_str),
+          level = 2, process = "info")
         return(list(tile_roads = 0L,
                     with_data = FALSE,
-                    elapsed = proc.time()["elapsed"] - t0))
+                    elapsed = elapsed,
+                    tile_id_str = tile_id_str))
       }
 
       tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
                                    target_crs = cfg$TARGET_CRS)
 
       n_tile <- nrow(x = tile_sf)
+      pipeline_message(
+        sprintf("Processing tile %s: %s roads", tile_id_str, fmt(n_tile)),
+        level = 2, process = "info")
       geom_for_merge <- tile_sf[, c("osm_id", "geom")]
       tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
       rm(tile_sf)
@@ -1846,16 +1854,42 @@ build_france_tiles <- function(tile_size_m = 200000) {
       rm(predictions_wide, predictions_long, geom_for_merge)
       gc(verbose = FALSE)
 
+      elapsed <- proc.time()["elapsed"] - t0
+      pipeline_message(
+        sprintf("Tile %s completed: %s roads in %.1f s", 
+                tile_id_str, fmt(n_tile), elapsed),
+        level = 2, process = "info")
+
       list(tile_roads = n_tile,
            with_data = TRUE,
-           elapsed = proc.time()["elapsed"] - t0)
+           elapsed = elapsed,
+           tile_id_str = tile_id_str)
     }
 
     if (cores > 1 && length(x = tile_jobs) > 1) {
-      tile_results <- parallel::mclapply(tile_jobs,
-                                         process_tile,
-                                         mc.cores = cores,
-                                         mc.preschedule = FALSE)
+      jobs <- lapply(tile_jobs, function(job) {
+        parallel::mcparallel(expr = process_tile(job), mc.set.seed = FALSE)
+      })
+      names(jobs) <- vapply(tile_jobs, `[[`, character(1), "tile_id_str")
+
+      tile_results <- list()
+      while (length(x = jobs) > 0) {
+        finished <- parallel::mccollect(jobs, wait = FALSE)
+        if (length(x = finished) == 0) {
+          Sys.sleep(1)
+          next
+        }
+
+        for (tile_id in names(x = finished)) {
+          res <- finished[[tile_id]]
+          tile_results[[length(x = tile_results) + 1L]] <- res
+          pipeline_message(
+            sprintf("Tile %s finished: %s roads, %.1f s", 
+                    res$tile_id_str, fmt(res$tile_roads), res$elapsed),
+            level = 2, process = "info")
+          jobs[[tile_id]] <- NULL
+        }
+      }
     } else {
       tile_results <- lapply(tile_jobs, process_tile)
     }
