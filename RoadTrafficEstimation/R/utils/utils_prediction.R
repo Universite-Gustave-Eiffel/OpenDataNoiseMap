@@ -1734,6 +1734,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
     }
     cores <- min(length(x = tile_jobs), cores_requested)
 
+    cat(sprintf("[DEBUG] Processing %d tiles with %d core(s)\n",
+                length(x = tile_jobs), cores),
+        file = stderr())
+    try(flush.connection(stderr()), silent = TRUE)
+
     pipeline_message(
       sprintf("Processing %d tiles with %d core(s)",
               length(x = tile_jobs), cores),
@@ -1867,12 +1872,19 @@ build_france_tiles <- function(tile_size_m = 200000) {
     }
 
     if (cores > 1 && length(x = tile_jobs) > 1) {
+      cat(sprintf("[DEBUG] Submitting %d tile jobs to %d cores\n", 
+                  length(x = tile_jobs), cores),
+          file = stderr())
+      try(flush.connection(stderr()), silent = TRUE)
       pipeline_message(
         sprintf("Submitting %d tile jobs to %d cores", 
                 length(x = tile_jobs), cores),
         process = "info")
 
       jobs <- lapply(tile_jobs, function(job) {
+        cat(sprintf("[DEBUG] Submitting tile %s\n", job$tile_id_str),
+            file = stderr())
+        try(flush.connection(stderr()), silent = TRUE)
         pipeline_message(
           sprintf("Submitting tile %s", job$tile_id_str),
           level = 2, process = "info")
@@ -1889,6 +1901,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
         if (length(x = finished) == 0) {
           if (as.numeric(difftime(Sys.time(), last_heartbeat, 
                                   units = "secs")) >= 30) {
+            cat(sprintf("[DEBUG] Waiting for %d tile jobs to finish...\n", 
+                        length(x = jobs)),
+                file = stderr())
+            try(flush.connection(stderr()), silent = TRUE)
             pipeline_message(
               sprintf("Waiting for %d tile jobs to finish...", 
                       length(x = jobs)),
