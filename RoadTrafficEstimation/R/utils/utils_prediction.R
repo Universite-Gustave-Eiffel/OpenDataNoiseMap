@@ -1583,7 +1583,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                        chunks = c("DEN")) {
   
   # Ensure mode is a valid character string (not NULL or empty)
-  if (is.null(x = mode) || length(x = mode) == 0L || !is.character(x = mode)) {
+  if (is.null(x = mode) || length(x = mode) == 0L || 
+      !is.character(x = mode)) {
     mode <- "france"
   }
   if (!nzchar(x = mode)) {
@@ -1929,12 +1930,54 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         for (tile_id in names(x = finished)) {
           res <- finished[[tile_id]]
+          if (!is.list(x = res)) {
+            res <- list(tile_roads  = NA_integer_,
+                        with_data   = TRUE,
+                        elapsed     = NA_real_,
+                        tile_id_str = as.character(x = tile_id))
+          } else {
+            if (!"tile_id_str" %in% names(x = res) || 
+                length(x = res$tile_id_str) != 1) {
+              res$tile_id_str <- as.character(tile_id)
+            }
+            if (!"tile_roads" %in% names(x = res) || 
+                length(x = res$tile_roads) != 1) {
+              res$tile_roads <- NA_integer_
+            }
+            if (!"with_data" %in% names(x = res) || 
+                length(x = res$with_data) != 1) {
+              res$with_data <- TRUE
+            }
+            if (!"elapsed" %in% names(x = res) || 
+                length(x = res$elapsed) != 1) {
+              res$elapsed <- NA_real_
+            }
+          }
+          tile_id_str <- as.character(x = res$tile_id_str)
+          tile_roads <- ifelse(test = is.na(x = res$tile_roads),
+                               yes  = NA_integer_,
+                               no   = as.integer(x = res$tile_roads))
+          tile_elapsed <- ifelse(test = is.na(x = res$elapsed),
+                                 yes  = NA_real_,
+                                 no   = as.numeric(x = res$elapsed))
           tile_results[[length(x = tile_results) + 1L]] <- res
-          append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%.1f s)",
-                                     res$tile_id_str, fmt(res$tile_roads), res$elapsed))
+          append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%s s)",
+                                     tile_id_str,
+                                     ifelse(test = is.na(x = tile_roads),
+                                            yes  = "unknown",
+                                            no   = fmt(tile_roads)),
+                                     ifelse(test = is.na(x = tile_elapsed),
+                                            yes  = "unknown",
+                                            no   = sprintf("%.1f", tile_elapsed))))
           pipeline_message(
-            sprintf("Tile %s finished: %s roads, %.1f s", 
-                    res$tile_id_str, fmt(res$tile_roads), res$elapsed),
+            sprintf("Tile %s finished: %s roads, %s s", 
+                    tile_id_str,
+                    ifelse(test = is.na(x = tile_roads),
+                           yes  = "unknown",
+                           no   = fmt(tile_roads)),
+                    ifelse(test = is.na(x = tile_elapsed),
+                           yes  = "unknown",
+                           no   = sprintf("%.1f", tile_elapsed))),
             level = 2, process = "info")
           jobs[[tile_id]] <- NULL
         }
