@@ -17,6 +17,9 @@ CONFIG_PREDICT <- list(
 
   # Force reprocessing of all French tiled output files even when existing
   FORCE_REPROCESS_ALL_TILES = FALSE,
+  # Number of cores to use for France tiled prediction.
+  # If NULL, the pipeline will use all physical cores minus one.
+  PREDICTION_TILE_CORES = NULL,
   
   # ============================================================================
   # Regional predictions (single file per extent)

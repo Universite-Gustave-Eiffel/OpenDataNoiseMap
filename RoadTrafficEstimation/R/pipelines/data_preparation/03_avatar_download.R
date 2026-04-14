@@ -130,7 +130,7 @@ count_points <- count_points %>%
 pipeline_message(describe_df(count_points), process = "info")
 
 # Reduce to test region if running in TEST mode
-IS_TEST_MODE <- exists("TEST_REGION") && !is.null(TEST_REGION)
+IS_TEST_MODE <- exists(x = "TEST_REGION") && !is.null(x = TEST_REGION)
 if (IS_TEST_MODE) {
   n_before <- nrow(count_points)
   count_points <- crop_to_test_region(count_points)

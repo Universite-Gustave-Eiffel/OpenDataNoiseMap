@@ -36,7 +36,6 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
                    yes  = MODE, 
                    no   = "all")
   }
-
   # Generate file paths
   switch(extent,
     sensors = list(
@@ -73,6 +72,9 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
   )
 }
 #' 
+# -------------------------------------------------------------------------------
+# CRS objects utilities for tile validation and alignment
+# -------------------------------------------------------------------------------
 #' @title Compare sf CRS objects safely
 #' @description Compare two sf CRS objects by EPSG or WKT when available.
 #' @param crs_a First CRS object or numeric EPSG code to compare (reference).
@@ -99,6 +101,34 @@ sf_crs_matches <- function(x, y) {
   return(identical(x, y))
 }
 #' 
+# -------------------------------------------------------------------------------
+# CRS objects conversion
+# -------------------------------------------------------------------------------
+#' @title Convert sf CRS object to a stable string identifier
+#' @description Returns an EPSG-based string when available, or falls back to
+#'              WKT/proj4. This is used to compare CRS across tile files.
+#' @param crs CRS object or object accepted by sf::st_crs.
+#' @return Character scalar.
+sf_crs_to_string <- function(crs) {
+  crs <- sf::st_crs(x = crs)
+  if (is.na(x = crs)) {
+    return(NA_character_)
+  }
+  if (!is.null(x = crs$epsg) && !is.na(x = crs$epsg)) {
+    return(sprintf("EPSG:%s", crs$epsg))
+  }
+  if (!is.null(x = crs$wkt) && nzchar(x = crs$wkt)) {
+    return(crs$wkt)
+  }
+  if (!is.null(x = crs$proj4string) && nzchar(x = crs$proj4string)) {
+    return(crs$proj4string)
+  }
+  return(as.character(crs)[1])
+}
+#' 
+# -------------------------------------------------------------------------------
+# Check sf objects for expected CRS and report issues
+# -------------------------------------------------------------------------------
 #' @title Ensure an sf object uses the target CRS
 #' @description Assigns the target CRS if missing, or transforms the object if
 #'              the current CRS is different.
@@ -121,56 +151,74 @@ ensure_target_crs <- function(sf_obj, target_crs) {
   }
   return(sf_obj)
 }
-
+#' 
+# -------------------------------------------------------------------------------
+# Tile chunk GeoPackage files validation
+# -------------------------------------------------------------------------------
 #' @title Validate tile chunk GeoPackage files
 #' @description Check that all expected tile chunk files exist and use the target CRS.
 #' @param tile_files Character vector of GeoPackage file paths.
 #' @param target_crs Target CRS (numeric EPSG code or crs object).
 #' @return Logical scalar. TRUE if all files exist and match the target CRS.
 tile_chunk_files_valid <- function(tile_files, target_crs) {
-  validate_tile_chunk_files(tile_files = tile_files, target_crs = target_crs)$is_valid
+  validate_tile_chunk_files(tile_files = tile_files, 
+                            target_crs = target_crs)$is_valid
 }
-
+#' 
+# -------------------------------------------------------------------------------
+# Tile chunk GeoPackage files validation with detailed issue reporting
+# -------------------------------------------------------------------------------
+#' @title Validate tile chunk GeoPackage files with detailed issue reporting
+#' @description Check that all expected tile chunk files exist and use the 
+#'              target CRS. Returns a list with overall validity and detailed issues
+#'              issues for any problems found.
+#' @param tile_files Character vector of GeoPackage file paths.
+#' @param target_crs Target CRS (numeric EPSG code or crs object).
+#' @return List with is_valid (logical scalar) and issues (named list).
+#' @export
 validate_tile_chunk_files <- function(tile_files, target_crs) {
   issues <- list()
   if (length(x = tile_files) == 0L) {
     issues[["no_files"]] <- "No expected tile chunk files were provided."
-    return(list(is_valid = FALSE, issues = issues))
+    return(list(is_valid = FALSE, 
+                issues   = issues))
   }
-
+  # Check for missing files first (avoid reading files if some are missing)
   missing_files <- tile_files[!file.exists(tile_files)]
   if (length(x = missing_files) > 0L) {
     issues[["missing_files"]] <- sprintf(
       "Missing %d file(s): %s",
       length(x = missing_files),
-      paste(basename(missing_files), collapse = ", ")
-    )
+      paste(basename(path = missing_files), collapse = ", "))
     return(list(is_valid = FALSE, issues = issues))
   }
-
+  # Check CRS of each file
   for (tile_fp in tile_files) {
     sf_obj <- tryCatch(
       sf::st_read(dsn   = tile_fp,
                   quiet = TRUE,
                   n_max = 0),
       error = function(e) e)
-
-    if (inherits(sf_obj, "error")) {
-      issues[[basename(tile_fp)]] <- sprintf("cannot read (%s)", sf_obj$message)
+    # If st_read fails (e.g., file is corrupted), report as an issue
+    if (inherits(x = sf_obj, "error")) {
+      issues[[basename(tile_fp)]] <- sprintf(
+        "cannot read (%s)", 
+        sf_obj$message)
       next
     }
-
-    if (!sf_crs_matches(x = sf::st_crs(x = sf_obj), y = target_crs)) {
+    # Otherwise, check CRS
+    if (!sf_crs_matches(x = sf::st_crs(x = sf_obj), 
+                        y = target_crs)) {
       issues[[basename(tile_fp)]] <- sprintf(
         "CRS mismatch (%s)",
         as.character(sf::st_crs(x = sf_obj))
       )
     }
   }
-
-  list(is_valid = length(x = issues) == 0L, issues = issues)
+  return(list(is_valid = length(x = issues) == 0L, 
+              issues = issues))
 }
-
+#' 
 #' ------------------------------------------------------------------------------
 # Load and crop France engineered network
 # ------------------------------------------------------------------------------
@@ -288,7 +336,7 @@ load_network_around_points <- function(points, buffer_radius, config) {
   }
   
   # Compute bounding box of all points + buffer for efficient GPKG read
-  pts_bbox <- sf::st_bbox(points)
+  pts_bbox <- sf::st_bbox(obj = points)
   wkt_bbox <- sprintf("POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
                       pts_bbox["xmin"] - buffer_radius,
                       pts_bbox["ymin"] - buffer_radius,
@@ -308,13 +356,15 @@ load_network_around_points <- function(points, buffer_radius, config) {
     quiet      = TRUE)
   
   # Ensure correct CRS
-  osm_network <- ensure_target_crs(sf_obj = osm_network, 
-                                  target_crs = target_crs)
+  osm_network <- ensure_target_crs(sf_obj     = osm_network, 
+                                   target_crs = target_crs)
   
   # Create buffers and filter precisely
-  buffers         <- sf::st_buffer(x = points, dist = buffer_radius)
+  buffers         <- sf::st_buffer(x    = points, 
+                                   dist = buffer_radius)
   combined_buffer <- sf::st_union(x = buffers)
-  osm_network     <- sf::st_filter(x = osm_network, y = combined_buffer)
+  osm_network     <- sf::st_filter(x = osm_network, 
+                                   y = combined_buffer)
   
   pipeline_message(sprintf("Network filtered: %s roads within buffers", 
                            fmt(nrow(x = osm_network))), 
@@ -337,7 +387,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
     vars_in_formula <- intersect(x = unique(x = all.vars(formula_obj)), 
                                  y = names(x = data_df))
     if (nrow(x = data_df) == 0L) {
-      return(Matrix::sparse.model.matrix(object = formula_obj, data = data_df))
+      return(Matrix::sparse.model.matrix(object = formula_obj, 
+                                         data   = data_df))
     }
     mm_data <- data_df
     for (v in vars_in_formula) {
@@ -357,7 +408,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
         }
       }
     }
-    Matrix::sparse.model.matrix(object = formula_obj, data = mm_data)
+    return(Matrix::sparse.model.matrix(object = formula_obj, 
+                                       data = mm_data))
   }
 #' 
 # ------------------------------------------------------------------------------
@@ -1621,217 +1673,204 @@ build_france_tiles <- function(tile_size_m = 200000) {
   n_digits <- floor(log10(n_tiles)) + 1L
 
   # --- Process tiles ---
-  total_roads           <- 0L
-  total_tiles_with_data <- 0L
-  tile_times            <- numeric(length = 0)
-
   force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
+  tile_jobs <- list()
 
   for (i in seq_len(to = n_tiles)) {
-    tile <- tiles[i, ]
-    tile_id_str <- sprintf("%0*d", n_digits, i)
-    tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+    tile           <- tiles[i, ]
+    tile_id_str    <- sprintf("%0*d", n_digits, i)
+    tile_dir       <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+    expected_files <- file.path(
+      tile_dir,
+      sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+              mode, names(x = temporal_chunks), tile_id_str)
+    )
 
-    if (!force_reprocess) {
-      expected_files <- file.path(
-        tile_dir,
-        sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
-                mode, names(x = temporal_chunks), tile_id_str)
-      )
-      if (all(file.exists(expected_files))) {
-        validation <- validate_tile_chunk_files(expected_files, cfg$TARGET_CRS)
-        if (validation$is_valid) {
-          pipeline_message(
-            sprintf("Skipping tile %s: all %d chunk files already exist", 
-                    tile_id_str, length(x = expected_files)),
-            level = 2, process = "info")
-          next
-        }
-        invalid_reasons <- paste(
-          sprintf("- %s: %s",
-                  names(x = validation$issues),
-                  unlist(validation$issues)),
-          collapse = "\n")
+    if (!force_reprocess && all(file.exists(expected_files))) {
+      validation <- validate_tile_chunk_files(expected_files, cfg$TARGET_CRS)
+      if (validation$is_valid) {
         pipeline_message(
-          sprintf("Reprocessing tile %s: existing chunk files present but not valid\n%s",
-                  tile_id_str, invalid_reasons),
-          process = "warning")
-        file.remove(expected_files)
+          sprintf("Skipping tile %s: all %d chunk files already exist", 
+                  tile_id_str, length(x = expected_files)),
+          level = 2, process = "info")
+        next
       }
-    }
-
-    dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
-    
-    t0   <- proc.time()["elapsed"]
-
-    # Load tile from GPKG with spatial filter
-    wkt_bbox <- sprintf(
-      "POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
-      tile$xmin, tile$ymin,
-      tile$xmax, tile$ymin,
-      tile$xmax, tile$ymax,
-      tile$xmin, tile$ymax,
-      tile$xmin, tile$ymin)
-
-    tile_sf <- tryCatch(
-                  expr = sf::st_read(dsn        = osm_roads_path,
-                                     wkt_filter = wkt_bbox,
-                                     quiet      = TRUE),
-                  error = function(e) NULL)
-
-    if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+      invalid_reasons <- paste(
+        sprintf("- %s: %s",
+                names(x = validation$issues),
+                unlist(validation$issues)),
+        collapse = "\n")
       pipeline_message(
-        sprintf("Tile %s/%s: empty tile, no roads found", i, n_tiles),
-        level = 2, process = "info")
-      next
+        sprintf("Reprocessing tile %s: existing chunk files present but not valid\n%s",
+                tile_id_str, invalid_reasons),
+        process = "warning")
+      file.remove(expected_files)
     }
 
-    # Ensure correct CRS
-    tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
-                                  target_crs = cfg$TARGET_CRS)
+    tile_jobs[[length(tile_jobs) + 1L]] <- list(
+      tile_index   = i,
+      tile         = tile,
+      tile_id_str  = tile_id_str,
+      tile_dir     = tile_dir
+    )
+  }
 
-    n_tile                <- nrow(x = tile_sf)
-    total_roads           <- total_roads + n_tile
-    total_tiles_with_data <- total_tiles_with_data + 1L
-
-    # Keep geometry for merging with traffic data (only once per tile)
-    geom_for_merge <- tile_sf[, c("osm_id", "geom")]
-    tile_dt        <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
-    rm(tile_sf)
-
-    predictions_wide <- apply_xgboost_predictions(
-      network_data          = tile_dt,
-      models_list           = models_list,
-      feature_info          = feature_info,
-      default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
-
-    rm(tile_dt)
-
-    # OPTIMIZATION: Convert to long format ONCE per tile, not per chunk
-    check_memory_available(
-      operation_name = sprintf("Pivot tile %s (%s roads)", 
-                               tile$tile_id, fmt(n_tile)),
-      min_gb         = 1, 
-      warn_gb        = 2)
-
-    predictions_long <- predictions_wide %>%
-      tidyr::pivot_longer(
-        cols          = matches("^(flow|truck_pct|speed)_"),
-        names_to      = c(".value", "period"),
-        names_pattern = "^(flow|truck_pct|speed)_(.+)$"
-      ) %>%
-      mutate(
-        HGV    = flow * (truck_pct / 100),
-        LV     = flow - HGV,
-        TV     = flow,
-        period = factor(x = period, levels = all_periods)
-      ) %>%
-      select(osm_id, highway, period, TV, HGV, LV, speed,
-             osm_speed, osm_speed_imputed, truck_pct)
-
-    # Add period datetime columns once per tile
-    predictions_long <- add_period_datetime_columns(predictions_long, cfg)
-
-    # validate predictions for this tile
-    validation <- validate_predictions(predictions_long)
-    if (!validation$is_valid) {
-      pipeline_message(sprintf("Validation warnings in tile %d: %s issues", 
-                               tile$tile_id, length(x = validation$issues)),
-                       process = "warning")
+  if (length(x = tile_jobs) == 0) {
+    pipeline_message("All tiles already exist and are valid; no tile processing needed.",
+                     process = "info")
+    total_roads           <- 0L
+    total_tiles_with_data <- 0L
+  } else {
+    cores_available <- parallel::detectCores(logical = FALSE)
+    if (is.na(x = cores_available) || cores_available < 1L) {
+      cores_available <- 1L
     }
-
-    # Write each tile per chunk immediately
-    for (chunk_name in names(x = temporal_chunks)) {
-      chunk_periods <- temporal_chunks[[chunk_name]]
-      chunk_long    <- predictions_long %>%
-        dplyr::filter(period %in% chunk_periods) %>%
-        mutate(period = as.character(x = period))
-
-      # Debug logging for tile 1
-      if (i == 1L) {
-        pipeline_message(
-          sprintf("DEBUG Tile %d chunk '%s': %d rows after filter (periods: %s)",
-                  i, chunk_name, nrow(x = chunk_long),
-                  paste(chunk_periods, collapse = ", ")),
-          level = 2, process = "info")
-      }
-
-      if (nrow(x = chunk_long) > 0) {
-        # Join attributes with geometry
-        tile_chunk_sf <- dplyr::left_join(
-          x  = chunk_long,
-          y  = geom_for_merge,
-          by = "osm_id"
-        )
-        
-        # Debug: check for NA geometries after join
-        if (i == 1L) {
-          n_na_geom <- sum(is.na(sf::st_geometry(tile_chunk_sf)))
-          pipeline_message(
-            sprintf("DEBUG Tile %d chunk '%s': %d NA geometries after join",
-                    i, chunk_name, n_na_geom),
-            level = 2, process = "info")
-        }
-        
-        tile_chunk_sf <- sf::st_as_sf(
-          x              = tile_chunk_sf,
-          sf_column_name = attr(geom_for_merge, "sf_column")
-        )
-
-        # Ensure CRS is explicit and consistent
-        tile_chunk_sf <- ensure_target_crs(sf_obj     = tile_chunk_sf, 
-                                           target_crs = cfg$TARGET_CRS)
-
-        # Write tile file
-        tile_file <- file.path(tile_dir, 
-                               sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
-                                       mode, chunk_name, tile_id_str))
-        
-        # Debug logging before write
-        if (i == 1L) {
-          pipeline_message(
-            sprintf("DEBUG Tile %d: writing to %s", i, basename(path = tile_file)),
-            level = 2, process = "info")
-        }
-        
-        sf::st_write(
-          obj        = tile_chunk_sf,
-          dsn        = tile_file,
-          delete_dsn = TRUE,
-          quiet      = TRUE
-        )
-        
-        # Debug logging after write
-        if (i == 1L) {
-          file_exists_after <- file.exists(tile_file)
-          pipeline_message(
-            sprintf("DEBUG Tile %d: file exists after write = %s",
-                    i, file_exists_after),
-            level = 2, process = "info")
-        }
-      } else if (i == 1L) {
-        # Debug: no rows to write
-        pipeline_message(
-          sprintf("DEBUG Tile %d chunk '%s': SKIPPED (0 rows)",
-                  i, chunk_name),
-          level = 2, process = "info")
-      }
+    cores_requested <- if (!is.null(cfg$PREDICTION_TILE_CORES) &&
+                             is.numeric(cfg$PREDICTION_TILE_CORES) &&
+                             cfg$PREDICTION_TILE_CORES >= 1) {
+      min(length(x = tile_jobs), cfg$PREDICTION_TILE_CORES)
+    } else {
+      max(1L, cores_available - 1L)
     }
-
-    rm(predictions_wide, predictions_long, geom_for_merge)
-    gc(verbose = FALSE)
-
-    dt         <- proc.time()["elapsed"] - t0
-    tile_times <- c(tile_times, dt)
-    avg_time   <- mean(x = tile_times)
-    remaining  <- (n_tiles - i) * avg_time
+    cores <- min(length(x = tile_jobs), cores_requested)
 
     pipeline_message(
-      sprintf("Tile %d/%d: %s roads (%.1f s) | Total: %s roads | ETA: %s", 
-              i, n_tiles, fmt(n_tile), dt, 
-              fmt(total_roads), 
-              format_duration(remaining)), 
-      level = 2, process = "calc")
+      sprintf("Processing %d tiles with %d core(s)",
+              length(x = tile_jobs), cores),
+      process = "info")
+
+    # Process tiles in parallel (or sequentially if cores=1)
+    process_tile <- function(job) {
+      i           <- job$tile_index
+      tile           <- job$tile
+      tile_id_str    <- job$tile_id_str
+      tile_dir       <- job$tile_dir
+
+      dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
+      t0 <- proc.time()["elapsed"]
+
+      # Read data for tile using spatial filter (WKT bbox)
+      wkt_bbox <- sprintf(
+        "POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
+        tile$xmin, tile$ymin,
+        tile$xmax, tile$ymin,
+        tile$xmax, tile$ymax,
+        tile$xmin, tile$ymax,
+        tile$xmin, tile$ymin)
+
+      tile_sf <- tryCatch(
+        expr = sf::st_read(dsn        = osm_roads_path,
+                           wkt_filter = wkt_bbox,
+                           quiet      = TRUE),
+        error = function(e) NULL)
+
+      if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+        return(list(tile_roads = 0L,
+                    with_data = FALSE,
+                    elapsed = proc.time()["elapsed"] - t0))
+      }
+
+      tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
+                                   target_crs = cfg$TARGET_CRS)
+
+      n_tile <- nrow(x = tile_sf)
+      geom_for_merge <- tile_sf[, c("osm_id", "geom")]
+      tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
+      rm(tile_sf)
+
+      predictions_wide <- apply_xgboost_predictions(
+        network_data          = tile_dt,
+        models_list           = models_list,
+        feature_info          = feature_info,
+        default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
+
+      rm(tile_dt)
+
+      check_memory_available(
+        operation_name = sprintf("Pivot tile %s (%s roads)",
+                                 tile_id_str, fmt(n_tile)),
+        min_gb         = 1,
+        warn_gb        = 2)
+
+      predictions_long <- predictions_wide %>%
+        tidyr::pivot_longer(
+          cols          = matches("^(flow|truck_pct|speed)_"),
+          names_to      = c(".value", "period"),
+          names_pattern = "^(flow|truck_pct|speed)_(.+)$"
+        ) %>%
+        mutate(
+          HGV    = flow * (truck_pct / 100),
+          LV     = flow - HGV,
+          TV     = flow,
+          period = factor(x = period, levels = all_periods)
+        ) %>%
+        select(osm_id, highway, period, TV, HGV, LV, speed,
+               osm_speed, osm_speed_imputed, truck_pct)
+
+      predictions_long <- add_period_datetime_columns(predictions_long, cfg)
+      validation       <- validate_predictions(predictions_long)
+      if (!validation$is_valid) {
+        pipeline_message(sprintf("Validation warnings in tile %s: %s issues",
+                                 tile_id_str, length(x = validation$issues)),
+                         process = "warning")
+      }
+
+      for (chunk_name in names(x = temporal_chunks)) {
+        chunk_periods <- temporal_chunks[[chunk_name]]
+        chunk_long    <- predictions_long %>%
+          dplyr::filter(period %in% chunk_periods) %>%
+          mutate(period = as.character(x = period))
+
+        if (nrow(x = chunk_long) > 0) {
+          tile_chunk_sf <- dplyr::left_join(
+            x  = chunk_long,
+            y  = geom_for_merge,
+            by = "osm_id")
+          tile_chunk_sf <- sf::st_as_sf(
+            x              = tile_chunk_sf,
+            sf_column_name = attr(geom_for_merge, "sf_column"))
+          tile_chunk_sf <- ensure_target_crs(sf_obj = tile_chunk_sf,
+                                             target_crs = cfg$TARGET_CRS)
+
+          tile_file <- file.path(tile_dir,
+                                 sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
+                                         mode, chunk_name, tile_id_str))
+          sf::st_write(
+            obj        = tile_chunk_sf,
+            dsn        = tile_file,
+            delete_dsn = TRUE,
+            quiet      = TRUE)
+        }
+      }
+
+      rm(predictions_wide, predictions_long, geom_for_merge)
+      gc(verbose = FALSE)
+
+      list(tile_roads = n_tile,
+           with_data = TRUE,
+           elapsed = proc.time()["elapsed"] - t0)
+    }
+
+    if (cores > 1 && length(x = tile_jobs) > 1) {
+      tile_results <- parallel::mclapply(tile_jobs,
+                                         process_tile,
+                                         mc.cores = cores,
+                                         mc.preschedule = FALSE)
+    } else {
+      tile_results <- lapply(tile_jobs, process_tile)
+    }
+
+    total_roads <- sum(vapply(tile_results, function(x) x$tile_roads, integer(1)))
+    total_tiles_with_data <- sum(vapply(tile_results, function(x) as.integer(x$with_data), integer(1)))
+    tile_times <- vapply(tile_results, function(x) x$elapsed, numeric(1))
+
+    if (length(x = tile_times) > 0) {
+      avg_time <- mean(x = tile_times)
+      pipeline_message(
+        sprintf("France tile prediction completed: %d tiles with data, avg %.1f s per tile",
+                total_tiles_with_data, avg_time),
+        process = "info")
+    }
   }
 
   rm(models_list, feature_info)
@@ -1885,8 +1924,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     })
 
     # Ensure all tiles share the same target CRS before bind
-    tile_crs <- vapply(tile_sf_list, function(x) {
-      as.character(sf::st_crs(x))
+    tile_crs <- vapply(X = tile_sf_list, FUN = function(x) {
+      sf_crs_to_string(crs = sf::st_crs(x))
     }, character(1))
     if (length(x = unique(x = tile_crs)) > 1) {
       pipeline_message(
@@ -1906,12 +1945,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
                list(make.row.names = FALSE))
     )
 
-    if (any(duplicated(combined_sf$osm_id))) {
+    if (any(duplicated(x = combined_sf$osm_id))) {
       pipeline_message(
         sprintf("Removing %d duplicated osm_id rows from merged chunk '%s'",
-                sum(duplicated(combined_sf$osm_id)), chunk_name),
+                sum(duplicated(x = combined_sf$osm_id)), chunk_name),
         process = "warning")
-      combined_sf <- combined_sf[!duplicated(combined_sf$osm_id), ]
+      combined_sf <- combined_sf[!duplicated(x = combined_sf$osm_id), ]
     }
 
     # Write final chunk file

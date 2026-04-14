@@ -90,6 +90,8 @@ download_file <- function(
 #'                    stopping with an error. Default is `3`.
 #' @param use_auth Logical. If `TRUE`, authentication is enabled and passed to 
 #'                 `download_file()`.
+#' @param throttle_delay Numeric. Seconds to wait between retry attempts when no 
+#'                       HTTP rate limit is detected. Default is `5`.
 #' @return Logical. Returns `TRUE` if the file was successfully downloaded and 
 #'         written. An error is raised if all retry attempts fail.
 #' @details The function wraps `download_file()` in a retry loop using 
@@ -107,7 +109,8 @@ download_with_retry <- function(
     url, 
     target, 
     max_retries = 3, 
-    use_auth = FALSE) {
+    use_auth = FALSE,
+    throttle_delay = 5) {
   for (i in 1:max_retries) {
     tryCatch({
       # Download attempt
