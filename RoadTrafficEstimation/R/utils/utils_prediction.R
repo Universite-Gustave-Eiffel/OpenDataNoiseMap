@@ -1775,121 +1775,133 @@ build_france_tiles <- function(tile_size_m = 200000) {
       dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
       t0 <- proc.time()["elapsed"]
 
-      # Read data for tile using spatial filter (WKT bbox)
-      wkt_bbox <- sprintf(
-        "POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
-        tile$xmin, tile$ymin,
-        tile$xmax, tile$ymin,
-        tile$xmax, tile$ymax,
-        tile$xmin, tile$ymax,
-        tile$xmin, tile$ymin)
+      tryCatch({
+        # Read data for tile using spatial filter (WKT bbox)
+        wkt_bbox <- sprintf(
+          "POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
+          tile$xmin, tile$ymin,
+          tile$xmax, tile$ymin,
+          tile$xmax, tile$ymax,
+          tile$xmin, tile$ymax,
+          tile$xmin, tile$ymin)
 
-      tile_sf <- tryCatch(
-        expr = sf::st_read(dsn        = osm_roads_path,
-                           wkt_filter = wkt_bbox,
-                           quiet      = TRUE),
-        error = function(e) NULL)
+        tile_sf <- tryCatch(
+          expr = sf::st_read(dsn        = osm_roads_path,
+                             wkt_filter = wkt_bbox,
+                             quiet      = TRUE),
+          error = function(e) NULL)
 
-      if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+        if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+          elapsed <- proc.time()["elapsed"] - t0
+          pipeline_message(
+            sprintf("Tile %s has no roads; skipping", tile_id_str),
+            level = 2, process = "info")
+          return(list(tile_roads = 0L,
+                      with_data = FALSE,
+                      elapsed = elapsed,
+                      tile_id_str = tile_id_str))
+        }
+
+        tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
+                                     target_crs = cfg$TARGET_CRS)
+
+        n_tile <- nrow(x = tile_sf)
+        pipeline_message(
+          sprintf("Processing tile %s: %s roads", tile_id_str, fmt(n_tile)),
+          level = 2, process = "info")
+        geom_for_merge <- tile_sf[, c("osm_id", "geom")]
+        tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
+        rm(tile_sf)
+
+        predictions_wide <- apply_xgboost_predictions(
+          network_data          = tile_dt,
+          models_list           = models_list,
+          feature_info          = feature_info,
+          default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
+
+        rm(tile_dt)
+
+        check_memory_available(
+          operation_name = sprintf("Pivot tile %s (%s roads)",
+                                   tile_id_str, fmt(n_tile)),
+          min_gb         = 1,
+          warn_gb        = 2)
+
+        predictions_long <- predictions_wide %>%
+          tidyr::pivot_longer(
+            cols          = matches("^(flow|truck_pct|speed)_"),
+            names_to      = c(".value", "period"),
+            names_pattern = "^(flow|truck_pct|speed)_(.+)$"
+          ) %>%
+          mutate(
+            HGV    = flow * (truck_pct / 100),
+            LV     = flow - HGV,
+            TV     = flow,
+            period = factor(x = period, levels = all_periods)
+          ) %>%
+          select(osm_id, highway, period, TV, HGV, LV, speed,
+                 osm_speed, osm_speed_imputed, truck_pct)
+
+        predictions_long <- add_period_datetime_columns(predictions_long, cfg)
+        validation       <- validate_predictions(predictions_long)
+        if (!validation$is_valid) {
+          pipeline_message(sprintf("Validation warnings in tile %s: %s issues",
+                                   tile_id_str, length(x = validation$issues)),
+                           process = "warning")
+        }
+
+        for (chunk_name in names(x = temporal_chunks)) {
+          chunk_periods <- temporal_chunks[[chunk_name]]
+          chunk_long    <- predictions_long %>%
+            dplyr::filter(period %in% chunk_periods) %>%
+            mutate(period = as.character(x = period))
+
+          if (nrow(x = chunk_long) > 0) {
+            tile_chunk_sf <- dplyr::left_join(
+              x  = chunk_long,
+              y  = geom_for_merge,
+              by = "osm_id")
+            tile_chunk_sf <- sf::st_as_sf(
+              x              = tile_chunk_sf,
+              sf_column_name = attr(geom_for_merge, "sf_column"))
+            tile_chunk_sf <- ensure_target_crs(sf_obj = tile_chunk_sf,
+                                               target_crs = cfg$TARGET_CRS)
+
+            tile_file <- file.path(tile_dir,
+                                   sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
+                                           mode, chunk_name, tile_id_str))
+            sf::st_write(
+              obj        = tile_chunk_sf,
+              dsn        = tile_file,
+              delete_dsn = TRUE,
+              quiet      = TRUE)
+          }
+        }
+
+        rm(predictions_wide, predictions_long, geom_for_merge)
+        gc(verbose = FALSE)
+
         elapsed <- proc.time()["elapsed"] - t0
         pipeline_message(
-          sprintf("Tile %s has no roads; skipping", tile_id_str),
+          sprintf("Tile %s completed: %s roads in %.1f s", 
+                  tile_id_str, fmt(n_tile), elapsed),
           level = 2, process = "info")
-        return(list(tile_roads = 0L,
-                    with_data = FALSE,
-                    elapsed = elapsed,
-                    tile_id_str = tile_id_str))
-      }
 
-      tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
-                                   target_crs = cfg$TARGET_CRS)
-
-      n_tile <- nrow(x = tile_sf)
-      pipeline_message(
-        sprintf("Processing tile %s: %s roads", tile_id_str, fmt(n_tile)),
-        level = 2, process = "info")
-      geom_for_merge <- tile_sf[, c("osm_id", "geom")]
-      tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
-      rm(tile_sf)
-
-      predictions_wide <- apply_xgboost_predictions(
-        network_data          = tile_dt,
-        models_list           = models_list,
-        feature_info          = feature_info,
-        default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
-
-      rm(tile_dt)
-
-      check_memory_available(
-        operation_name = sprintf("Pivot tile %s (%s roads)",
-                                 tile_id_str, fmt(n_tile)),
-        min_gb         = 1,
-        warn_gb        = 2)
-
-      predictions_long <- predictions_wide %>%
-        tidyr::pivot_longer(
-          cols          = matches("^(flow|truck_pct|speed)_"),
-          names_to      = c(".value", "period"),
-          names_pattern = "^(flow|truck_pct|speed)_(.+)$"
-        ) %>%
-        mutate(
-          HGV    = flow * (truck_pct / 100),
-          LV     = flow - HGV,
-          TV     = flow,
-          period = factor(x = period, levels = all_periods)
-        ) %>%
-        select(osm_id, highway, period, TV, HGV, LV, speed,
-               osm_speed, osm_speed_imputed, truck_pct)
-
-      predictions_long <- add_period_datetime_columns(predictions_long, cfg)
-      validation       <- validate_predictions(predictions_long)
-      if (!validation$is_valid) {
-        pipeline_message(sprintf("Validation warnings in tile %s: %s issues",
-                                 tile_id_str, length(x = validation$issues)),
-                         process = "warning")
-      }
-
-      for (chunk_name in names(x = temporal_chunks)) {
-        chunk_periods <- temporal_chunks[[chunk_name]]
-        chunk_long    <- predictions_long %>%
-          dplyr::filter(period %in% chunk_periods) %>%
-          mutate(period = as.character(x = period))
-
-        if (nrow(x = chunk_long) > 0) {
-          tile_chunk_sf <- dplyr::left_join(
-            x  = chunk_long,
-            y  = geom_for_merge,
-            by = "osm_id")
-          tile_chunk_sf <- sf::st_as_sf(
-            x              = tile_chunk_sf,
-            sf_column_name = attr(geom_for_merge, "sf_column"))
-          tile_chunk_sf <- ensure_target_crs(sf_obj = tile_chunk_sf,
-                                             target_crs = cfg$TARGET_CRS)
-
-          tile_file <- file.path(tile_dir,
-                                 sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
-                                         mode, chunk_name, tile_id_str))
-          sf::st_write(
-            obj        = tile_chunk_sf,
-            dsn        = tile_file,
-            delete_dsn = TRUE,
-            quiet      = TRUE)
-        }
-      }
-
-      rm(predictions_wide, predictions_long, geom_for_merge)
-      gc(verbose = FALSE)
-
-      elapsed <- proc.time()["elapsed"] - t0
-      pipeline_message(
-        sprintf("Tile %s completed: %s roads in %.1f s", 
-                tile_id_str, fmt(n_tile), elapsed),
-        level = 2, process = "info")
-
-      list(tile_roads = n_tile,
-           with_data = TRUE,
-           elapsed = elapsed,
-           tile_id_str = tile_id_str)
+        list(tile_roads = n_tile,
+             with_data = TRUE,
+             elapsed = elapsed,
+             tile_id_str = tile_id_str)
+      }, error = function(e) {
+        elapsed <- proc.time()["elapsed"] - t0
+        pipeline_message(
+          sprintf("Tile %s failed: %s", tile_id_str, conditionMessage(e)),
+          level = 1, process = "error")
+        list(tile_roads  = NA_integer_,
+             with_data   = FALSE,
+             elapsed     = elapsed,
+             tile_id_str = tile_id_str,
+             error       = conditionMessage(e))
+      })
     }
 
     if (cores > 1 && length(x = tile_jobs) > 1) {
@@ -2003,16 +2015,22 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                      ifelse(test = is.na(x = tile_elapsed),
                                             yes  = "unknown",
                                             no   = sprintf("%.1f", tile_elapsed))))
-          pipeline_message(
-            sprintf("Tile %s finished: %s roads, %s s", 
-                    tile_id_str,
-                    ifelse(test = is.na(x = tile_roads),
-                           yes  = "unknown",
-                           no   = fmt(tile_roads)),
-                    ifelse(test = is.na(x = tile_elapsed),
-                           yes  = "unknown",
-                           no   = sprintf("%.1f", tile_elapsed))),
-            level = 2, process = "info")
+          if ("error" %in% names(x = res)) {
+            pipeline_message(
+              sprintf("Tile %s failed: %s", tile_id_str, res$error),
+              level = 1, process = "error")
+          } else {
+            pipeline_message(
+              sprintf("Tile %s finished: %s roads, %s s", 
+                      tile_id_str,
+                      ifelse(test = is.na(x = tile_roads),
+                             yes  = "unknown",
+                             no   = fmt(tile_roads)),
+                      ifelse(test = is.na(x = tile_elapsed),
+                             yes  = "unknown",
+                             no   = sprintf("%.1f", tile_elapsed))),
+              level = 2, process = "info")
+          }
 
           if (finished_key %in% names(x = jobs)) {
             jobs[[finished_key]] <- NULL
@@ -2026,17 +2044,35 @@ build_france_tiles <- function(tile_size_m = 200000) {
     }
 
     total_roads           <- sum(vapply(X = tile_results,
-                                        FUN = function(x) x$tile_roads,
-                                        integer(1)))
+                                        FUN = function(x) {
+                                          if (is.list(x) && "tile_roads" %in% names(x)) {
+                                            as.integer(x$tile_roads)
+                                          } else {
+                                            NA_integer_
+                                          }
+                                        },
+                                        integer(1)), na.rm = TRUE)
     total_tiles_with_data <- sum(vapply(X = tile_results,
-                                        FUN = function(x) as.integer(x$with_data),
-                                        integer(1)))
+                                        FUN = function(x) {
+                                          if (is.list(x) && "with_data" %in% names(x)) {
+                                            as.integer(x$with_data)
+                                          } else {
+                                            0L
+                                          }
+                                        },
+                                        integer(1)), na.rm = TRUE)
     tile_times            <- vapply(X = tile_results,
-                                    FUN = function(x) x$elapsed,
+                                    FUN = function(x) {
+                                      if (is.list(x) && "elapsed" %in% names(x)) {
+                                        as.numeric(x$elapsed)
+                                      } else {
+                                        NA_real_
+                                      }
+                                    },
                                     numeric(1))
 
     if (length(x = tile_times) > 0) {
-      avg_time <- mean(x = tile_times)
+      avg_time <- mean(x = tile_times, na.rm = TRUE)
       pipeline_message(
         sprintf("France tile prediction completed: %d tiles with data, avg %.1f s per tile",
                 total_tiles_with_data, avg_time),
