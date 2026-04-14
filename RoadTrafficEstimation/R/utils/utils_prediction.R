@@ -2025,18 +2025,15 @@ build_france_tiles <- function(tile_size_m = 200000) {
       tile_results <- lapply(tile_jobs, process_tile)
     }
 
-    total_roads           <- sum(vapply(X   = tile_results, 
-                                        FUN = function(x){
-                                                x$tile_roads, 
-                                                integer(1)}))
-    total_tiles_with_data <- sum(vapply(X   = tile_results, 
-                                        FUN = function(x){
-                                                as.integer(x$with_data), 
-                                                integer(1)}))
-    tile_times            <- vapply(X   = tile_results, 
-                                    FUN = function(x){
-                                            x$elapsed, 
-                                            numeric(1)})
+    total_roads           <- sum(vapply(X = tile_results,
+                                        FUN = function(x) x$tile_roads,
+                                        integer(1)))
+    total_tiles_with_data <- sum(vapply(X = tile_results,
+                                        FUN = function(x) as.integer(x$with_data),
+                                        integer(1)))
+    tile_times            <- vapply(X = tile_results,
+                                    FUN = function(x) x$elapsed,
+                                    numeric(1))
 
     if (length(x = tile_times) > 0) {
       avg_time <- mean(x = tile_times)
