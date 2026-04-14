@@ -403,9 +403,9 @@ for (model_name in names(x = all_configs)) {
       train_idx <- which(!sensor_ids %in% shared_base_test_sensors)
       test_idx  <- which(sensor_ids %in% shared_base_test_sensors)
       if (length(x = train_idx) == 0 || length(x = test_idx) == 0) {
-        train_idx <- sample(x    = seq_len(to = n_final),
+        train_idx <- sample(x    = seq_len(n_final),
                             size = floor(x = 0.8 * n_final))
-        test_idx  <- setdiff(x = seq_len(to = n_final), 
+        test_idx  <- setdiff(x = seq_len(n_final), 
                              y = train_idx)
       }
     } else if (length(x = unique_sensors) >= 5) {
@@ -414,21 +414,21 @@ for (model_name in names(x = all_configs)) {
       train_idx       <- which(sensor_ids %in% train_sensors)
       test_idx        <- which(!sensor_ids %in% train_sensors)
       if (length(x = train_idx) == 0 || length(x = test_idx) == 0) {
-        train_idx <- sample(x    = seq_len(to = n_final), 
+        train_idx <- sample(x    = seq_len(n_final), 
                             size = floor(x = 0.8 * n_final))
-        test_idx  <- setdiff(x = seq_len(to = n_final), 
+        test_idx  <- setdiff(x = seq_len(n_final), 
                              y = train_idx)
       }
     } else {
-      train_idx <- sample(x    = seq_len(to = n_final), 
+      train_idx <- sample(x    = seq_len(n_final), 
                           size = floor(x = 0.8 * n_final))
-      test_idx  <- setdiff(x = seq_len(to = n_final), 
+      test_idx  <- setdiff(x = seq_len(n_final), 
                            y = train_idx)
     }
   } else {
-    train_idx <- sample(x    = seq_len(to = n_final), 
+    train_idx <- sample(x    = seq_len(n_final), 
                         size = floor(x = 0.8 * n_final))
-    test_idx  <- setdiff(x = seq_len(to = n_final), 
+    test_idx  <- setdiff(x = seq_len(n_final), 
                          y = train_idx)
   }
   
@@ -724,7 +724,7 @@ for (model_name in names(x = all_configs)) {
   
   pipeline_message(paste("Top 5 most important features:", 
                          paste0(sprintf("\t\t\t%d. %-15s (%.1f%%)", 
-                                        seq_len(to = nrow(top_features)), 
+                                        seq_len(nrow(top_features)), 
                                         top_features$Feature, 
                                         top_features$Gain * 100), 
                                 collapse = "\n"), 
@@ -990,9 +990,9 @@ for (model_name in names(x = models_list)) {
   # Train/test split (same seed as training)
   set.seed(123)
   n_final   <- nrow(x = sparse_data_matrix)
-  train_idx <- sample(x    = seq_len(to = n_final), 
+  train_idx <- sample(x    = seq_len(n_final), 
                       size = floor(x = 0.8 * n_final))
-  test_idx  <- setdiff(x = seq_len(to = n_final), 
+  test_idx  <- setdiff(x = seq_len(n_final), 
                        y = train_idx)
   
   X_test <- sparse_data_matrix[test_idx, ]
@@ -1527,7 +1527,7 @@ if (nrow(x = emission_test) > 0) {
     process = "info")
 
   # Attach row indices for decomposition lookup
-  emission_test$.row_idx <- seq_len(to = nrow(x = emission_test))
+  emission_test$.row_idx <- seq_len(nrow(x = emission_test))
 
   # ============================================================================
   # PAGE 1: Overall prediction quality in dB on test sections
@@ -1721,7 +1721,7 @@ if (nrow(x = emission_test) > 0) {
 
   table_lines <- c()
   if (nrow(x = subset_table) > 0) {
-    for (i in seq_len(to = nrow(x = subset_table))) {
+    for (i in seq_len(nrow(x = subset_table))) {
       rr          <- subset_table[i, ]
       table_lines <- c(table_lines, sprintf(
         "%-34s %6s %7s %6s %7s %5s %5s %8s %8s",
@@ -2495,7 +2495,7 @@ if (nrow(x = emission_test) > 0) {
 
       # Per-highway source analysis
       hw_diag <- c(hw_diag, "\tMain source of error per highway:")
-      for (i in seq_len(to = nrow(x = top_n))) {
+      for (i in seq_len(nrow(x = top_n))) {
         hw_name  <- top_n$group[i]
         sub_idx  <- which(emission_test$highway == hw_name)
         mae_f    <- mean(x = abs(x = contrib_flow[sub_idx]), na.rm = TRUE)
@@ -2615,7 +2615,7 @@ if (nrow(x = emission_test) > 0) {
 
       # 5d: Comparison A vs B per DEGREE
       if (has_osm_speed && all(is.finite(x = deg_stats$mae_osm))) {
-        x     <- seq_len(to = nrow(x = deg_stats))
+        x     <- seq_len(nrow(x = deg_stats))
         y_lim <- range(c(deg_stats$mae_xgb, deg_stats$mae_osm), na.rm = TRUE)
         plot(x        = x, 
              y        = deg_stats$mae_xgb, 
@@ -2854,7 +2854,7 @@ if (nrow(x = emission_test) > 0) {
         cex.main = 1.1)
 
   top_k   <- min(25L, nrow(x = emission_test))
-  idx_top <- order(emission_test$abs_db_error, decreasing = TRUE)[seq_len(to = top_k)]
+  idx_top <- order(emission_test$abs_db_error, decreasing = TRUE)[seq_len(top_k)]
   top_err <- emission_test[idx_top, , drop = FALSE]
 
   # Identify dominant source of error
@@ -2865,7 +2865,7 @@ if (nrow(x = emission_test) > 0) {
 
   # Build summary table
   df_top <- data.frame(
-              rank             = seq_len(to = nrow(top_err)),
+              rank             = seq_len(nrow(top_err)),
               osm_id           = top_err$osm_id,
               period           = top_err$period,
               hwy              = substr(x     = top_err$highway, 

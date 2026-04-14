@@ -464,13 +464,13 @@ apply_xgboost_predictions <- function(network_data,
                    level = 2, progress = "start", process = "calc")
   
   # Prepare feature matrix (same encoding as training: sparse.model.matrix)
-  rownames(x = network_data) <- seq_len(to = nrow(x = network_data))
+  rownames(x = network_data) <- seq_len(nrow(x = network_data))
   feature_matrix_part <- safe_sparse_model_matrix(
     formula_obj = feature_info$road_feature_formula,
     data_df     = network_data)
   rows_used <- as.integer(x = rownames(x = feature_matrix_part))
   if (length(x = rows_used) == 0 || anyNA(rows_used)) {
-    rows_used <- seq_len(to = nrow(x = feature_matrix_part))
+    rows_used <- seq_len(nrow(x = feature_matrix_part))
   }
   rows_used <- rows_used[rows_used >= 1 & rows_used <= nrow(x = network_data)]
   feature_matrix <- matrix(
@@ -483,9 +483,9 @@ apply_xgboost_predictions <- function(network_data,
   if (length(x = rows_used) != nrow(x = feature_matrix_part)) {
     # Fallback alignment when sparse.model.matrix rownames are unavailable
     n_common  <- min(length(x = rows_used), nrow(x = feature_matrix_part))
-    rows_used <- rows_used[seq_len(to = n_common)]
+    rows_used <- rows_used[seq_len(n_common)]
     feature_matrix[rows_used, ] <- as.matrix(
-          x = feature_matrix_part[seq_len(to = n_common), , drop = FALSE])
+          x = feature_matrix_part[seq_len(n_common), , drop = FALSE])
   } else {
     feature_matrix[rows_used, ] <- as.matrix(x = feature_matrix_part)
   }
@@ -1516,7 +1516,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   ys <- seq(from = france_ymin, to = france_ymax, by = tile_size_m)
 
   tiles         <- expand.grid(x = xs, y = ys, stringsAsFactors = FALSE)
-  tiles$tile_id <- seq_len(to = nrow(x = tiles))
+  tiles$tile_id <- seq_len(nrow(x = tiles))
   tiles$xmin    <- tiles$x
   tiles$ymin    <- tiles$y
   tiles$xmax    <- tiles$x + tile_size_m
@@ -1697,7 +1697,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         append = TRUE)
   }
 
-  for (i in seq_len(to = n_tiles)) {
+  for (i in seq_len(n_tiles)) {
     tile           <- tiles[i, ]
     tile_id_str    <- sprintf("%0*d", n_digits, i)
     tile_dir       <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
@@ -2092,7 +2092,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
     
     # Collect all tile files for this chunk
     tile_files <- list()
-    for (i in seq_len(to = n_tiles)) {
+    for (i in seq_len(n_tiles)) {
       tile_id_str <- sprintf("%0*d", n_digits, i)
       tile_dir    <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
       tile_file   <- file.path(tile_dir, 
@@ -2184,9 +2184,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
   pipeline_message("Tile merging phase completed", 
                    level = 1, progress = "end", process = "save")
-
-  rm(models_list, feature_info)
-  gc(verbose = FALSE)
 
   # --- Summary ---
   pipeline_message("France-wide prediction summary:", 
