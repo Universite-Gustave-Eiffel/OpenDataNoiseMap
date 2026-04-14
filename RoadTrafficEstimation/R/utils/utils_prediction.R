@@ -1676,6 +1676,18 @@ build_france_tiles <- function(tile_size_m = 200000) {
   force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
   tile_jobs <- list()
 
+  tile_progress_log <- if (exists("PROJECT_ROOT", envir = .GlobalEnv)) {
+    file.path(PROJECT_ROOT, "logs", "pipeline_prediction_tiles.log")
+  } else {
+    file.path("logs", "pipeline_prediction_tiles.log")
+  }
+  dir.create(dirname(tile_progress_log), recursive = TRUE, showWarnings = FALSE)
+  append_tile_progress <- function(msg) {
+    cat(sprintf("%s %s\n", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), msg),
+        file = tile_progress_log,
+        append = TRUE)
+  }
+
   for (i in seq_len(to = n_tiles)) {
     tile           <- tiles[i, ]
     tile_id_str    <- sprintf("%0*d", n_digits, i)
@@ -1876,6 +1888,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                   length(x = tile_jobs), cores),
           file = stderr())
       try(flush.connection(stderr()), silent = TRUE)
+      append_tile_progress(sprintf("Tile processing parallelized on %d cores", cores))
       pipeline_message(
         sprintf("Submitting %d tile jobs to %d cores", 
                 length(x = tile_jobs), cores),
@@ -1885,12 +1898,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
         cat(sprintf("[DEBUG] Submitting tile %s\n", job$tile_id_str),
             file = stderr())
         try(flush.connection(stderr()), silent = TRUE)
+        append_tile_progress(sprintf("Tile %s start", job$tile_id_str))
         pipeline_message(
           sprintf("Submitting tile %s", job$tile_id_str),
           level = 2, process = "info")
-        parallel::mcparallel(expr = process_tile(job), 
-                             mc.set.seed = FALSE,
-                             mc.silent = FALSE)
+        parallel::mcparallel(expr = process_tile(job), mc.set.seed = FALSE)
       })
       names(jobs) <- vapply(tile_jobs, `[[`, character(1), "tile_id_str")
 
@@ -1918,6 +1930,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
         for (tile_id in names(x = finished)) {
           res <- finished[[tile_id]]
           tile_results[[length(x = tile_results) + 1L]] <- res
+          append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%.1f s)",
+                                     res$tile_id_str, fmt(res$tile_roads), res$elapsed))
           pipeline_message(
             sprintf("Tile %s finished: %s roads, %.1f s", 
                     res$tile_id_str, fmt(res$tile_roads), res$elapsed),
