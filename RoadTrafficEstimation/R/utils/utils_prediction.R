@@ -1867,15 +1867,34 @@ build_france_tiles <- function(tile_size_m = 200000) {
     }
 
     if (cores > 1 && length(x = tile_jobs) > 1) {
+      pipeline_message(
+        sprintf("Submitting %d tile jobs to %d cores", 
+                length(x = tile_jobs), cores),
+        process = "info")
+
       jobs <- lapply(tile_jobs, function(job) {
-        parallel::mcparallel(expr = process_tile(job), mc.set.seed = FALSE)
+        pipeline_message(
+          sprintf("Submitting tile %s", job$tile_id_str),
+          level = 2, process = "info")
+        parallel::mcparallel(expr = process_tile(job), 
+                             mc.set.seed = FALSE,
+                             mc.silent = FALSE)
       })
       names(jobs) <- vapply(tile_jobs, `[[`, character(1), "tile_id_str")
 
       tile_results <- list()
+      last_heartbeat <- Sys.time()
       while (length(x = jobs) > 0) {
         finished <- parallel::mccollect(jobs, wait = FALSE)
         if (length(x = finished) == 0) {
+          if (as.numeric(difftime(Sys.time(), last_heartbeat, 
+                                  units = "secs")) >= 30) {
+            pipeline_message(
+              sprintf("Waiting for %d tile jobs to finish...", 
+                      length(x = jobs)),
+              process = "info")
+            last_heartbeat <- Sys.time()
+          }
           Sys.sleep(1)
           next
         }
