@@ -394,6 +394,10 @@ pipeline_message <- function(text,
                              level = 1,
                              progress = c("start", "end"),
                              process = NULL) {
+  flush_log <- function() {
+    try(flush.connection(stderr()), silent = TRUE)
+    try(flush.console(), silent = TRUE)
+  }
   # ----------------------------------------------------------------------------
   # List of icons associated with specific processes
   # ----------------------------------------------------------------------------
@@ -430,10 +434,12 @@ pipeline_message <- function(text,
   # INFO / WARNING / STOP — no level, no timer
   if (process == "info") {
     message("\t\t ", icon, " ", text)
+    flush_log()
     return(invisible(NULL))
   }
   if (process == "warning") {
     warning(paste(icon, text), call. = FALSE)
+    flush_log()
     return(invisible(NULL))
   }
   if (process == "stop") {
@@ -449,6 +455,7 @@ pipeline_message <- function(text,
     } else {
       message("\t 🏁 ", text, "\n")
     }
+    flush_log()
     return(invisible(NULL))
   }
   
@@ -457,11 +464,13 @@ pipeline_message <- function(text,
     if (progress == "start") {
       pipeline_timer_start(level = 1)
       message("\t ", icon, " ", text)
+      flush_log()
       return(invisible(NULL))
     }
     if (progress == "end") {
       elapsed <- pipeline_timer_stop(level = 1)
       message("\t\t ✓ ", text, sprintf(" in %.1f s", elapsed))
+      flush_log()
       return(invisible(NULL))
     }
   }
@@ -471,11 +480,13 @@ pipeline_message <- function(text,
     if (progress == "start") {
       pipeline_timer_start(level = 2)
       message("\t\t ", icon, " ", text)
+      flush_log()
       return(invisible(NULL))
     }
     if (progress == "end") {
       elapsed <- pipeline_timer_stop(level = 2)
       message("\t\t\t ✓ ", text, sprintf(" in %.1f s", elapsed))
+      flush_log()
       return(invisible(NULL))
     }
   }
