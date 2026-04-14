@@ -875,7 +875,7 @@ validate_predictions <- function(predictions) {
     }
   } else {
     # Wide format checks
-    flow_cols <- grep(pattern = "^flow_", x = names(predictions), value = TRUE)
+    flow_cols <- grep(pattern = "^flow_", x = names(x = predictions), value = TRUE)
     for (col in flow_cols) {
       n_negative <- sum(predictions[[col]] < 0, na.rm = TRUE)
       if (n_negative > 0) {
@@ -884,7 +884,7 @@ validate_predictions <- function(predictions) {
     }
 
     truck_cols <- grep(pattern = "^truck_pct_", 
-                       x = names(predictions), 
+                       x = names(x = predictions), 
                        value = TRUE)
     for (col in truck_cols) {
       n_exceed <- sum(predictions[[col]] > 100 | predictions[[col]] < 0, 
@@ -894,7 +894,7 @@ validate_predictions <- function(predictions) {
       }
     }
 
-    speed_cols <- grep(pattern = "^speed_", x = names(predictions), value = TRUE)
+    speed_cols <- grep(pattern = "^speed_", x = names(x = predictions), value = TRUE)
     for (col in speed_cols) {
       n_unrealistic <- sum(predictions[[col]] < 5 | predictions[[col]] > 200,
                            na.rm = TRUE)
@@ -904,14 +904,14 @@ validate_predictions <- function(predictions) {
     }
 
     # Temporal coherence for wide format
-    if (all(c("flow_D", "flow_N") %in% names(predictions))) {
+    if (all(c("flow_D", "flow_N") %in% names(x = predictions))) {
       n_flow_n_gt_d <- sum(predictions$flow_N > (predictions$flow_D * 1.05), 
                            na.rm = TRUE)
       if (n_flow_n_gt_d > 0) {
         issues[["coherence_flow_N_gt_D"]] <- n_flow_n_gt_d
       }
     }
-    if (all(c("speed_D", "speed_N") %in% names(predictions))) {
+    if (all(c("speed_D", "speed_N") %in% names(x = predictions))) {
       n_speed_n_lt_d <- sum(predictions$speed_N + 0.5 < predictions$speed_D, 
                             na.rm = TRUE)
       if (n_speed_n_lt_d > 0) {
@@ -951,7 +951,7 @@ validate_predictions <- function(predictions) {
 #' }
 #' @export 
 add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
-  if (!"period" %in% names(predictions_long)) {
+  if (!"period" %in% names(x = predictions_long)) {
     return(predictions_long)
   }
 
@@ -1307,9 +1307,15 @@ predict_traffic <- function(region_name,
 
   dt <- data.table::as.data.table(predictions_wide)
 
-  flow_cols  <- grep(pattern = "^flow_", x = names(dt), value = TRUE)
-  truck_cols <- grep(pattern = "^truck_pct_", x = names(dt), value = TRUE)
-  speed_cols <- grep(pattern = "^speed_", x = names(dt), value = TRUE)
+  flow_cols  <- grep(pattern = "^flow_", 
+                     x       = names(x = dt), 
+                     value   = TRUE)
+  truck_cols <- grep(pattern = "^truck_pct_", 
+                     x       = names(x = dt), 
+                     value   = TRUE)
+  speed_cols <- grep(pattern = "^speed_", 
+                     x       = names(x = dt), 
+                     value   = TRUE)
 
   flow_long <- data.table::melt(
     data          = dt,
@@ -1376,7 +1382,7 @@ predict_traffic <- function(region_name,
     pipeline_message(sprintf("Validation warnings: %s issues detected", 
                              length(x = validation$issues)), 
                      process = "warning")
-    for (issue_name in names(validation$issues)) {
+    for (issue_name in names(x = validation$issues)) {
       pipeline_message(sprintf("\t- %s: %s cases", 
                                issue_name, validation$issues[[issue_name]]), 
                        process = "warning")
@@ -1627,8 +1633,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
   # --- Define temporal chunks ---
   temporal_chunks <- get_temporal_chunks()
-  temporal_chunks <- temporal_chunks[intersect(x = chunks, 
-                                               y = names(temporal_chunks))]
+  temporal_chunks <- temporal_chunks[
+                        intersect(
+                          x = chunks, 
+                          y = names(x = temporal_chunks))]
 
   if (length(x = temporal_chunks) == 0) {
     pipeline_message(paste("No valid temporal chunks requested.", 
@@ -1895,7 +1903,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 length(x = tile_jobs), cores),
         process = "info")
 
-      jobs <- lapply(tile_jobs, function(job) {
+      jobs <- list()
+      job_pid_to_tile_id <- list()
+      job_tile_id_to_pid <- list()
+      for (job in tile_jobs) {
         cat(sprintf("[DEBUG] Submitting tile %s\n", job$tile_id_str),
             file = stderr())
         try(flush.connection(stderr()), silent = TRUE)
@@ -1903,9 +1914,19 @@ build_france_tiles <- function(tile_size_m = 200000) {
         pipeline_message(
           sprintf("Submitting tile %s", job$tile_id_str),
           level = 2, process = "info")
-        parallel::mcparallel(expr = process_tile(job), mc.set.seed = FALSE)
-      })
-      names(jobs) <- vapply(tile_jobs, `[[`, character(1), "tile_id_str")
+
+        job_obj <- parallel::mcparallel(expr = process_tile(job),
+                                       mc.set.seed = FALSE)
+        pid <- if ("pid" %in% names(x = job_obj)) {
+          job_obj$pid
+        } else {
+          attr(job_obj, "pid")
+        }
+        pid <- as.character(pid)
+        jobs[[pid]] <- job_obj
+        job_pid_to_tile_id[[pid]] <- job$tile_id_str
+        job_tile_id_to_pid[[job$tile_id_str]] <- pid
+      }
 
       tile_results <- list()
       last_heartbeat <- Sys.time()
@@ -1928,17 +1949,30 @@ build_france_tiles <- function(tile_size_m = 200000) {
           next
         }
 
-        for (tile_id in names(x = finished)) {
-          res <- finished[[tile_id]]
+        for (finished_key in names(x = finished)) {
+          res <- finished[[finished_key]]
           if (!is.list(x = res)) {
+            if (finished_key %in% names(x = job_pid_to_tile_id)) {
+              tile_id_str <- job_pid_to_tile_id[[finished_key]]
+            } else if (finished_key %in% names(x = job_tile_id_to_pid)) {
+              tile_id_str <- finished_key
+            } else {
+              tile_id_str <- as.character(x = finished_key)
+            }
             res <- list(tile_roads  = NA_integer_,
                         with_data   = TRUE,
                         elapsed     = NA_real_,
-                        tile_id_str = as.character(x = tile_id))
+                        tile_id_str = tile_id_str)
           } else {
             if (!"tile_id_str" %in% names(x = res) || 
                 length(x = res$tile_id_str) != 1) {
-              res$tile_id_str <- as.character(tile_id)
+              if (finished_key %in% names(x = job_pid_to_tile_id)) {
+                res$tile_id_str <- job_pid_to_tile_id[[finished_key]]
+              } else if (finished_key %in% names(x = job_tile_id_to_pid)) {
+                res$tile_id_str <- finished_key
+              } else {
+                res$tile_id_str <- as.character(x = finished_key)
+              }
             }
             if (!"tile_roads" %in% names(x = res) || 
                 length(x = res$tile_roads) != 1) {
@@ -1979,16 +2013,30 @@ build_france_tiles <- function(tile_size_m = 200000) {
                            yes  = "unknown",
                            no   = sprintf("%.1f", tile_elapsed))),
             level = 2, process = "info")
-          jobs[[tile_id]] <- NULL
+
+          if (finished_key %in% names(x = jobs)) {
+            jobs[[finished_key]] <- NULL
+          } else if (tile_id_str %in% names(x = job_tile_id_to_pid)) {
+            jobs[[job_tile_id_to_pid[[tile_id_str]]]] <- NULL
+          }
         }
       }
     } else {
       tile_results <- lapply(tile_jobs, process_tile)
     }
 
-    total_roads <- sum(vapply(tile_results, function(x) x$tile_roads, integer(1)))
-    total_tiles_with_data <- sum(vapply(tile_results, function(x) as.integer(x$with_data), integer(1)))
-    tile_times <- vapply(tile_results, function(x) x$elapsed, numeric(1))
+    total_roads           <- sum(vapply(X   = tile_results, 
+                                        FUN = function(x){
+                                                x$tile_roads, 
+                                                integer(1)}))
+    total_tiles_with_data <- sum(vapply(X   = tile_results, 
+                                        FUN = function(x){
+                                                as.integer(x$with_data), 
+                                                integer(1)}))
+    tile_times            <- vapply(X   = tile_results, 
+                                    FUN = function(x){
+                                            x$elapsed, 
+                                            numeric(1)})
 
     if (length(x = tile_times) > 0) {
       avg_time <- mean(x = tile_times)
@@ -2036,7 +2084,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
       min_gb         = 4, 
       warn_gb        = 8)
 
-    tile_sf_list <- lapply(tile_files, function(tf) {
+    tile_sf_list <- lapply(X = tile_files, FUN= function(tf) {
       sf_obj <- sf::st_read(dsn   = tf, 
                             quiet = TRUE)
       sf_obj <- ensure_target_crs(sf_obj     = sf_obj, 
@@ -2058,7 +2106,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         sprintf("CRS mismatch detected across tile chunk files: %s",
                 paste(unique(tile_crs), collapse = " | ")),
         process = "warning")
-      tile_sf_list <- lapply(tile_sf_list, function(sf_obj) {
+      tile_sf_list <- lapply(X = tile_sf_list, FUN = function(sf_obj) {
         ensure_target_crs(sf_obj     = sf_obj,
                           target_crs = cfg$TARGET_CRS)
       })
