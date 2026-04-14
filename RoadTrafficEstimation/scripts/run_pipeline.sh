@@ -121,5 +121,7 @@ mkdir -p "${LOG_DIR}"
 echo "🚀 RUN PIPELINE: ${MAIN_R}"
 echo "📜 R LOG: ${OUT_LOG}"
 
+echo "🔧 Using line-buffered Rscript output"
+
 # Pass all arguments to Rscript and redirect output to log file
-Rscript --vanilla "${MAIN_R}" "$@" > "${OUT_LOG}" 2>&1
+stdbuf -oL -eL Rscript --vanilla "${MAIN_R}" "$@" > "${OUT_LOG}" 2>&1
