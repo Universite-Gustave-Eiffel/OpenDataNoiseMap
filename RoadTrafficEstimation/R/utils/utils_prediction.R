@@ -1713,7 +1713,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         pipeline_message(
           sprintf("Skipping tile %s: all %d chunk files already exist", 
                   tile_id_str, length(x = expected_files)),
-          level = 2, process = "info")
+          process = "info")
         next
       }
       invalid_reasons <- paste(
@@ -1785,17 +1785,15 @@ build_france_tiles <- function(tile_size_m = 200000) {
           tile$xmin, tile$ymax,
           tile$xmin, tile$ymin)
 
-        tile_sf <- tryCatch(
-          expr = sf::st_read(dsn        = osm_roads_path,
-                             wkt_filter = wkt_bbox,
-                             quiet      = TRUE),
-          error = function(e) NULL)
+        tile_sf <- sf::st_read(dsn        = osm_roads_path,
+                               wkt_filter = wkt_bbox,
+                               quiet      = TRUE)
 
-        if (is.null(x = tile_sf) || nrow(x = tile_sf) == 0) {
+        if (nrow(x = tile_sf) == 0) {
           elapsed <- proc.time()["elapsed"] - t0
           pipeline_message(
             sprintf("Tile %s has no roads; skipping", tile_id_str),
-            level = 2, process = "info")
+            process = "warning")
           return(list(tile_roads = 0L,
                       with_data = FALSE,
                       elapsed = elapsed,
@@ -1808,7 +1806,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         n_tile <- nrow(x = tile_sf)
         pipeline_message(
           sprintf("Processing tile %s: %s roads", tile_id_str, fmt(n_tile)),
-          level = 2, process = "info")
+          process = "info")
         geom_for_merge <- tile_sf[, c("osm_id", "geom")]
         tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
         rm(tile_sf)
@@ -1885,7 +1883,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         pipeline_message(
           sprintf("Tile %s completed: %s roads in %.1f s", 
                   tile_id_str, fmt(n_tile), elapsed),
-          level = 2, process = "info")
+          process = "info")
 
         list(tile_roads = n_tile,
              with_data = TRUE,
@@ -1925,7 +1923,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         append_tile_progress(sprintf("Tile %s start", job$tile_id_str))
         pipeline_message(
           sprintf("Submitting tile %s", job$tile_id_str),
-          level = 2, process = "info")
+          process = "info")
 
         job_obj <- parallel::mcparallel(expr = process_tile(job),
                                        mc.set.seed = FALSE)
@@ -2029,7 +2027,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                       ifelse(test = is.na(x = tile_elapsed),
                              yes  = "unknown",
                              no   = sprintf("%.1f", tile_elapsed))),
-              level = 2, process = "info")
+              process = "info")
           }
 
           if (finished_key %in% names(x = jobs)) {
