@@ -1743,30 +1743,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
     total_roads           <- 0L
     total_tiles_with_data <- 0L
   } else {
-    cores_available <- parallel::detectCores(logical = FALSE)
-    if (is.na(x = cores_available) || cores_available < 1L) {
-      cores_available <- 1L
-    }
-    cores_requested <- if (!is.null(cfg$PREDICTION_TILE_CORES) &&
-                             is.numeric(cfg$PREDICTION_TILE_CORES) &&
-                             cfg$PREDICTION_TILE_CORES >= 1) {
-      min(length(x = tile_jobs), cfg$PREDICTION_TILE_CORES)
-    } else {
-      max(1L, cores_available - 1L)
-    }
-    cores <- min(length(x = tile_jobs), cores_requested)
-
-    cat(sprintf("[DEBUG] Processing %d tiles with %d core(s)\n",
-                length(x = tile_jobs), cores),
-        file = stderr())
-    try(flush.connection(stderr()), silent = TRUE)
-
-    pipeline_message(
-      sprintf("Processing %d tiles with %d core(s)",
-              length(x = tile_jobs), cores),
-      process = "info")
-
-    # Process tiles in parallel (or sequentially if cores=1)
     process_tile <- function(job) {
       i              <- job$tile_index
       tile           <- job$tile
@@ -1907,152 +1883,23 @@ build_france_tiles <- function(tile_size_m = 200000) {
       })
     }
 
-    if (cores > 1 && length(x = tile_jobs) > 1) {
-      cat(sprintf("[DEBUG] Submitting %d tile jobs to %d cores\n", 
-                  length(x = tile_jobs), cores),
-          file = stderr())
-      try(flush.connection(stderr()), silent = TRUE)
-      append_tile_progress(sprintf("Tile processing parallelized on %d cores", cores))
-      pipeline_message(
-        sprintf("Submitting %d tile jobs to %d cores", 
-                length(x = tile_jobs), cores),
-        process = "info")
-
-      pending_jobs       <- tile_jobs
-      active_jobs        <- list()
-      job_pid_to_tile_id <- list()
-      job_tile_id_to_pid <- list()
-      tile_results       <- list()
-      last_heartbeat     <- Sys.time()
-
-      submit_next_job <- function(job) {
-        cat(sprintf("[DEBUG] Submitting tile %s\n", job$tile_id_str),
-            file = stderr())
-        try(flush.connection(stderr()), silent = TRUE)
-        append_tile_progress(sprintf("Tile %s start", job$tile_id_str))
-        pipeline_message(
-          sprintf("Submitting tile %s", job$tile_id_str),
-          process = "info")
-
-        job_obj <- parallel::mcparallel(expr = process_tile(job),
-                                       mc.set.seed = FALSE)
-        pid <- if ("pid" %in% names(x = job_obj)) {
-          job_obj$pid
-        } else {
-          attr(job_obj, "pid")
-        }
-        pid <- as.character(pid)
-        active_jobs[[pid]]                    <<- job_obj
-        job_pid_to_tile_id[[pid]]             <<- job$tile_id_str
-        job_tile_id_to_pid[[job$tile_id_str]] <<- pid
-      }
-
-      while (length(x = pending_jobs) > 0L || length(x = active_jobs) > 0L) {
-        while (length(x = active_jobs) < cores && length(x = pending_jobs) > 0L) {
-          job <- pending_jobs[[1L]]
-          pending_jobs[[1L]] <- NULL
-          submit_next_job(job)
-        }
-
-        finished <- parallel::mccollect(active_jobs, wait = FALSE)
-        if (length(x = finished) == 0) {
-          if (as.numeric(difftime(Sys.time(), last_heartbeat, 
-                                  units = "secs")) >= 180) {
-            cat(sprintf("[DEBUG] Waiting for %d active tile jobs to finish...\n", 
-                        length(x = active_jobs)),
-                file = stderr())
-            try(flush.connection(stderr()), silent = TRUE)
-            pipeline_message(
-              sprintf("Waiting for %d active tile jobs to finish...", 
-                      length(x = active_jobs)),
-              process = "info")
-            last_heartbeat <- Sys.time()
-          }
-          Sys.sleep(1)
-          next
-        }
-
-        for (finished_key in names(x = finished)) {
-          res <- finished[[finished_key]]
-          if (!is.list(x = res)) {
-            if (finished_key %in% names(x = job_pid_to_tile_id)) {
-              tile_id_str <- job_pid_to_tile_id[[finished_key]]
-            } else if (finished_key %in% names(x = job_tile_id_to_pid)) {
-              tile_id_str <- finished_key
-            } else {
-              tile_id_str <- as.character(x = finished_key)
-            }
-            res <- list(tile_roads  = NA_integer_,
-                        with_data   = TRUE,
-                        elapsed     = NA_real_,
-                        tile_id_str = tile_id_str)
-          } else {
-            if (!"tile_id_str" %in% names(x = res) || 
-                length(x = res$tile_id_str) != 1) {
-              if (finished_key %in% names(x = job_pid_to_tile_id)) {
-                res$tile_id_str <- job_pid_to_tile_id[[finished_key]]
-              } else if (finished_key %in% names(x = job_tile_id_to_pid)) {
-                res$tile_id_str <- finished_key
-              } else {
-                res$tile_id_str <- as.character(x = finished_key)
-              }
-            }
-            if (!"tile_roads" %in% names(x = res) || 
-                length(x = res$tile_roads) != 1) {
-              res$tile_roads <- NA_integer_
-            }
-            if (!"with_data" %in% names(x = res) || 
-                length(x = res$with_data) != 1) {
-              res$with_data <- TRUE
-            }
-            if (!"elapsed" %in% names(x = res) || 
-                length(x = res$elapsed) != 1) {
-              res$elapsed <- NA_real_
-            }
-          }
-
-          tile_id_str <- as.character(x = res$tile_id_str)
-          tile_roads <- ifelse(test = is.na(x = res$tile_roads),
-                               yes  = NA_integer_,
-                               no   = as.integer(x = res$tile_roads))
-          tile_elapsed <- ifelse(test = is.na(x = res$elapsed),
-                                 yes  = NA_real_,
-                                 no   = as.numeric(x = res$elapsed))
-          tile_results[[length(x = tile_results) + 1L]] <- res
-          append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%s s)",
-                                     tile_id_str,
-                                     ifelse(test = is.na(x = tile_roads),
-                                            yes  = "unknown",
-                                            no   = fmt(tile_roads)),
-                                     ifelse(test = is.na(x = tile_elapsed),
-                                            yes  = "unknown",
-                                            no   = sprintf("%.1f", tile_elapsed))))
-          if ("error" %in% names(x = res)) {
-            pipeline_message(
-              sprintf("Tile %s failed: %s", tile_id_str, res$error),
-              level = 1, process = "error")
-          } else {
-            pipeline_message(
-              sprintf("Tile %s finished: %s roads, %s s", 
-                      tile_id_str,
-                      ifelse(test = is.na(x = tile_roads),
-                             yes  = "unknown",
-                             no   = fmt(tile_roads)),
-                      ifelse(test = is.na(x = tile_elapsed),
-                             yes  = "unknown",
-                             no   = sprintf("%.1f", tile_elapsed))),
-              process = "info")
-          }
-
-          if (finished_key %in% names(x = active_jobs)) {
-            active_jobs[[finished_key]] <- NULL
-          } else if (tile_id_str %in% names(x = job_tile_id_to_pid)) {
-            active_jobs[[job_tile_id_to_pid[[tile_id_str]]]] <- NULL
-          }
-        }
-      }
-    } else {
-      tile_results <- lapply(tile_jobs, process_tile)
+    pipeline_message(
+      sprintf("Processing %d tiles sequentially", length(x = tile_jobs)),
+      process = "info")
+    append_tile_progress(sprintf("Tile processing sequential"))
+    tile_results <- list()
+    for (job in tile_jobs) {
+      append_tile_progress(sprintf("Tile %s start", job$tile_id_str))
+      res <- process_tile(job)
+      tile_results[[length(tile_results) + 1L]] <- res
+      append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%s s)",
+                                 job$tile_id_str,
+                                 ifelse(test = is.na(x = res$tile_roads),
+                                        yes  = "unknown",
+                                        no   = fmt(res$tile_roads)),
+                                 ifelse(test = is.na(x = res$elapsed),
+                                        yes  = "unknown",
+                                        no   = sprintf("%.1f", res$elapsed))))
     }
 
     total_roads           <- sum(vapply(X = tile_results,
