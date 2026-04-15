@@ -1678,12 +1678,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
                    process = "info")
 
   # Calculate number of digits for tile numbering
-  n_tiles <- nrow(x = tiles)
+  n_tiles  <- nrow(x = tiles)
   n_digits <- floor(log10(n_tiles)) + 1L
 
   # --- Process tiles ---
   force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
-  tile_jobs <- list()
+  tile_jobs    <- list()
   tile_results <- list()
 
   tile_progress_log <- if (exists("PROJECT_ROOT", envir = .GlobalEnv)) {
@@ -1768,7 +1768,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     # Process tiles in parallel (or sequentially if cores=1)
     process_tile <- function(job) {
-      i           <- job$tile_index
+      i              <- job$tile_index
       tile           <- job$tile
       tile_id_str    <- job$tile_id_str
       tile_dir       <- job$tile_dir
@@ -1918,10 +1918,14 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 length(x = tile_jobs), cores),
         process = "info")
 
-      jobs <- list()
+      pending_jobs       <- tile_jobs
+      active_jobs        <- list()
       job_pid_to_tile_id <- list()
       job_tile_id_to_pid <- list()
-      for (job in tile_jobs) {
+      tile_results       <- list()
+      last_heartbeat     <- Sys.time()
+
+      submit_next_job <- function(job) {
         cat(sprintf("[DEBUG] Submitting tile %s\n", job$tile_id_str),
             file = stderr())
         try(flush.connection(stderr()), silent = TRUE)
@@ -1938,25 +1942,29 @@ build_france_tiles <- function(tile_size_m = 200000) {
           attr(job_obj, "pid")
         }
         pid <- as.character(pid)
-        jobs[[pid]] <- job_obj
-        job_pid_to_tile_id[[pid]] <- job$tile_id_str
-        job_tile_id_to_pid[[job$tile_id_str]] <- pid
+        active_jobs[[pid]]                    <<- job_obj
+        job_pid_to_tile_id[[pid]]             <<- job$tile_id_str
+        job_tile_id_to_pid[[job$tile_id_str]] <<- pid
       }
 
-      tile_results <- list()
-      last_heartbeat <- Sys.time()
-      while (length(x = jobs) > 0) {
-        finished <- parallel::mccollect(jobs, wait = FALSE)
+      while (length(x = pending_jobs) > 0L || length(x = active_jobs) > 0L) {
+        while (length(x = active_jobs) < cores && length(x = pending_jobs) > 0L) {
+          job <- pending_jobs[[1L]]
+          pending_jobs[[1L]] <- NULL
+          submit_next_job(job)
+        }
+
+        finished <- parallel::mccollect(active_jobs, wait = FALSE)
         if (length(x = finished) == 0) {
           if (as.numeric(difftime(Sys.time(), last_heartbeat, 
                                   units = "secs")) >= 180) {
-            cat(sprintf("[DEBUG] Waiting for %d tile jobs to finish...\n", 
-                        length(x = jobs)),
+            cat(sprintf("[DEBUG] Waiting for %d active tile jobs to finish...\n", 
+                        length(x = active_jobs)),
                 file = stderr())
             try(flush.connection(stderr()), silent = TRUE)
             pipeline_message(
-              sprintf("Waiting for %d tile jobs to finish...", 
-                      length(x = jobs)),
+              sprintf("Waiting for %d active tile jobs to finish...", 
+                      length(x = active_jobs)),
               process = "info")
             last_heartbeat <- Sys.time()
           }
@@ -2002,6 +2010,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
               res$elapsed <- NA_real_
             }
           }
+
           tile_id_str <- as.character(x = res$tile_id_str)
           tile_roads <- ifelse(test = is.na(x = res$tile_roads),
                                yes  = NA_integer_,
@@ -2035,10 +2044,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
               process = "info")
           }
 
-          if (finished_key %in% names(x = jobs)) {
-            jobs[[finished_key]] <- NULL
+          if (finished_key %in% names(x = active_jobs)) {
+            active_jobs[[finished_key]] <- NULL
           } else if (tile_id_str %in% names(x = job_tile_id_to_pid)) {
-            jobs[[job_tile_id_to_pid[[tile_id_str]]]] <- NULL
+            active_jobs[[job_tile_id_to_pid[[tile_id_str]]]] <- NULL
           }
         }
       }
