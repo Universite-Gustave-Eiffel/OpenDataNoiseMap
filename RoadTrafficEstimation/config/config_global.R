@@ -15,7 +15,7 @@ CONFIG_GLOBAL <- list(
   # ----------------------------------------------------------------------------
   # Number of cores for parallel processing in tiled prediction
   # ----------------------------------------------------------------------------
-  PREDICTION_TILE_CORES = 12,
+  PREDICTION_TILE_CORES = 6,
 
   # ----------------------------------------------------------------------------
   # CRS for transforming or converting simple feature coordinates (Lambert-93)

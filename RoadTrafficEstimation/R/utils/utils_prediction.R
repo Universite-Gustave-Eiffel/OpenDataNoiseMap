@@ -1684,6 +1684,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   # --- Process tiles ---
   force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
   tile_jobs <- list()
+  tile_results <- list()
 
   tile_progress_log <- if (exists("PROJECT_ROOT", envir = .GlobalEnv)) {
     file.path(PROJECT_ROOT, "logs", "pipeline_prediction_tiles.log")
@@ -1873,6 +1874,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
               dsn        = tile_file,
               delete_dsn = TRUE,
               quiet      = TRUE)
+            pipeline_message(
+              sprintf("Tile %s chunk '%s' file written: %s",
+                      tile_id_str, chunk_name, rel_path(tile_file)),
+              level = 2, process = "info")
           }
         }
 
@@ -2076,6 +2081,57 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 total_tiles_with_data, avg_time),
         process = "info")
     }
+
+    tile_grid_fp <- file.path(output_dir,
+                               sprintf("07_predictions_%s_tile_grid.gpkg", mode))
+
+    tile_metadata <- tiles
+    tile_metadata$tile_id_str <- sprintf("%0*d", n_digits, tile_metadata$tile_id)
+    tile_metadata$tile_roads  <- NA_integer_
+    tile_metadata$with_data  <- FALSE
+    tile_metadata$tile_status <- "skipped"
+
+    if (length(x = tile_results) > 0) {
+      for (res in tile_results) {
+        tidx <- which(tile_metadata$tile_id_str == as.character(res$tile_id_str))
+        if (length(x = tidx) == 1L) {
+          tile_metadata$tile_roads[tidx] <- as.integer(res$tile_roads)
+          tile_metadata$with_data[tidx] <- isTRUE(res$with_data)
+          tile_metadata$tile_status[tidx] <- if ("error" %in% names(x = res)) {
+            "error"
+          } else if (isTRUE(res$with_data)) {
+            "with_data"
+          } else {
+            "no_data"
+          }
+        }
+      }
+    }
+
+    tile_polys <- lapply(seq_len(nrow(x = tile_metadata)), FUN = function(i) {
+      sf::st_polygon(list(matrix(
+        c(tile_metadata$xmin[i], tile_metadata$ymin[i],
+          tile_metadata$xmax[i], tile_metadata$ymin[i],
+          tile_metadata$xmax[i], tile_metadata$ymax[i],
+          tile_metadata$xmin[i], tile_metadata$ymax[i],
+          tile_metadata$xmin[i], tile_metadata$ymin[i]),
+        ncol = 2,
+        byrow = TRUE)))
+    })
+
+    tile_grid_sf <- sf::st_sf(
+      tile_metadata[, c("tile_id_str", "tile_roads", "with_data", "tile_status")],
+      geometry = sf::st_sfc(tile_polys, crs = cfg$TARGET_CRS))
+
+    pipeline_message(sprintf("Writing France tile grid overview: %s", rel_path(tile_grid_fp)),
+                     level = 1, progress = "start", process = "save")
+    sf::st_write(
+      obj        = tile_grid_sf,
+      dsn        = tile_grid_fp,
+      delete_dsn = TRUE,
+      quiet      = TRUE)
+    pipeline_message(sprintf("France tile grid overview written: %s", rel_path(tile_grid_fp)),
+                     level = 1, progress = "end", process = "save")
   }
 
   rm(models_list, feature_info)
