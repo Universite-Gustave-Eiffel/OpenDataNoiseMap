@@ -2020,6 +2020,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
       next
     }
 
+    pipeline_message(
+      sprintf("Merging chunk '%s' with %d tile files", chunk_name, length(tile_files)),
+      level = 1, process = "join")
+
     # Read and combine all tile sf objects
     check_memory_available(
       operation_name = sprintf("Merge %d tiles for chunk '%s'", 
@@ -2028,14 +2032,21 @@ build_france_tiles <- function(tile_size_m = 200000) {
       warn_gb        = 8)
 
     tile_sf_list <- lapply(X = tile_files, FUN= function(tf) {
+      pipeline_message(
+        sprintf("Reading tile file %s for chunk '%s'", rel_path(tf), chunk_name),
+        level = 2, process = "search")
       sf_obj <- sf::st_read(dsn   = tf, 
                             quiet = TRUE)
       sf_obj <- ensure_target_crs(sf_obj     = sf_obj, 
                                   target_crs = cfg$TARGET_CRS)
       if (is.na(x = sf::st_crs(sf_obj))) {
         pipeline_message(
-          sprintf("Tile chunk file %s has missing CRS after read", basename(tf)),
-          process = "warning")
+          sprintf("Tile chunk file %s has missing CRS after read", rel_path(tf)),
+          level = 2, process = "fail")
+      } else {
+        pipeline_message(
+          sprintf("Tile file %s loaded with %d rows", rel_path(tf), nrow(sf_obj)),
+          level = 2, process = "valid")
       }
       sf_obj
     })
