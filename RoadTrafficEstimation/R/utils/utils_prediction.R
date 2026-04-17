@@ -163,14 +163,18 @@ ensure_target_crs <- function(sf_obj, target_crs) {
 #' @param dsn Destination GeoPackage path.
 #' @return TRUE if writing and rename succeeded, otherwise throws.
 write_sf_gpkg_atomic <- function(sf_obj, dsn) {
-  temp_fp <- tempfile(pattern = "tmp_tile_", fileext = ".gpkg")
+  dest_dir <- dirname(dsn)
+  dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
+  temp_fp <- tempfile(pattern = "tmp_tile_", fileext = ".gpkg", tmpdir = dest_dir)
+
   sf::st_write(obj        = sf_obj,
                dsn        = temp_fp,
                delete_dsn = TRUE,
                quiet      = TRUE)
-  dir.create(dirname(dsn), recursive = TRUE, showWarnings = FALSE)
+
   if (!file.rename(from = temp_fp, to = dsn)) {
     if (!file.copy(from = temp_fp, to = dsn, overwrite = TRUE)) {
+      unlink(temp_fp)
       stop(sprintf("Cannot move temporary GeoPackage to %s", dsn))
     }
     unlink(temp_fp)
@@ -286,20 +290,14 @@ repair_tile_chunk_files <- function(tile_files, target_crs) {
       next
     }
 
-    temp_fp <- tempfile(fileext = ".gpkg")
     write_err <- tryCatch({
       write_sf_gpkg_atomic(sf_obj = sf_obj,
-                           dsn    = temp_fp)
+                           dsn    = tile_fp)
       NULL
     }, error = function(e) e)
 
     if (inherits(x = write_err, "error")) {
       failed[[basename(tile_fp)]] <- write_err$message
-      next
-    }
-
-    if (!file.rename(from = temp_fp, to = tile_fp)) {
-      failed[[basename(tile_fp)]] <- "cannot rename repaired file"
       next
     }
     repaired <- c(repaired, basename(tile_fp))
