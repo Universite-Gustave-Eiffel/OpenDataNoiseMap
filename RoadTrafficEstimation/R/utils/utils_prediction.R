@@ -218,6 +218,71 @@ validate_tile_chunk_files <- function(tile_files, target_crs) {
   return(list(is_valid = length(x = issues) == 0L, 
               issues = issues))
 }
+
+#' 
+# -------------------------------------------------------------------------------
+# Repair tile chunk GeoPackage files with bad CRS metadata
+# -------------------------------------------------------------------------------
+#' @title Repair tile chunk GeoPackage files with bad CRS metadata
+#' @description Reads each file, assigns/transforms the target CRS when needed,
+#'              and overwrites the original GeoPackage.
+#' @param tile_files Character vector of GeoPackage file paths.
+#' @param target_crs Target CRS (numeric EPSG code or crs object).
+#' @return List containing repaired and failed file names.
+repair_tile_chunk_files <- function(tile_files, target_crs) {
+  repaired <- character(0)
+  failed   <- list()
+
+  for (tile_fp in tile_files) {
+    if (!file.exists(tile_fp)) {
+      failed[[basename(tile_fp)]] <- "file does not exist"
+      next
+    }
+
+    sf_obj <- tryCatch(
+      sf::st_read(dsn   = tile_fp,
+                  quiet = TRUE),
+      error = function(e) e)
+    if (inherits(x = sf_obj, "error")) {
+      failed[[basename(tile_fp)]] <- sf_obj$message
+      next
+    }
+
+    if (sf_crs_matches(x = sf::st_crs(x = sf_obj),
+                       y = target_crs)) {
+      next
+    }
+
+    sf_obj <- ensure_target_crs(sf_obj     = sf_obj,
+                                target_crs = target_crs)
+    if (is.na(x = sf::st_crs(x = sf_obj))) {
+      failed[[basename(tile_fp)]] <- "unable to assign target CRS"
+      next
+    }
+
+    temp_fp <- tempfile(fileext = ".gpkg")
+    write_err <- tryCatch({
+      sf::st_write(obj        = sf_obj,
+                   dsn        = temp_fp,
+                   delete_dsn = TRUE,
+                   quiet      = TRUE)
+      NULL
+    }, error = function(e) e)
+
+    if (inherits(x = write_err, "error")) {
+      failed[[basename(tile_fp)]] <- write_err$message
+      next
+    }
+
+    if (!file.rename(from = temp_fp, to = tile_fp)) {
+      failed[[basename(tile_fp)]] <- "cannot rename repaired file"
+      next
+    }
+    repaired <- c(repaired, basename(tile_fp))
+  }
+
+  return(list(repaired = repaired, failed = failed))
+}
 #' 
 #' ------------------------------------------------------------------------------
 # Load and crop France engineered network
@@ -1717,15 +1782,46 @@ build_france_tiles <- function(tile_size_m = 200000) {
           process = "info")
         next
       }
+
+      repairable <- all(
+        vapply(X         = validation$issues, 
+               FUN       = function(msg) {
+                              grepl(pattern   = "CRS mismatch|missing CRS|NA", 
+                                    x         = msg)}, 
+                                    FUN.VALUE = logical(1)))
+
       invalid_reasons <- paste(
         sprintf("- %s: %s",
                 names(x = validation$issues),
                 unlist(validation$issues)),
         collapse = "\n")
+
       pipeline_message(
-        sprintf("Reprocessing tile %s: existing chunk files present but not valid\n%s",
+        sprintf("Repairing tile %s: existing chunk files present but not valid\n%s",
                 tile_id_str, invalid_reasons),
-        process = "warning")
+        level = 2, progress = "start", process = "save")
+
+      if (repairable) {
+        repair_res <- repair_tile_chunk_files(expected_files, cfg$TARGET_CRS)
+        if (length(x = repair_res$failed) == 0L) {
+          pipeline_message(
+            sprintf("Tile %s CRS repair finished: %d files rewritten", 
+                    tile_id_str, length(x = repair_res$repaired)),
+            level = 2, progress = "end", process = "save")
+          next
+        }
+
+        pipeline_message(
+          sprintf("Tile %s CRS repair partially failed; reprocessing tile", 
+                  tile_id_str),
+          level = 2, progress = "end", process = "warning")
+      } else {
+        pipeline_message(
+          sprintf("Tile %s cannot be repaired automatically; reprocessing tile", 
+                  tile_id_str),
+          level = 2, progress = "end", process = "warning")
+      }
+
       file.remove(expected_files)
     }
 
@@ -1739,7 +1835,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
   if (length(x = tile_jobs) == 0) {
     pipeline_message("All tiles already exist and are valid; no tile processing needed.",
-                     process = "info")
+                     level = 1, progress = "end", process = "info")
     total_roads           <- 0L
     total_tiles_with_data <- 0L
   } else {
@@ -1885,7 +1981,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     pipeline_message(
       sprintf("Processing %d tiles sequentially", length(x = tile_jobs)),
-      process = "info")
+      level = 1, progress = "start", process = "info")
     append_tile_progress(sprintf("Tile processing sequential"))
     tile_results <- list()
     for (job in tile_jobs) {
@@ -1937,6 +2033,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 total_tiles_with_data, avg_time),
         process = "info")
     }
+    pipeline_message(
+      sprintf("Tile processing loop finished for %d tiles", length(x = tile_jobs)),
+      level = 1, progress = "end", process = "info")
 
     tile_grid_fp <- file.path(output_dir,
                                sprintf("07_predictions_%s_tile_grid.gpkg", mode))
