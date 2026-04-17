@@ -118,6 +118,17 @@ OUT_LOG="${LOG_DIR}/pipeline_${LOG_SUFFIX}.Rout"
 mkdir -p "${LOG_DIR}"
 [ -f "$OUT_LOG" ] && rm "$OUT_LOG"
 
+PROJECT_TMPDIR="${PROJECT_ROOT}/tmp"
+mkdir -p "${PROJECT_TMPDIR}"
+if [ -w "${PROJECT_TMPDIR}" ]; then
+  export TMPDIR="${PROJECT_TMPDIR}"
+  export TEMP="${PROJECT_TMPDIR}"
+  export TMP="${PROJECT_TMPDIR}"
+  echo "🧪 R temp directory set to ${PROJECT_TMPDIR}"
+else
+  echo "⚠️ Cannot write to ${PROJECT_TMPDIR}; R will use system temp dir"
+fi
+
 echo "🚀 RUN PIPELINE: ${MAIN_R}"
 echo "📜 R LOG: ${OUT_LOG}"
 
