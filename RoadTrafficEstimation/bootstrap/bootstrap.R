@@ -6,6 +6,25 @@
 # Load utility functions
 # ------------------------------------------------------------------------------
 
+# Ensure a writable temporary directory exists on HPC, to avoid R_TempDir creation failures.
+project_tmp <- file.path(PROJECT_ROOT, "tmp")
+dir.create(project_tmp, recursive = TRUE, showWarnings = FALSE)
+use_tmp <- FALSE
+if (dir.exists(project_tmp) && file.access(project_tmp, mode = 2) == 0) {
+  use_tmp <- TRUE
+} else if (nzchar(Sys.getenv(x = "TMPDIR"))) {
+  existing_tmp <- Sys.getenv(x = "TMPDIR")
+  if (dir.exists(existing_tmp) && file.access(existing_tmp, mode = 2) == 0) {
+    use_tmp <- TRUE
+    project_tmp <- existing_tmp
+  }
+}
+if (use_tmp) {
+  Sys.setenv(TMPDIR = project_tmp,
+             TEMP   = project_tmp,
+             TMP    = project_tmp)
+}
+
 utils_dir   <- file.path(PROJECT_ROOT, "R", "utils")
 utils_files <- list.files(
   path       = utils_dir,
@@ -16,7 +35,7 @@ for (uf in utils_files) {
   source(uf)
 }
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Get computing environment information
 # ------------------------------------------------------------------------------
 
