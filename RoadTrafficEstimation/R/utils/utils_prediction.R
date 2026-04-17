@@ -123,7 +123,7 @@ sf_crs_to_string <- function(crs) {
   if (!is.null(x = crs$proj4string) && nzchar(x = crs$proj4string)) {
     return(crs$proj4string)
   }
-  return(as.character(crs)[1])
+  return(as.character(x = crs)[1])
 }
 #' 
 # -------------------------------------------------------------------------------
@@ -171,6 +171,19 @@ write_sf_gpkg_atomic <- function(sf_obj, dsn) {
                dsn        = temp_fp,
                delete_dsn = TRUE,
                quiet      = TRUE)
+
+  validation_sf <- tryCatch(
+    sf::st_read(dsn   = temp_fp,
+                quiet = TRUE,
+                n_max = 0),
+    error = function(e) e)
+
+  if (inherits(validation_sf, "error") || !inherits(validation_sf, "sf")) {
+    unlink(temp_fp)
+    stop(sprintf("GeoPackage validation failed for temporary file %s: %s",
+                 temp_fp,
+                 if (inherits(validation_sf, "error")) validation_sf$message else "output is not an sf object"))
+  }
 
   if (!file.rename(from = temp_fp, to = dsn)) {
     if (!file.copy(from = temp_fp, to = dsn, overwrite = TRUE)) {
@@ -241,7 +254,7 @@ validate_tile_chunk_files <- function(tile_files, target_crs) {
                         y = target_crs)) {
       issues[[basename(tile_fp)]] <- sprintf(
         "CRS mismatch (%s)",
-        as.character(sf::st_crs(x = sf_obj))
+        as.character(x = sf::st_crs(x = sf_obj))
       )
     }
   }
@@ -260,7 +273,7 @@ validate_tile_chunk_files <- function(tile_files, target_crs) {
 #' @param target_crs Target CRS (numeric EPSG code or crs object).
 #' @return List containing repaired and failed file names.
 repair_tile_chunk_files <- function(tile_files, target_crs) {
-  repaired <- character(0)
+  repaired <- character(x = 0)
   failed   <- list()
 
   for (tile_fp in tile_files) {
@@ -1108,7 +1121,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   idx_h <- which(x = lengths(g_h) == 2)
   if (length(x = idx_h) > 0) {
     h_vals <- as.integer(x = vapply(X   = g_h[idx_h], 
-                                    FUN = function(x) x[2], character(1)))
+                                    FUN = function(x) x[2], character(x = 1)))
     start_str <- sprintf("%d-01-04 %02d:00:00", base_year, h_vals)
     datetimestart[idx_h] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_h]   <- datetimestart[idx_h] + 3600
@@ -1122,7 +1135,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   idx_wd <- which(x = lengths(g_wd) == 2)
   if (length(x = idx_wd) > 0) {
     h_vals    <- as.integer(x   = vapply(X   = g_wd[idx_wd], 
-                                         FUN = function(x) x[2], character(1)))
+                                         FUN = function(x) x[2], character(x = 1)))
     start_str <- sprintf("%d-01-02 %02d:00:00", base_year, h_vals)
     datetimestart[idx_wd] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_wd]   <- datetimestart[idx_wd] + 3600
@@ -1136,7 +1149,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   idx_we <- which(x = lengths(g_we) == 2)
   if (length(x = idx_we) > 0) {
     h_vals    <- as.integer(x   = vapply(X   = g_we[idx_we], 
-                                         FUN = function(x) x[2], character(1)))
+                                         FUN = function(x) x[2], character(x = 1)))
     start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
     datetimestart[idx_we] <- as.POSIXct(x  = start_str, 
                                         tz = "UTC")
@@ -1770,8 +1783,20 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
   # --- Process tiles ---
   force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
-  tile_jobs    <- list()
-  tile_results <- list()
+  tile_jobs        <- list()
+  tile_results     <- list()
+  tile_seq_counter <- 0L
+
+  if (force_reprocess && dir.exists(output_dir)) {
+    old_tile_dirs <- list.dirs(path = output_dir, recursive = FALSE, full.names = TRUE)
+    old_tile_dirs <- old_tile_dirs[grepl(pattern = "^tile_[0-9]+$", x = basename(old_tile_dirs))]
+    if (length(x = old_tile_dirs) > 0L) {
+      unlink(old_tile_dirs, recursive = TRUE, force = TRUE)
+      pipeline_message(sprintf("Removed %d existing tile directories due to force reprocess", 
+                               length(x = old_tile_dirs)),
+                       level = 2, process = "warning")
+    }
+  }
 
   tile_progress_log <- if (exists("PROJECT_ROOT", envir = .GlobalEnv)) {
     file.path(PROJECT_ROOT, "logs", "pipeline_prediction_tiles.log")
@@ -1788,70 +1813,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
   for (i in seq_len(n_tiles)) {
     tile           <- tiles[i, ]
     tile_id_str    <- sprintf("%0*d", n_digits, i)
-    tile_dir       <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
-    expected_files <- file.path(
-      tile_dir,
-      sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
-              mode, names(x = temporal_chunks), tile_id_str)
-    )
-
-    if (!force_reprocess && all(file.exists(expected_files))) {
-      validation <- validate_tile_chunk_files(expected_files, cfg$TARGET_CRS)
-      if (validation$is_valid) {
-        pipeline_message(
-          sprintf("Skipping tile %s: all %d chunk files already exist", 
-                  tile_id_str, length(x = expected_files)),
-          process = "info")
-        next
-      }
-
-      repairable <- all(
-        vapply(X         = validation$issues, 
-               FUN       = function(msg) {
-                              grepl(pattern   = "CRS mismatch|missing CRS|NA", 
-                                    x         = msg)}, 
-                                    FUN.VALUE = logical(1)))
-
-      invalid_reasons <- paste(
-        sprintf("- %s: %s",
-                names(x = validation$issues),
-                unlist(validation$issues)),
-        collapse = "\n")
-
-      pipeline_message(
-        sprintf("Repairing tile %s: existing chunk files present but not valid\n%s",
-                tile_id_str, invalid_reasons),
-        level = 2, progress = "start", process = "save")
-
-      if (repairable) {
-        repair_res <- repair_tile_chunk_files(expected_files, cfg$TARGET_CRS)
-        if (length(x = repair_res$failed) == 0L) {
-          pipeline_message(
-            sprintf("Tile %s CRS repair finished: %d files rewritten", 
-                    tile_id_str, length(x = repair_res$repaired)),
-            level = 2, progress = "end", process = "save")
-          next
-        }
-
-        pipeline_message(
-          sprintf("Tile %s CRS repair partially failed; reprocessing tile", 
-                  tile_id_str),
-          level = 2, progress = "end", process = "warning")
-      } else {
-        pipeline_message(
-          sprintf("Tile %s cannot be repaired automatically; reprocessing tile", 
-                  tile_id_str),
-          level = 2, progress = "end", process = "warning")
-      }
-
-      file.remove(expected_files)
-    }
 
     tile_jobs[[length(tile_jobs) + 1L]] <- list(
-      tile_index   = i,
-      tile         = tile,
-      tile_id_str  = tile_id_str,
-      tile_dir     = tile_dir
+      tile_index       = i,
+      tile             = tile,
+      grid_tile_id_str = tile_id_str
     )
   }
 
@@ -1862,12 +1828,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
     total_tiles_with_data <- 0L
   } else {
     process_tile <- function(job) {
-      i              <- job$tile_index
-      tile           <- job$tile
-      tile_id_str    <- job$tile_id_str
-      tile_dir       <- job$tile_dir
+      i                 <- job$tile_index
+      tile              <- job$tile
+      grid_tile_id_str  <- job$grid_tile_id_str
 
-      dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
       t0 <- proc.time()["elapsed"]
 
       tryCatch({
@@ -1887,12 +1851,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
         if (nrow(x = tile_sf) == 0) {
           elapsed <- proc.time()["elapsed"] - t0
           pipeline_message(
-            sprintf("Tile %s has no roads; skipping", tile_id_str),
+            sprintf("Tile %s has no roads; skipping", grid_tile_id_str),
             process = "warning")
-          return(list(tile_roads = 0L,
-                      with_data = FALSE,
-                      elapsed = elapsed,
-                      tile_id_str = tile_id_str))
+          return(list(tile_roads       = 0L,
+                      with_data       = FALSE,
+                      elapsed         = elapsed,
+                      grid_tile_id_str = grid_tile_id_str,
+                      tile_dir_id     = NA_character_))
         }
 
         tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
@@ -1900,8 +1865,17 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         n_tile <- nrow(x = tile_sf)
         pipeline_message(
-          sprintf("Processing tile %s: %s roads", tile_id_str, fmt(n_tile)),
+          sprintf("Processing tile %s: %s roads", grid_tile_id_str, fmt(n_tile)),
           process = "info")
+
+        tile_seq_counter <<- tile_seq_counter + 1L
+        tile_dir_id <- sprintf("%0*d", n_digits, tile_seq_counter)
+        tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_dir_id))
+        if (dir.exists(path = tile_dir)) {
+          unlink(x = tile_dir, recursive = TRUE, force = TRUE)
+        }
+        dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
+
         geom_for_merge <- tile_sf[, c("osm_id", "geom")]
         tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
         rm(tile_sf)
@@ -1916,7 +1890,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         check_memory_available(
           operation_name = sprintf("Pivot tile %s (%s roads)",
-                                   tile_id_str, fmt(n_tile)),
+                                   grid_tile_id_str, fmt(n_tile)),
           min_gb         = 1,
           warn_gb        = 2)
 
@@ -1939,7 +1913,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         validation       <- validate_predictions(predictions_long)
         if (!validation$is_valid) {
           pipeline_message(sprintf("Validation warnings in tile %s: %s issues",
-                                   tile_id_str, length(x = validation$issues)),
+                                   grid_tile_id_str, length(x = validation$issues)),
                            process = "warning")
         }
 
@@ -1950,24 +1924,34 @@ build_france_tiles <- function(tile_size_m = 200000) {
             mutate(period = as.character(x = period))
 
           if (nrow(x = chunk_long) > 0) {
+            geom_col_name <- attr(geom_for_merge, "sf_column")
+            geom_for_merge_df <- sf::st_drop_geometry(x = geom_for_merge)
+            geom_for_merge_df[[geom_col_name]] <- sf::st_geometry(geom_for_merge)
+
             tile_chunk_sf <- dplyr::left_join(
               x  = chunk_long,
-              y  = geom_for_merge,
+              y  = geom_for_merge_df,
               by = "osm_id")
             tile_chunk_sf <- sf::st_as_sf(
               x              = tile_chunk_sf,
-              sf_column_name = attr(geom_for_merge, "sf_column"))
+              sf_column_name = geom_col_name)
+
+            if (!inherits(tile_chunk_sf, "sf") || is.null(sf::st_geometry(tile_chunk_sf))) {
+              stop(sprintf("Tile %s chunk '%s' failed to build a valid sf object", 
+                           grid_tile_id_str, chunk_name))
+            }
+
             tile_chunk_sf <- ensure_target_crs(sf_obj = tile_chunk_sf,
                                                target_crs = cfg$TARGET_CRS)
 
             tile_file <- file.path(tile_dir,
                                    sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
-                                           mode, chunk_name, tile_id_str))
+                                           mode, chunk_name, tile_dir_id))
             write_sf_gpkg_atomic(sf_obj = tile_chunk_sf,
                                  dsn    = tile_file)
             pipeline_message(
               sprintf("Tile %s chunk '%s' file written: %s",
-                      tile_id_str, chunk_name, rel_path(tile_file)),
+                      grid_tile_id_str, chunk_name, rel_path(tile_file)),
               level = 2, process = "info")
           }
         }
@@ -1978,23 +1962,25 @@ build_france_tiles <- function(tile_size_m = 200000) {
         elapsed <- proc.time()["elapsed"] - t0
         pipeline_message(
           sprintf("Tile %s completed: %s roads in %.1f s", 
-                  tile_id_str, fmt(n_tile), elapsed),
+                  grid_tile_id_str, fmt(n_tile), elapsed),
           process = "info")
 
-        list(tile_roads = n_tile,
-             with_data = TRUE,
-             elapsed = elapsed,
-             tile_id_str = tile_id_str)
+        list(tile_roads        = n_tile,
+             with_data        = TRUE,
+             elapsed          = elapsed,
+             grid_tile_id_str = grid_tile_id_str,
+             tile_dir_id      = tile_dir_id)
       }, error = function(e) {
         elapsed <- proc.time()["elapsed"] - t0
         pipeline_message(
-          sprintf("Tile %s failed: %s", tile_id_str, conditionMessage(e)),
+          sprintf("Tile %s failed: %s", grid_tile_id_str, conditionMessage(e)),
           level = 1, process = "error")
-        list(tile_roads  = NA_integer_,
-             with_data   = FALSE,
-             elapsed     = elapsed,
-             tile_id_str = tile_id_str,
-             error       = conditionMessage(e))
+        list(tile_roads        = NA_integer_,
+           with_data        = FALSE,
+           elapsed          = elapsed,
+           grid_tile_id_str = grid_tile_id_str,
+           tile_dir_id      = NA_character_,
+           error            = conditionMessage(e))
       })
     }
 
@@ -2004,11 +1990,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
     append_tile_progress(sprintf("Tile processing sequential"))
     tile_results <- list()
     for (job in tile_jobs) {
-      append_tile_progress(sprintf("Tile %s start", job$tile_id_str))
+      append_tile_progress(sprintf("Tile %s start", job$grid_tile_id_str))
       res <- process_tile(job)
       tile_results[[length(tile_results) + 1L]] <- res
       append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%s s)",
-                                 job$tile_id_str,
+                                 job$grid_tile_id_str,
                                  ifelse(test = is.na(x = res$tile_roads),
                                         yes  = "unknown",
                                         no   = fmt(res$tile_roads)),
@@ -2067,7 +2053,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     if (length(x = tile_results) > 0) {
       for (res in tile_results) {
-        tidx <- which(tile_metadata$tile_id_str == as.character(res$tile_id_str))
+        tidx <- which(tile_metadata$tile_id_str == as.character(x = res$grid_tile_id_str))
         if (length(x = tidx) == 1L) {
           tile_metadata$tile_roads[tidx] <- as.integer(res$tile_roads)
           tile_metadata$with_data[tidx] <- isTRUE(res$with_data)
@@ -2118,19 +2104,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
   for (chunk_name in names(x = temporal_chunks)) {
     chunk_file <- chunk_paths[[chunk_name]]
     
-    # Collect all tile files for this chunk
-    tile_files <- list()
-    for (i in seq_len(n_tiles)) {
-      tile_id_str <- sprintf("%0*d", n_digits, i)
-      tile_dir    <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
-      tile_file   <- file.path(tile_dir, 
-                          sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
-                                  mode, chunk_name, tile_id_str))
-      if (file.exists(tile_file)) {
-        tile_files <- c(tile_files, tile_file)
-      }
-    }
-    
+    all_tile_files <- list.files(path      = output_dir,
+                                 pattern   = "^07_predictions_.*_tile_.*\\.gpkg$",
+                                 recursive = TRUE,
+                                 full.names = TRUE)
+    tile_files <- all_tile_files[grepl(paste0("_", chunk_name, "_tile_"), all_tile_files, fixed = TRUE)]
+    tile_files <- sort(tile_files)
+
     if (length(tile_files) == 0) {
       pipeline_message(sprintf("No tile files found for chunk '%s'", 
                                chunk_name),
@@ -2172,7 +2152,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
     # Ensure all tiles share the same target CRS before bind
     tile_crs <- vapply(X = tile_sf_list, FUN = function(x) {
       sf_crs_to_string(crs = sf::st_crs(x))
-    }, character(1))
+    }, character(x = 1))
     if (length(x = unique(x = tile_crs)) > 1) {
       pipeline_message(
         sprintf("CRS mismatch detected across tile chunk files: %s",

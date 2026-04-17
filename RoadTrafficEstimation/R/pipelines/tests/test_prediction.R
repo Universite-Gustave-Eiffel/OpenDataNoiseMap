@@ -224,6 +224,44 @@ test_prediction <- function() {
     tests_failed <- tests_failed + 1
   }
   
+  # Test 6: France tile GeoPackages readability
+  pipeline_message("Test 6: France tile GeoPackages readability", level = 1, 
+                   progress = "start", process = "search")
+  if (!is.null(CFG$FRANCE_OUTPUT_DIR) && dir.exists(CFG$FRANCE_OUTPUT_DIR)) {
+    france_tile_files <- list.files(path      = CFG$FRANCE_OUTPUT_DIR,
+                                   pattern   = "^07_predictions_.*_tile_.*\\.gpkg$",
+                                   recursive = TRUE,
+                                   full.names = TRUE)
+    if (length(x = france_tile_files) == 0) {
+      pipeline_message("No France tile GeoPackage files found", level = 1, 
+                       progress = "end", process = "info")
+    } else {
+      tile_readable <- TRUE
+      for (tile_fp in france_tile_files) {
+        tile_sf <- tryCatch(
+          sf::st_read(dsn   = tile_fp, quiet = TRUE, n_max = 0),
+          error = function(e) e)
+        if (inherits(tile_sf, "error") || !inherits(tile_sf, "sf")) {
+          pipeline_message(sprintf("Unreadable tile GeoPackage: %s", rel_path(tile_fp)),
+                           level = 1, progress = "end", process = "fail")
+          tile_readable <- FALSE
+          break
+        }
+      }
+      if (tile_readable) {
+        pipeline_message(sprintf("All %d France tile GeoPackages are readable", 
+                                 length(x = france_tile_files)),
+                         level = 1, progress = "end", process = "valid")
+        tests_passed <- tests_passed + 1
+      } else {
+        tests_failed <- tests_failed + 1
+      }
+    }
+  } else {
+    pipeline_message("France tile output directory not found", level = 1, 
+                     progress = "end", process = "info")
+  }
+  
   # Summary
   pipeline_message(sprintf("Prediction tests: %d passed, %d failed", 
                            tests_passed, tests_failed),
