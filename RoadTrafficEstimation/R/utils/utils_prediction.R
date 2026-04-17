@@ -151,6 +151,32 @@ ensure_target_crs <- function(sf_obj, target_crs) {
   }
   return(sf_obj)
 }
+
+#' 
+# -------------------------------------------------------------------------------
+# Write sf object to GeoPackage using a temporary file first
+# -------------------------------------------------------------------------------
+#' @title Write sf GeoPackage atomically
+#' @description Write an sf object to a temporary GeoPackage and rename it to the
+#'              final destination to avoid leaving partially written files.
+#' @param sf_obj An sf object to write.
+#' @param dsn Destination GeoPackage path.
+#' @return TRUE if writing and rename succeeded, otherwise throws.
+write_sf_gpkg_atomic <- function(sf_obj, dsn) {
+  temp_fp <- tempfile(pattern = "tmp_tile_", fileext = ".gpkg")
+  sf::st_write(obj        = sf_obj,
+               dsn        = temp_fp,
+               delete_dsn = TRUE,
+               quiet      = TRUE)
+  dir.create(dirname(dsn), recursive = TRUE, showWarnings = FALSE)
+  if (!file.rename(from = temp_fp, to = dsn)) {
+    if (!file.copy(from = temp_fp, to = dsn, overwrite = TRUE)) {
+      stop(sprintf("Cannot move temporary GeoPackage to %s", dsn))
+    }
+    unlink(temp_fp)
+  }
+  invisible(TRUE)
+}
 #' 
 # -------------------------------------------------------------------------------
 # Tile chunk GeoPackage files validation
@@ -262,10 +288,8 @@ repair_tile_chunk_files <- function(tile_files, target_crs) {
 
     temp_fp <- tempfile(fileext = ".gpkg")
     write_err <- tryCatch({
-      sf::st_write(obj        = sf_obj,
-                   dsn        = temp_fp,
-                   delete_dsn = TRUE,
-                   quiet      = TRUE)
+      write_sf_gpkg_atomic(sf_obj = sf_obj,
+                           dsn    = temp_fp)
       NULL
     }, error = function(e) e)
 
@@ -1941,11 +1965,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
             tile_file <- file.path(tile_dir,
                                    sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
                                            mode, chunk_name, tile_id_str))
-            sf::st_write(
-              obj        = tile_chunk_sf,
-              dsn        = tile_file,
-              delete_dsn = TRUE,
-              quiet      = TRUE)
+            write_sf_gpkg_atomic(sf_obj = tile_chunk_sf,
+                                 dsn    = tile_file)
             pipeline_message(
               sprintf("Tile %s chunk '%s' file written: %s",
                       tile_id_str, chunk_name, rel_path(tile_file)),
