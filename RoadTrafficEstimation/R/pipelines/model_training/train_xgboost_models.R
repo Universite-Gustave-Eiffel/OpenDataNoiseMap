@@ -1757,8 +1757,8 @@ if (nrow(x = emission_test) > 0) {
     table_lines,
     paste("\nNote: the objective of the report is solely the quality of", 
           "dB emission predictions on test sections (not the error on", 
-          "gross road traffic)."
-  )
+          "gross road traffic).")
+    )
 
   text(x      = 0.02,
        y      = seq(from       = 0.96, 
