@@ -402,7 +402,16 @@ process_network_features <- function(data, rules,
                                      default_degre = 1, 
                                      default_number_of_lanes = 2, 
                                      default_vehicle_speed = 50) {
-  data.table::setDT(x= data)
+  # Preserve sf geometry if present
+  is_sf <- inherits(x = data, what = "sf")
+  if (is_sf) {
+    geom_col  <- attr(data, "sf_column")
+    geom_data <- sf::st_geometry(data)
+    data      <- sf::st_drop_geometry(data)
+  }
+  
+  data.table::setDT(x = data)
+  
   # ------------------------------------------- #
   # Highway type normalization (ordered factor) #
   # ------------------------------------------- #
@@ -579,7 +588,14 @@ process_network_features <- function(data, rules,
     yes  = lanes_osm,                        # one-way: all lanes serve one direction
     no   = pmax(1, round(lanes_osm / 2))     # two-way: half the lanes per direction
   )]
-  return(as.data.frame(data))
+  
+  # Restore sf geometry if it was present
+  result <- as.data.frame(data)
+  if (is_sf) {
+    result <- sf::st_sf(result, geometry = geom_data)
+  }
+  
+  return(result)
 }
 #' 
 #'@title  Validate OSM network structure
