@@ -19,11 +19,23 @@ pipeline_message("Run pipeline", level = 0,
 pipeline_message("Parsing arguments", level = 1, 
                  progress = "start", process = "install")
 
+# Normalize phase name
+PHASE_NORMALIZED <- tolower(PHASE)
+PHASE_NORMALIZED <- gsub(pattern     = "data_prep.*", 
+                         replacement = "preparation", 
+                         x           = PHASE_NORMALIZED)
+PHASE_NORMALIZED <- gsub(pattern     = "train.*", 
+                         replacement = "training", 
+                         x           = PHASE_NORMALIZED)
+PHASE_NORMALIZED <- gsub(pattern     = "pred.*", 
+                         replacement = "prediction", 
+                         x           = PHASE_NORMALIZED)
+
 # Define phases to run
-phases_to_run <- if (PHASE == "all") {
+phases_to_run <- if (PHASE_NORMALIZED == "all") {
   c("preparation", "training", "prediction")
 } else {
-  PHASE
+  PHASE_NORMALIZED
 }
 
 # Define modes to run
