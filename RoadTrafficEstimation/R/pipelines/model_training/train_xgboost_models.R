@@ -2340,7 +2340,7 @@ if (nrow(x = emission_test) > 0) {
            y          = seq(from       = 0.90, 
                             to         = 0.90 - 0.06 * (length(x = wd_we_diag) - 1), 
                             length.out = length(x = wd_we_diag)),
-           length.out = length(x = wd_we_diag)),
+           length.out = length(x = wd_we_diag),
            labels     = wd_we_diag, 
            adj        = c(0, 0.5), 
            cex        = 0.82, 
@@ -2889,7 +2889,7 @@ if (nrow(x = emission_test) > 0) {
     "\nInterpretation: 'src_dom' indicates which variable contributes the most",
     "to the error in absolute terms (Flow, Speed, or %%HGV).",
     "These cases help identify where the modelling pipeline could be improved."
-  )
+    )
 
   text(x = 0.02,
        y      = seq(from       = 0.96, 
