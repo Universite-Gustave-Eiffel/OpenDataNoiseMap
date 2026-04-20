@@ -129,7 +129,7 @@ if (length(x = available_road_features) == 0) {
           "dataset. The model will not be able to learn meaningful patterns", 
           "and predictions will be unreliable. Please ensure the training", 
           "dataset contains relevant OSM/network features for the model to", 
-          "train on.", 
+          "train on."), 
   process = "stop")}
 
 pipeline_message(
