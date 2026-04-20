@@ -2790,15 +2790,14 @@ if (nrow(x = emission_test) > 0) {
     delta_mae  <- db_mae_osm  - db_mae
     delta_rmse <- db_rmse_osm - db_rmse
 
-    summary_df = pandas.DataFrame({
-        "Metric"           : ["Bias (dB)", "MAE (dB)", "RMSE (dB)"],
-        "Predicted speed"  : [db_bias, db_mae, db_rmse],
-        "OSM speed"        : [db_bias_osm, db_mae_osm, db_rmse_osm],
-        "Δ (OSM-Predicted)": [delta_bias, delta_mae, delta_rmse]
-    })
+    summary_df = data.frame(
+        "Metric"           = c("Bias (dB)", "MAE (dB)", "RMSE (dB)"),
+        "Predicted speed"  = c(db_bias, db_mae, db_rmse),
+        "OSM speed"        = c(db_bias_osm, db_mae_osm, db_rmse_osm),
+        "Δ (OSM-Predicted)" = c(delta_bias, delta_mae, delta_rmse))
 
     print("\nComparison of prediction quality in dB on the test sections:\n")
-    print(summary_df.to_string(index=False))
+    cat(capture.output(print(summary_df, row.names = FALSE)), sep = "\n")
 
     if (delta_mae > 0.05) {
       verdict_lines <- c(
@@ -2820,13 +2819,14 @@ if (nrow(x = emission_test) > 0) {
     }
 
     # Calculate percentage of observations using OSM speed as speed_obs
-    pct_osm_speed <- round(100 * mean(!emission_test$has_measured_speed))
+    pct_osm_speed <- round(x     = 100 * mean(!emission_test$has_measured_speed, 
+                           na.rm = TRUE))
 
     verdict_lines <- c(
       verdict_lines, "",
       "\tNote: 'observed' = CNOSSOS(flow_obs, HGV%_obs, speed_obs).",
       sprintf("\t%.0f%% of AVATAR sensors use OSM maxspeed as 'speed_obs'.", pct_osm_speed), 
-              "\tThe speed bias therefore partially includes a reference bias.")
+      "\tThe speed bias therefore partially includes a reference bias.")
 
     text(x      = 0.02, 
          y      = seq(from       = 0.95, 
@@ -2854,14 +2854,16 @@ if (nrow(x = emission_test) > 0) {
         cex.main = 1.1)
 
   top_k   <- min(25L, nrow(x = emission_test))
-  idx_top <- order(emission_test$abs_db_error, decreasing = TRUE)[seq_len(top_k)]
+  ord     <- order(emission_test$abs_db_error, decreasing = TRUE, na.last = NA)
+  idx_top <- ord[seq_len(min(top_k, length(ord)))]
   top_err <- emission_test[idx_top, , drop = FALSE]
 
   # Identify dominant source of error
   src_dom <- c("Flow", "Speed", "%HGV")[
-    max.col(m = abs(x = cbind(contrib_flow[idx_top], 
-                              contrib_speed[idx_top], 
-                              contrib_truck[idx_top])))]
+    max.col(m           = abs(x = cbind(contrib_flow[idx_top], 
+                                        contrib_speed[idx_top], 
+                                        contrib_truck[idx_top])), 
+            ties.method = "first")]
 
   # Build summary table
   df_top <- data.frame(
@@ -2909,7 +2911,7 @@ if (nrow(x = emission_test) > 0) {
         cex.main = 1.2)
 
   synth_lines <- c(
-    sprintf("Data: %s sections-periods evaluated via CNOSSOS-EU 2020\s", 
+    sprintf("Data: %s sections-periods evaluated via CNOSSOS-EU 2020 ", 
             fmt(nrow(x = emission_test))),
     sprintf("of which %s with measured speed, %s with measured %%HGV\n",
             fmt(sum(emission_test$has_measured_speed, na.rm = TRUE)),
@@ -2941,13 +2943,13 @@ if (nrow(x = emission_test) > 0) {
     if (delta_mae_v > 0.05) {
       synth_lines <- c(synth_lines, 
         "\t--- Regulatory speed vs predicted ---", 
-        sprintf("\tUsing the OSM speed  Using OSM speed would DEGRADE the MAE of %.2f dB.", 
+        sprintf("\tUsing the OSM speed would DEGRADE the MAE of %.2f dB.", 
                 delta_mae_v), 
         "\t\t-> Keep the speed predicted by XGBoost.\n")
     } else if (delta_mae_v < -0.05) {
       synth_lines <- c(synth_lines,
         "\t--- Regulatory speed vs predicted ---",
-        sprintf("\tUsing the OSM speed  Using OSM speed would IMPROVE the MAE of %.2f dB.", 
+        sprintf("\tUsing the OSM speed would IMPROVE the MAE of %.2f dB.", 
                 abs(x = delta_mae_v)),
         "\t\t-> Consider using the OSM speed for predictions.", "")
     } else {
@@ -2958,7 +2960,9 @@ if (nrow(x = emission_test) > 0) {
   }
 
   # Best/worst
-  if ("highway" %in% names(x = emission_test) && exists(x = "top_n") && nrow(x = top_n) > 0) {
+  if ("highway" %in% names(x = emission_test) && 
+      exists("top_n", inherits = FALSE) && 
+      nrow(x = top_n) > 0) {
     best_hw_s   <- top_n$group[which.min(x = top_n$mae_xgb)]
     worst_hw_s  <- top_n$group[which.max(x = top_n$mae_xgb)]
     synth_lines <- c(synth_lines, 
