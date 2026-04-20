@@ -83,7 +83,8 @@ if ("preparation" %in% phases_to_run) {
     !file.exists(CFG$IMPUTATION_RULES_FRANCE_FILEPATH)
   
   # Check if Avatar aggregation can be skipped
-  avatar_aggregation_needed <- !file.exists(CFG$AVATAR_AGGREGATED_FILEPATH)
+  avatar_aggregation_needed <- isTRUE(CFG$FORCE_REAGGREGATE_AVATAR) ||
+                               !file.exists(CFG$AVATAR_AGGREGATED_FILEPATH)
   
   # Check if training dataset merge is needed
   training_merge_needed <- isTRUE(CFG$FORCE_BUILD_TRAINING_DATASET) || 
@@ -111,7 +112,7 @@ if ("preparation" %in% phases_to_run) {
     pipeline_message(
       paste("AVATAR aggregated data already exists. ", 
             "Skipping 03_avatar_download.R and 04_avatar_aggregation.R. ", 
-            "To rebuild, set FORCE_REDOWNLOAD_CHUNKS=TRUE ", 
+            "To rebuild, set FORCE_REAGGREGATE_AVATAR=TRUE ", 
             "in config/config_data_prep.R"),
       level = 1, progress = "end", process = "warning")
   }
