@@ -43,8 +43,8 @@ CONFIG_DATA_PREP <- list(
   # Process forcing #
   # *************** #
   
-  FORCE_REJOIN_OSM_AND_COMMUNES = TRUE,
-  FORCE_REENGINEER_OSM_FRANCE   = TRUE,
+  FORCE_REJOIN_OSM_AND_COMMUNES = FALSE,
+  FORCE_REENGINEER_OSM_FRANCE   = FALSE,
   FORCE_BUILD_TRAINING_DATASET  = FALSE,
   
   # ********************* #
