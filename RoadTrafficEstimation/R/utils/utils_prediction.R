@@ -1865,8 +1865,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         n_tile <- nrow(x = tile_sf)
         pipeline_message(
-          sprintf("Processing tile %s: %s roads", grid_tile_id_str, fmt(n_tile)),
-          process = "info")
+          sprintf("Tile %s: %s roads", grid_tile_id_str, fmt(n_tile)),
+          level = 2, process = "calc")
 
         tile_seq_counter <<- tile_seq_counter + 1L
         tile_dir_id <- sprintf("%0*d", n_digits, tile_seq_counter)
@@ -1876,15 +1876,26 @@ build_france_tiles <- function(tile_size_m = 200000) {
         }
         dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
 
-        geom_for_merge <- tile_sf[, c("osm_id", "geom")]
+        # Store osm_id and geometry for later merge (keep as sf object)
+        # Select only osm_id column; geometry column is automatically preserved
+        geom_for_merge <- sf::st_as_sf(
+          data.frame(osm_id = tile_sf$osm_id),
+          geometry = sf::st_geometry(tile_sf)
+        )
         tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
         rm(tile_sf)
 
+        pipeline_message(
+          sprintf("Applying XGBoost models to %s roads", fmt(n_tile)),
+          level = 2, progress = "start", process = "wait")
         predictions_wide <- apply_xgboost_predictions(
           network_data          = tile_dt,
           models_list           = models_list,
           feature_info          = feature_info,
           default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
+        pipeline_message(
+          sprintf("Predictions completed for %s roads x %d periods", fmt(n_tile), length(x = all_periods)),
+          level = 2, progress = "end", process = "valid")
 
         rm(tile_dt)
 
@@ -1924,17 +1935,19 @@ build_france_tiles <- function(tile_size_m = 200000) {
             mutate(period = as.character(x = period))
 
           if (nrow(x = chunk_long) > 0) {
-            geom_col_name <- attr(geom_for_merge, "sf_column")
-            geom_for_merge_df <- sf::st_drop_geometry(x = geom_for_merge)
-            geom_for_merge_df[[geom_col_name]] <- sf::st_geometry(geom_for_merge)
-
+            # Join predictions with geometries: use geom_for_merge as sf object to preserve geometry
+            # dplyr::left_join should preserve geometry when left object is sf
+            chunk_long_df <- as.data.frame(chunk_long)
             tile_chunk_sf <- dplyr::left_join(
-              x  = chunk_long,
-              y  = geom_for_merge_df,
-              by = "osm_id")
-            tile_chunk_sf <- sf::st_as_sf(
-              x              = tile_chunk_sf,
-              sf_column_name = geom_col_name)
+              x = geom_for_merge,  # Keep as sf object to preserve geometry column
+              y = chunk_long_df,
+              by = "osm_id"
+            )
+            
+            # Ensure the result is valid sf object
+            if (!inherits(tile_chunk_sf, "sf")) {
+              tile_chunk_sf <- sf::st_as_sf(tile_chunk_sf)
+            }
 
             if (!inherits(tile_chunk_sf, "sf") || is.null(sf::st_geometry(tile_chunk_sf))) {
               stop(sprintf("Tile %s chunk '%s' failed to build a valid sf object", 
@@ -1986,7 +1999,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     pipeline_message(
       sprintf("Processing %d tiles sequentially", length(x = tile_jobs)),
-      level = 1, progress = "start", process = "info")
+      level = 1, progress = "start", process = "calc")
     append_tile_progress(sprintf("Tile processing sequential"))
     tile_results <- list()
     for (job in tile_jobs) {
