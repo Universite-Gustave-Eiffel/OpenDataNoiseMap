@@ -139,7 +139,7 @@ ensure_target_crs <- function(sf_obj, target_crs) {
   if (!inherits(x = sf_obj, what = "sf")) {
     return(sf_obj)
   }
-  target_crs <- sf::st_crs(x = target_crs)
+  target_crs  <- sf::st_crs(x = target_crs)
   current_crs <- sf::st_crs(x = sf_obj)
   if (is.na(x = current_crs)) {
     sf::st_crs(x = sf_obj) <- target_crs
@@ -259,7 +259,7 @@ validate_tile_chunk_files <- function(tile_files, target_crs) {
     }
   }
   return(list(is_valid = length(x = issues) == 0L, 
-              issues = issues))
+              issues   = issues))
 }
 
 #' 
@@ -527,7 +527,7 @@ apply_xgboost_predictions <- function(network_data,
                                       feature_info, 
                                       default_vehicle_speed = 50) {
   pipeline_message("Applying XGBoost models to network", 
-                   level = 1, progress = "start", process = "calc")
+                   level = 1, process = "wait")
   
   # Memory check: predictions will create ~n_roads x n_periods x 3 columns
   n_roads   <- nrow(x = network_data)
@@ -535,9 +535,9 @@ apply_xgboost_predictions <- function(network_data,
   est_mb    <- round(x = n_roads * n_periods * 3 * 8 / 1024^2)  # 8 bytes / double
   check_memory_available(
     operation_name = sprintf("XGBoost prediction (%s roads x %d periods, ~%d MB result)",
-              fmt(n_roads), n_periods, est_mb),
-    min_gb        = 1, 
-    warn_gb       = 3)
+                             fmt(n_roads), n_periods, est_mb),
+    min_gb         = 1, 
+    warn_gb        = 3)
 
   # lane_number is an AVATAR-derived directional lane feature used in training.
   # For region-wide prediction (no AVATAR), derive a proxy from OSM lanes.
@@ -746,8 +746,8 @@ apply_xgboost_predictions <- function(network_data,
     speed_osm_base <- speed_osm_raw
     speed_osm_base[speed_osm_missing] <- default_vehicle_speed
     speed_D <- ifelse(test = all(is.na(x = speed_D_raw)), 
-                      yes   = rep(x = NA_real_, length(x = speed_D_raw)), 
-                      no    = pmax(5, speed_D_raw * speed_osm_base))
+                      yes  = rep(x = NA_real_, length(x = speed_D_raw)), 
+                      no   = pmax(5, speed_D_raw * speed_osm_base))
   } else {
     # Legacy model: speed_D already predicts absolute speed (km/h).
     speed_D <- speed_D_raw
@@ -763,8 +763,8 @@ apply_xgboost_predictions <- function(network_data,
                     "%s missing values imputed with %s"), 
               fmt(n_speed_osm_missing), 
               ifelse(test = all(is.na(x = speed_D)), 
-                     yes = "DEFAULT_VEHICLE_SPEED", 
-                     no = "speed_D XGBoost predictions")),
+                     yes  = "DEFAULT_VEHICLE_SPEED", 
+                     no   = "speed_D XGBoost predictions")),
       process = "warning"
     )
     if (all(is.na(x = speed_D))) {
@@ -975,7 +975,9 @@ validate_predictions <- function(predictions) {
     }
   } else {
     # Wide format checks
-    flow_cols <- grep(pattern = "^flow_", x = names(x = predictions), value = TRUE)
+    flow_cols <- grep(pattern = "^flow_", 
+                      x       = names(x = predictions), 
+                      value   = TRUE)
     for (col in flow_cols) {
       n_negative <- sum(predictions[[col]] < 0, na.rm = TRUE)
       if (n_negative > 0) {
@@ -984,8 +986,8 @@ validate_predictions <- function(predictions) {
     }
 
     truck_cols <- grep(pattern = "^truck_pct_", 
-                       x = names(x = predictions), 
-                       value = TRUE)
+                       x       = names(x = predictions), 
+                       value   = TRUE)
     for (col in truck_cols) {
       n_exceed <- sum(predictions[[col]] > 100 | predictions[[col]] < 0, 
                       na.rm = TRUE)
@@ -1060,8 +1062,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
 
   # Store as POSIXct (native datetime type) so sf/GDAL writes to GeoPackage correctly
   # QGis recognizes POSIXct-backed datetime columns for temporal animation
-  datetimestart <- as.POSIXct(rep(NA_real_, n), tz = "UTC")
-  datetimeend   <- as.POSIXct(rep(NA_real_, n), tz = "UTC")
+  datetimestart <- as.POSIXct(x = rep(NA_real_, n), tz = "UTC")
+  datetimeend   <- as.POSIXct(x = rep(NA_real_, n), tz = "UTC")
 
   # Get base year from AVATAR data
   avatar_dir <- ifelse(test = !is.null(x = cfg) && !is.null(x = cfg$AVATAR_CSV_DIR), 
@@ -1097,20 +1099,26 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   # D / E / N reference periods (day 01)
   idx_D <- which(x = period_chr == "D")
   if (length(x = idx_D) > 0) {
-    datetimestart[idx_D] <- as.POSIXct(sprintf("%d-01-01 06:00:00", base_year), tz = "UTC")
-    datetimeend[idx_D]   <- as.POSIXct(sprintf("%d-01-01 18:00:00", base_year), tz = "UTC")
+    datetimestart[idx_D] <- as.POSIXct(x  = sprintf("%d-01-01 06:00:00", base_year), 
+                                       tz = "UTC")
+    datetimeend[idx_D]   <- as.POSIXct(x  = sprintf("%d-01-01 18:00:00", base_year), 
+                                       tz = "UTC")
   }
 
   idx_E <- which(x = period_chr == "E")
   if (length(x = idx_E) > 0) {
-    datetimestart[idx_E] <- as.POSIXct(sprintf("%d-01-01 18:00:00", base_year), tz = "UTC")
-    datetimeend[idx_E]   <- as.POSIXct(sprintf("%d-01-01 22:00:00", base_year), tz = "UTC")
+    datetimestart[idx_E] <- as.POSIXct(x  = sprintf("%d-01-01 18:00:00", base_year), 
+                                       tz = "UTC")
+    datetimeend[idx_E]   <- as.POSIXct(x  = sprintf("%d-01-01 22:00:00", base_year), 
+                                       tz = "UTC")
   }
 
   idx_N <- which(x = period_chr == "N")
   if (length(x = idx_N) > 0) {
-    datetimestart[idx_N] <- as.POSIXct(sprintf("%d-01-01 22:00:00", base_year), tz = "UTC")
-    datetimeend[idx_N]   <- as.POSIXct(sprintf("%d-01-02 06:00:00", base_year), tz = "UTC")
+    datetimestart[idx_N] <- as.POSIXct(x  = sprintf("%d-01-01 22:00:00", base_year), 
+                                       tz = "UTC")
+    datetimeend[idx_N]   <- as.POSIXct(x  = sprintf("%d-01-02 06:00:00", base_year), 
+                                       tz = "UTC")
   }
 
   # Generic hourly periods h0..h23 (day 04)
@@ -1129,9 +1137,9 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
 
   # Weekday hourly periods h0_wd..h23_wd (day 02)
   m_wd   <- regexec(pattern = "^h([0-9]{1,2})_wd$", 
-                  text    = period_chr)
+                    text    = period_chr)
   g_wd   <- regmatches(x = period_chr, 
-                     m = m_wd)
+                       m = m_wd)
   idx_wd <- which(x = lengths(g_wd) == 2)
   if (length(x = idx_wd) > 0) {
     h_vals    <- as.integer(x   = vapply(X   = g_wd[idx_wd], 
@@ -1148,8 +1156,8 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
                      m = m_we)
   idx_we <- which(x = lengths(g_we) == 2)
   if (length(x = idx_we) > 0) {
-    h_vals    <- as.integer(x   = vapply(X   = g_we[idx_we], 
-                                         FUN = function(x) x[2], character(1)))
+    h_vals    <- as.integer(x = vapply(X   = g_we[idx_we], 
+                                       FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
     datetimestart[idx_we] <- as.POSIXct(x  = start_str, 
                                         tz = "UTC")
@@ -1381,9 +1389,9 @@ predict_traffic <- function(region_name,
   osm_region_dt <- as.data.frame(x = sf::st_drop_geometry(x = osm_region))
 
   predictions_wide <- apply_xgboost_predictions(
-    network_data = osm_region_dt,
-    models_list = models_list,
-    feature_info = feature_info,
+    network_data          = osm_region_dt,
+    models_list           = models_list,
+    feature_info          = feature_info,
     default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
 
   pipeline_message(sprintf("Predictions completed: %s roads x %s periods", 
@@ -1854,10 +1862,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
             sprintf("Tile %s has no roads; skipping", grid_tile_id_str),
             process = "warning")
           return(list(tile_roads       = 0L,
-                      with_data       = FALSE,
-                      elapsed         = elapsed,
+                      with_data        = FALSE,
+                      elapsed          = elapsed,
                       grid_tile_id_str = grid_tile_id_str,
-                      tile_dir_id     = NA_character_))
+                      tile_dir_id      = NA_character_))
         }
 
         tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
@@ -1876,26 +1884,17 @@ build_france_tiles <- function(tile_size_m = 200000) {
         }
         dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
 
-        # Store osm_id and geometry for later merge (keep as sf object)
-        # Select only osm_id column; geometry column is automatically preserved
-        geom_for_merge <- sf::st_as_sf(
-          data.frame(osm_id = tile_sf$osm_id),
-          geometry = sf::st_geometry(tile_sf)
-        )
+        # Keep geometry and osm_id for later merge
+        geom_for_merge <- tile_sf[, c("osm_id")]
+        geom_for_merge$osm_id <- as.character(x = geom_for_merge$osm_id)
         tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
         rm(tile_sf)
 
-        pipeline_message(
-          sprintf("Applying XGBoost models to %s roads", fmt(n_tile)),
-          level = 2, progress = "start", process = "wait")
         predictions_wide <- apply_xgboost_predictions(
           network_data          = tile_dt,
           models_list           = models_list,
           feature_info          = feature_info,
           default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
-        pipeline_message(
-          sprintf("Predictions completed for %s roads x %d periods", fmt(n_tile), length(x = all_periods)),
-          level = 2, progress = "end", process = "valid")
 
         rm(tile_dt)
 
@@ -1921,6 +1920,30 @@ build_france_tiles <- function(tile_size_m = 200000) {
                  osm_speed, osm_speed_imputed, truck_pct)
 
         predictions_long <- add_period_datetime_columns(predictions_long, cfg)
+
+        tile_geom_file <- file.path(tile_dir,
+                                   sprintf("07_predictions_%s_geometry_tile_%s.gpkg",
+                                           mode, tile_dir_id))
+        write_sf_gpkg_atomic(sf_obj = geom_for_merge,
+                             dsn    = tile_geom_file)
+        pipeline_message(
+          sprintf("Tile %s geometry file written: %s",
+                  grid_tile_id_str, rel_path(tile_geom_file)),
+          level = 2, process = "save")
+
+        tile_csv_file <- file.path(tile_dir,
+                                   sprintf("07_predictions_%s_traffic_tile_%s.csv",
+                                           mode, tile_dir_id))
+        write.csv(
+          x = predictions_long %>%
+              dplyr::mutate(period = as.character(x = period)),
+          file     = tile_csv_file,
+          row.names = FALSE)
+        pipeline_message(
+          sprintf("Tile %s traffic CSV written: %s",
+                  grid_tile_id_str, rel_path(tile_csv_file)),
+          level = 2, process = "save")
+
         validation       <- validate_predictions(predictions_long)
         if (!validation$is_valid) {
           pipeline_message(sprintf("Validation warnings in tile %s: %s issues",
@@ -1935,18 +1958,22 @@ build_france_tiles <- function(tile_size_m = 200000) {
             mutate(period = as.character(x = period))
 
           if (nrow(x = chunk_long) > 0) {
-            # Join predictions with geometries: use geom_for_merge as sf object to preserve geometry
-            # dplyr::left_join should preserve geometry when left object is sf
             chunk_long_df <- as.data.frame(chunk_long)
+            chunk_long_df$osm_id <- as.character(x = chunk_long_df$osm_id)
+
+            geom_for_merge$osm_id <- as.character(x = geom_for_merge$osm_id)
+            geom_col_name <- attr(geom_for_merge, "sf_column")
+
             tile_chunk_sf <- dplyr::left_join(
-              x = geom_for_merge,  # Keep as sf object to preserve geometry column
-              y = chunk_long_df,
+              x  = geom_for_merge,
+              y  = chunk_long_df,
               by = "osm_id"
             )
-            
-            # Ensure the result is valid sf object
+
             if (!inherits(tile_chunk_sf, "sf")) {
-              tile_chunk_sf <- sf::st_as_sf(tile_chunk_sf)
+              tile_chunk_sf <- sf::st_as_sf(
+                x              = tile_chunk_sf,
+                sf_column_name = geom_col_name)
             }
 
             if (!inherits(tile_chunk_sf, "sf") || is.null(sf::st_geometry(tile_chunk_sf))) {
@@ -1954,7 +1981,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                            grid_tile_id_str, chunk_name))
             }
 
-            tile_chunk_sf <- ensure_target_crs(sf_obj = tile_chunk_sf,
+            tile_chunk_sf <- ensure_target_crs(sf_obj     = tile_chunk_sf,
                                                target_crs = cfg$TARGET_CRS)
 
             tile_file <- file.path(tile_dir,
@@ -1988,7 +2015,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
         pipeline_message(
           sprintf("Tile %s failed: %s", grid_tile_id_str, conditionMessage(e)),
           level = 1, process = "error")
-        list(tile_roads        = NA_integer_,
+        list(tile_roads     = NA_integer_,
            with_data        = FALSE,
            elapsed          = elapsed,
            grid_tile_id_str = grid_tile_id_str,
@@ -2016,7 +2043,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                         no   = sprintf("%.1f", res$elapsed))))
     }
 
-    total_roads           <- sum(vapply(X = tile_results,
+    total_roads           <- sum(vapply(X   = tile_results,
                                         FUN = function(x) {
                                           if (is.list(x) && "tile_roads" %in% names(x)) {
                                             as.integer(x$tile_roads)
@@ -2025,7 +2052,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                           }
                                         },
                                         integer(1)), na.rm = TRUE)
-    total_tiles_with_data <- sum(vapply(X = tile_results,
+    total_tiles_with_data <- sum(vapply(X   = tile_results,
                                         FUN = function(x) {
                                           if (is.list(x) && "with_data" %in% names(x)) {
                                             as.integer(x$with_data)
@@ -2034,7 +2061,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                           }
                                         },
                                         integer(1)), na.rm = TRUE)
-    tile_times            <- vapply(X = tile_results,
+    tile_times            <- vapply(X   = tile_results,
                                     FUN = function(x) {
                                       if (is.list(x) && "elapsed" %in% names(x)) {
                                         as.numeric(x$elapsed)
@@ -2068,11 +2095,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
       for (res in tile_results) {
         tidx <- which(tile_metadata$tile_id_str == as.character(x = res$grid_tile_id_str))
         if (length(x = tidx) == 1L) {
-          tile_metadata$tile_roads[tidx] <- as.integer(res$tile_roads)
-          tile_metadata$with_data[tidx] <- isTRUE(res$with_data)
+          tile_metadata$tile_roads[tidx] <- as.integer(x = res$tile_roads)
+          tile_metadata$with_data[tidx] <- isTRUE(x = res$with_data)
           tile_metadata$tile_status[tidx] <- if ("error" %in% names(x = res)) {
             "error"
-          } else if (isTRUE(res$with_data)) {
+          } else if (isTRUE(x = res$with_data)) {
             "with_data"
           } else {
             "no_data"
@@ -2082,15 +2109,14 @@ build_france_tiles <- function(tile_size_m = 200000) {
     }
 
     tile_polys <- lapply(seq_len(nrow(x = tile_metadata)), FUN = function(i) {
-      sf::st_polygon(list(matrix(
-        c(tile_metadata$xmin[i], tile_metadata$ymin[i],
-          tile_metadata$xmax[i], tile_metadata$ymin[i],
-          tile_metadata$xmax[i], tile_metadata$ymax[i],
-          tile_metadata$xmin[i], tile_metadata$ymax[i],
-          tile_metadata$xmin[i], tile_metadata$ymin[i]),
-        ncol = 2,
-        byrow = TRUE)))
-    })
+      sf::st_polygon(x =list(matrix(
+        data  = c(tile_metadata$xmin[i], tile_metadata$ymin[i], 
+                  tile_metadata$xmax[i], tile_metadata$ymin[i], 
+                  tile_metadata$xmax[i], tile_metadata$ymax[i], 
+                  tile_metadata$xmin[i], tile_metadata$ymax[i], 
+                  tile_metadata$xmin[i], tile_metadata$ymin[i]), 
+        ncol  = 2, 
+        byrow = TRUE)))})
 
     tile_grid_sf <- sf::st_sf(
       tile_metadata[, c("tile_id_str", "tile_roads", "with_data", "tile_status")],
@@ -2117,11 +2143,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
   for (chunk_name in names(x = temporal_chunks)) {
     chunk_file <- chunk_paths[[chunk_name]]
     
-    all_tile_files <- list.files(path      = output_dir,
-                                 pattern   = "^07_predictions_.*_tile_.*\\.gpkg$",
-                                 recursive = TRUE,
+    all_tile_files <- list.files(path       = output_dir,
+                                 pattern    = "^07_predictions_.*_tile_.*\\.gpkg$",
+                                 recursive  = TRUE,
                                  full.names = TRUE)
-    tile_files <- all_tile_files[grepl(paste0("_", chunk_name, "_tile_"), all_tile_files, fixed = TRUE)]
+    tile_files <- all_tile_files[grepl(pattern = paste0("_", chunk_name, "_tile_"), 
+                                       x       = all_tile_files, 
+                                       fixed   = TRUE)]
     tile_files <- sort(tile_files)
 
     if (length(tile_files) == 0) {
@@ -2132,7 +2160,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     }
 
     pipeline_message(
-      sprintf("Merging chunk '%s' with %d tile files", chunk_name, length(tile_files)),
+      sprintf("Merging chunk '%s' with %d tile files", chunk_name, 
+              length(X = tile_files)),
       level = 1, process = "join")
 
     # Read and combine all tile sf objects
@@ -2233,9 +2262,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
                    process = "info")
     }
   }
-
-  pipeline_message(sprintf("%s prediction completed", region_name), level = 0, 
-                   progress = "end", process = "valid")
-
-  invisible(NULL)
+  if (exists("geometry_output_file", inherits = FALSE) && 
+      file.exists(geometry_output_file)) {
+    sz <- round(x = file.info(geometry_output_file)$size / 1024^2, 1)
+    pipeline_message(sprintf("\t- Geometry: %s (%.1f MB)", 
+                             rel_path(geometry_output_file), sz), 
+                     process = "info")
+  }
 }
