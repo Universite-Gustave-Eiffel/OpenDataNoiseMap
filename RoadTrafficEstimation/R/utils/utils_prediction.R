@@ -1722,6 +1722,61 @@ build_france_tiles <- function(tile_size_m = 200000) {
   pipeline_message(sprintf("%s tiled prediction", region_name), level = 0, 
                    progress = "start", process = "calc")
 
+  # --- Validate source OSM network ---
+  pipeline_message("Validating source OSM network file", level = 1, 
+                   progress = "start", process = "search")
+  
+  if (!file.exists(osm_roads_path)) {
+    pipeline_message(sprintf("Source OSM network file not found: %s", 
+                             osm_roads_path), 
+                     process = "stop")
+  }
+  
+  # Quick validation: read first few rows to check sf structure
+  osm_validation <- tryCatch(
+    sf::st_read(dsn   = osm_roads_path,
+                quiet = TRUE,
+                n_max = 10),
+    error = function(e) e)
+  
+  if (inherits(osm_validation, "error")) {
+    pipeline_message(sprintf("Source OSM network file is corrupted or invalid: %s", 
+                             osm_validation$message), 
+                     process = "stop")
+  }
+  
+  if (!inherits(osm_validation, "sf")) {
+    pipeline_message("Source OSM network file does not contain valid sf geometry", 
+                     process = "stop")
+  }
+  
+  if (is.null(sf::st_geometry(osm_validation))) {
+    pipeline_message("Source OSM network file has no geometry column", 
+                     process = "stop")
+  }
+  
+  geom_col <- attr(osm_validation, "sf_column")
+  if (!geom_col %in% names(osm_validation)) {
+    pipeline_message(sprintf("Source OSM network file missing geometry column '%s'", 
+                             geom_col), 
+                     process = "stop")
+  }
+  
+  # Check CRS
+  if (is.na(sf::st_crs(osm_validation))) {
+    pipeline_message("Source OSM network file has missing CRS", 
+                     process = "warning")
+  } else if (!sf_crs_matches(sf::st_crs(osm_validation), cfg$TARGET_CRS)) {
+    pipeline_message(sprintf("Source OSM network file CRS mismatch: expected %s, got %s",
+                             sf_crs_to_string(cfg$TARGET_CRS),
+                             sf_crs_to_string(sf::st_crs(osm_validation))), 
+                     process = "warning")
+  }
+  
+  pipeline_message(sprintf("Source OSM network validated: %s rows with geometry", 
+                           fmt(nrow(osm_validation))), 
+                   level = 1, progress = "end", process = "valid")
+
   # --- Load models (once for all tiles) ---
   pipeline_message("Loading trained XGBoost models", level = 1, 
                    progress = "start", process = "load")
