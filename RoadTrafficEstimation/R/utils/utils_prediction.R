@@ -1885,8 +1885,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
         dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
 
         # Keep geometry and osm_id for later merge
-        geom_for_merge <- tile_sf[, c("osm_id")]
+        geom_col_name <- attr(tile_sf, "sf_column")
+        geom_for_merge <- tile_sf[, c("osm_id", geom_col_name), drop = FALSE]
         geom_for_merge$osm_id <- as.character(x = geom_for_merge$osm_id)
+        if (!inherits(geom_for_merge, "sf") || is.null(sf::st_geometry(geom_for_merge))) {
+          stop(sprintf("Tile %s failed to preserve geometry from source OSM road layer", 
+                       grid_tile_id_str))
+        }
         tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
         rm(tile_sf)
 
