@@ -25,6 +25,25 @@ pipeline_message("Matching Avatar traffic count points to OSM road segments",
                  level = 0, progress = "start", process = "join")
 
 # ------------------------------------------------------------------------------
+# Skip Avatar matching/download if outputs already exist and no force flags are set
+# ------------------------------------------------------------------------------
+avatar_download_needed <- isTRUE(CFG$FORCE_REENGINEER_OSM_FRANCE) ||
+                         isTRUE(CFG$FORCE_REJOIN_OSM_AND_COMMUNES) ||
+                         isTRUE(CFG$FORCE_REDOWNLOAD_COUNT_POINTS) ||
+                         isTRUE(CFG$FORCE_REDOWNLOAD_CHUNKS) ||
+                         isTRUE(CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS) ||
+                         !file.exists(CFG$AVATAR_MERGED_WITH_OSM_FILEPATH) ||
+                         !file.exists(CFG$AVATAR_RDS_DATA_FILEPATH)
+
+if (!avatar_download_needed) {
+  pipeline_message(
+    paste("Avatar matching and raw download outputs already exist.",
+          "Skipping 03_avatar_download.R."),
+    level = 1, progress = "end", process = "valid")
+  return(invisible(NULL))
+}
+
+# ------------------------------------------------------------------------------
 # Load full road network with connectivities and towns
 # ------------------------------------------------------------------------------
 

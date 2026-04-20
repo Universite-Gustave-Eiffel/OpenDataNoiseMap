@@ -34,7 +34,7 @@ if (!exists(x= 'avatar_data', inherits = FALSE &&
                            rel_path(CFG$AVATAR_RDS_DATA_FILEPATH)), 
                    level = 1, progress = "start", process = "load")
   
-  # Memory check before loading large RDS (~3.8 GB in RAM)
+  # Memory check before loading large RDS file
   avail_gb <- get_available_memory_gb()
   if (!is.na(avail_gb) && avail_gb < 6) {
     pipeline_message(

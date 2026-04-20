@@ -104,16 +104,30 @@ if ("preparation" %in% phases_to_run) {
       level = 1, progress = "end", process = "warning")
   }
   
-  # Run Avatar download and aggregation if needed
-  if (osm_reengineering_needed || avatar_aggregation_needed) {
+  # Run Avatar download/matching if matching/raw data are missing or OSM was re-engineered
+  avatar_download_needed <- 
+    osm_reengineering_needed ||
+    isTRUE(CFG$FORCE_REDOWNLOAD_COUNT_POINTS) ||
+    isTRUE(CFG$FORCE_REDOWNLOAD_CHUNKS) ||
+    isTRUE(CFG$FORCE_REDOWNLOAD_MISSING_INVALID_CHUNKS) ||
+    !file.exists(CFG$AVATAR_MERGED_WITH_OSM_FILEPATH) ||
+    !file.exists(CFG$AVATAR_RDS_DATA_FILEPATH)
+
+  if (avatar_download_needed) {
     source("R/pipelines/data_preparation/03_avatar_download.R")
+  } else {
+    pipeline_message(
+      "Avatar matching and raw data already exist. Skipping 03_avatar_download.R.",
+      level = 1, progress = "end", process = "valid")
+  }
+
+  # Run Avatar aggregation if forced or output missing
+  if (avatar_aggregation_needed) {
     source("R/pipelines/data_preparation/04_avatar_aggregation.R")
   } else {
     pipeline_message(
-      paste("AVATAR aggregated data already exists. ", 
-            "Skipping 03_avatar_download.R and 04_avatar_aggregation.R. ", 
-            "To rebuild, set FORCE_REAGGREGATE_AVATAR=TRUE ", 
-            "in config/config_data_prep.R"),
+      paste("AVATAR aggregated data already exists. Skipping 04_avatar_aggregation.R. ",
+            "To rebuild, set FORCE_REAGGREGATE_AVATAR=TRUE in config/config_data_prep.R"),
       level = 1, progress = "end", process = "warning")
   }
   
