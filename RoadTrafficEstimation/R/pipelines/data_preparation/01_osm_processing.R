@@ -61,6 +61,22 @@ if (file.exists(CFG$OSM_DEGRE_FILEPATH) &&
   osm_roads <- st_read(dsn   = CFG$OSM_ROADS_FILEPATH, 
                        quiet = TRUE)
   
+  # Validate and repair geometries if needed
+  pipeline_message("Validating and repairing geometries if necessary", 
+                   level = 2, progress = "start", process = "calc")
+  
+  invalid_count <- sum(!st_is_valid(osm_roads))
+  if (invalid_count > 0) {
+    pipeline_message(sprintf("Found %d invalid geometries, attempting repair", invalid_count), 
+                     process = "info")
+    osm_roads <- st_make_valid(osm_roads)
+    pipeline_message(sprintf("Geometries repaired"), 
+                     level = 2, progress = "end", process = "valid")
+  } else {
+    pipeline_message("All geometries are valid", 
+                     level = 2, progress = "end", process = "valid")
+  }
+  
   # Project data into target CRS if needed
   if (sf::st_crs(x = osm_roads) != CFG$TARGET_CRS){
     pipeline_message(sprintf("Reproject into CRS %d", CFG$TARGET_CRS), 
@@ -410,6 +426,14 @@ if (file.exists(CFG$OSM_ROADS_CONNECTIVITY_FILEPATH) &&
     
     osm_roads <- st_read(dsn   = CFG$OSM_ROADS_FILEPATH, 
                          quiet = TRUE)
+    
+    # Validate and repair geometries if needed
+    invalid_count <- sum(!st_is_valid(osm_roads))
+    if (invalid_count > 0) {
+      pipeline_message(sprintf("Found %d invalid geometries, attempting repair", invalid_count), 
+                       process = "info")
+      osm_roads <- st_make_valid(osm_roads)
+    }
     
     high_traffic_types <- c(
       "motorway", "trunk", "primary", "secondary", "tertiary", 
