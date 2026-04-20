@@ -273,7 +273,7 @@ validate_tile_chunk_files <- function(tile_files, target_crs) {
 #' @param target_crs Target CRS (numeric EPSG code or crs object).
 #' @return List containing repaired and failed file names.
 repair_tile_chunk_files <- function(tile_files, target_crs) {
-  repaired <- character(x = 0)
+  repaired <- character(0)
   failed   <- list()
 
   for (tile_fp in tile_files) {
@@ -1121,7 +1121,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   idx_h <- which(x = lengths(g_h) == 2)
   if (length(x = idx_h) > 0) {
     h_vals <- as.integer(x = vapply(X   = g_h[idx_h], 
-                                    FUN = function(x) x[2], character(x = 1)))
+                                    FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-04 %02d:00:00", base_year, h_vals)
     datetimestart[idx_h] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_h]   <- datetimestart[idx_h] + 3600
@@ -1135,7 +1135,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   idx_wd <- which(x = lengths(g_wd) == 2)
   if (length(x = idx_wd) > 0) {
     h_vals    <- as.integer(x   = vapply(X   = g_wd[idx_wd], 
-                                         FUN = function(x) x[2], character(x = 1)))
+                                         FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-02 %02d:00:00", base_year, h_vals)
     datetimestart[idx_wd] <- as.POSIXct(x = start_str, tz = "UTC")
     datetimeend[idx_wd]   <- datetimestart[idx_wd] + 3600
@@ -1149,7 +1149,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
   idx_we <- which(x = lengths(g_we) == 2)
   if (length(x = idx_we) > 0) {
     h_vals    <- as.integer(x   = vapply(X   = g_we[idx_we], 
-                                         FUN = function(x) x[2], character(x = 1)))
+                                         FUN = function(x) x[2], character(1)))
     start_str <- sprintf("%d-01-03 %02d:00:00", base_year, h_vals)
     datetimestart[idx_we] <- as.POSIXct(x  = start_str, 
                                         tz = "UTC")
@@ -2152,7 +2152,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
     # Ensure all tiles share the same target CRS before bind
     tile_crs <- vapply(X = tile_sf_list, FUN = function(x) {
       sf_crs_to_string(crs = sf::st_crs(x))
-    }, character(x = 1))
+    }, character(1))
     if (length(x = unique(x = tile_crs)) > 1) {
       pipeline_message(
         sprintf("CRS mismatch detected across tile chunk files: %s",
