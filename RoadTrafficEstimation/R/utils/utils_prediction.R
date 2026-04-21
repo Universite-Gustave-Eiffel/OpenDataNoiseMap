@@ -1731,9 +1731,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
                              osm_roads_path), 
                      process = "stop")
   }
-
-  # Repair geometry if needed
-  osm_validation <- sf::st_make_valid(x = osm_validation)
   
   # Quick validation: read first few rows to check sf structure
   osm_validation <- tryCatch(
@@ -1741,6 +1738,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 quiet = TRUE,
                 n_max = 10),
     error = function(e) e)
+  
+  # Repair geometry if needed
+  osm_validation <- sf::st_make_valid(x = osm_validation)
   
   if (inherits(osm_validation, "error")) {
     pipeline_message(sprintf("Source OSM network file is corrupted or invalid: %s", 
