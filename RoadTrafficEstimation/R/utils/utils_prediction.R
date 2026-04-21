@@ -1731,6 +1731,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
                              osm_roads_path), 
                      process = "stop")
   }
+
+  # Repair geometry if needed
+  osm_validation <- sf::st_make_valid(x = osm_validation)
   
   # Quick validation: read first few rows to check sf structure
   osm_validation <- tryCatch(
@@ -1772,6 +1775,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
                              sf_crs_to_string(sf::st_crs(osm_validation))), 
                      process = "warning")
   }
+  
+  # Check that all rows have geometry
+  pipeline_message(sprintf("Source OSM network validated: %s rows with geometry", 
+                          fmt(nrow(osm_validation))), 
+                  level = 1, progress = "end", process = "valid")
   
   pipeline_message(sprintf("Source OSM network validated: %s rows with geometry", 
                            fmt(nrow(osm_validation))), 
