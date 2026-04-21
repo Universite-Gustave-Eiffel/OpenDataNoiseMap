@@ -1739,14 +1739,14 @@ build_france_tiles <- function(tile_size_m = 200000) {
                 n_max = 10),
     error = function(e) e)
   
-  # Repair geometry if needed
-  osm_validation <- sf::st_make_valid(x = osm_validation)
-  
   if (inherits(osm_validation, "error")) {
     pipeline_message(sprintf("Source OSM network file is corrupted or invalid: %s", 
                              osm_validation$message), 
                      process = "stop")
   }
+  
+  # Repair geometry if needed
+  osm_validation <- sf::st_make_valid(x = osm_validation)
   
   if (!inherits(osm_validation, "sf")) {
     pipeline_message("Source OSM network file does not contain valid sf geometry", 
