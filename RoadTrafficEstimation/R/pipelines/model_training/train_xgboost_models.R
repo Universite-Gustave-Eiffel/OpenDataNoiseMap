@@ -643,8 +643,8 @@ for (model_name in names(x = all_configs)) {
                    level = 2, progress = "start", process = "search")
   
   # Evaluate
-  pred_test <- xgboost::predict(object  = xgb_model, 
-                                newdata = X_test)
+  pred_test <- predict(object  = xgb_model, 
+                       newdata = X_test)
   
   # Back-transform if needed
   if (!is.null(x = model_config$transform) && 
@@ -1009,8 +1009,8 @@ for (model_name in names(x = models_list)) {
   if (length(x = y_test) < 5) {next}
   
   # Predict
-  pred_test <- xgboost::predict(object  = model_info$model,  
-                                newdata = X_test)
+  pred_test <- predict(object  = model_info$model,  
+                       newdata = X_test)
   
   # Back-transform
   if (!is.null(x = model_config$transform) && 
@@ -1114,14 +1114,14 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(x = models_list)) &&
 
     if (nrow(d_matrix) > 0) {
       # --- Base predictions (period D) ---
-      pred_flow_D_log         <- xgboost::predict(
+      pred_flow_D_log         <- predict(
                                     object  = models_list[["flow_D"]]$model, 
                                     newdata = d_matrix)
       pred_flow_D             <- 10^pred_flow_D_log
-      pred_truck_D            <- xgboost::predict(
+      pred_truck_D            <- predict(
                                     object  = models_list[["truck_pct_D"]]$model, 
                                     newdata = d_matrix)
-      pred_speed_ratio_to_osm <- xgboost::predict(
+      pred_speed_ratio_to_osm <- predict(
                                     object  = models_list[["speed_D"]]$model, 
                                     newdata = d_matrix)
 
@@ -1194,17 +1194,17 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(x = models_list)) &&
         if (!has_flow_ratio) next
 
         # Predict ratios from the feature matrix (same d_matrix, same roads)
-        ratio_flow  <- xgboost::predict(
+        ratio_flow  <- predict(
                          object  = models_list[[flow_model_key]]$model, 
                          newdata = d_matrix)
         ratio_truck <- if (has_truck_ratio) {
-          xgboost::predict(object  = models_list[[truck_model_key]]$model, 
+          predict(object  = models_list[[truck_model_key]]$model, 
                            newdata = d_matrix)
         } else {
           rep(x = 1, times = nrow(d_matrix))  # Fallback: same as D
         }
         ratio_speed <- if (has_speed_ratio) {
-          xgboost::predict(object  = models_list[[speed_model_key]]$model, 
+          predict(object  = models_list[[speed_model_key]]$model, 
                            newdata = d_matrix)
         } else {
           rep(x = 1, times = nrow(d_matrix))  # Fallback: same as D
