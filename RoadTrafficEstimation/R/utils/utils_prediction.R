@@ -1732,53 +1732,53 @@ build_france_tiles <- function(tile_size_m = 200000) {
                      process = "stop")
   }
   
-  # Quick validation: read first few rows to check sf structure
+  # Metadata check using st_layers (much faster and avoids geometry detection bugs with n_max)
+  layers_info <- try(expr = sf::st_layers(dsn = osm_roads_path), silent = TRUE)
+  
+  if (inherits(layers_info, "try-error")) {
+    pipeline_message(sprintf("Source OSM network file is unreadable by GDAL: %s", 
+                             attr(layers_info, "condition")$message), 
+                     process = "stop")
+  }
+  if (length(layers_info$name) == 0) {
+    pipeline_message("Source OSM network file contains no layers", process = "stop")
+  }
+
+  layer_name <- layers_info$name[1]
+  pipeline_message(sprintf("GPKG Layer detected: '%s' (%s features)", 
+                           layer_name, fmt(layers_info$features[1])), 
+                   process = "info")
+
+  # Safe column name check without loading data (using quoted identifier for SQLite)
+  cols <- try(names(sf::st_read(osm_roads_path, 
+                               query = sprintf('SELECT * FROM "%s" LIMIT 0', layer_name), 
+                               quiet = TRUE)), silent = TRUE)
+  if (!inherits(cols, "try-error")) {
+    pipeline_message(sprintf("Columns in layer: %s", paste(cols, collapse = ", ")), 
+                     process = "info")
+  }
+
+  # Validation check: read first few rows using explicit layer name
   osm_validation <- tryCatch(
     sf::st_read(dsn   = osm_roads_path,
+                layer = layer_name,
                 quiet = TRUE,
                 n_max = 10),
     error = function(e) e)
   
   if (inherits(osm_validation, "error")) {
-    # Diagnosis: check of layers in GPKG file and columns without loading full data
-    layers_info <- try(expr = sf::st_layers(dsn = osm_roads_path), 
-                       silent = TRUE)
-
-    if (!inherits(layers_info, "try-error") && length(layers_info$name) > 0) {
-      pipeline_message(sprintf("GPKG Layers found: %s", 
-                               paste(layers_info$name, collapse = ", ")), 
-                       process = "info")
-      
-      # Tentative de lecture des noms de colonnes via SQL (très léger)
-      cols <- try(names(sf::st_read(osm_roads_path, 
-                                   query = sprintf("SELECT * FROM %s LIMIT 0", 
-                                                   layers_info$name[1]), 
-                                   quiet = TRUE)), silent = TRUE)
-      if (!inherits(cols, "try-error")) {
-        pipeline_message(sprintf("Columns in layer '%s': %s", 
-                                 layers_info$name[1], paste(cols, collapse = ", ")), 
-                         process = "info")
-      }
-    }
-    pipeline_message(sprintf("Source OSM network file is corrupted or invalid: %s", 
+    pipeline_message(sprintf("Source OSM network file validation failed: %s", 
                              osm_validation$message), 
                      process = "stop")
   }
   
-  # Réparer la géométrie seulement si l'objet est spatial (sf)
-  if (inherits(osm_validation, "sf")) {
-    osm_validation <- sf::st_make_valid(x = osm_validation)
-  } else {
-    col_names <- paste(names(osm_validation), collapse = ", ")
-    pipeline_message(sprintf("File loaded as %s but missing spatial attributes. Columns: %s", 
-                             class(osm_validation)[1], col_names), 
+  if (!inherits(osm_validation, "sf")) {
+    pipeline_message("Source OSM network layer does not contain a valid simple features geometry column", 
                      process = "stop")
   }
-  
-  if (is.null(sf::st_geometry(osm_validation))) {
-    pipeline_message("Source OSM network file has no geometry column", 
-                     process = "stop")
-  }
+
+  # Repair geometry if needed (safe because checked as sf above)
+  osm_validation <- sf::st_make_valid(x = osm_validation)
   
   geom_col <- attr(osm_validation, "sf_column")
   if (!geom_col %in% names(osm_validation)) {
