@@ -89,9 +89,9 @@ if hostname | grep -qi "hpc\|cluster"; then
   source ./.Renviron
   set +a
   module purge || true
-  module load gcc/gcc-12 || { echo "❌ gcc module failed"; exit 1; }
+  module load gcc/gcc-11 || { echo "❌ gcc module failed"; exit 1; }
   module load R/R-4.4.2 || { echo "❌ R module failed"; exit 1; }
-  module load gdal/gdal-2.4.4 || { echo "❌ gdal module failed"; exit 1; }
+  module load gdal/gdal-3.7.2.gcc11 || { echo "❌ gdal module failed"; exit 1; }
   
   export R_LIBS_USER=$HOME/R/x86_64-pc-linux-gnu-library/4.4.2
   export UDUNITS2_INCLUDE=$HOME/local/udunits/include

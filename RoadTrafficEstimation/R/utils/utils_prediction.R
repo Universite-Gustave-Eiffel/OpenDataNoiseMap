@@ -1767,12 +1767,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
                      process = "info")
   }
 
-  # Validation check: read first few rows using explicit layer name
+  # Validation check: using a SQL query with LIMIT is more robust than n_max 
+  # for geometry detection in older GDAL (2.4.x) environments.
   osm_validation <- tryCatch(
     sf::st_read(dsn   = osm_roads_path,
-                layer = layer_name,
-                quiet = TRUE,
-                n_max = 10),
+                query = sprintf('SELECT * FROM "%s" LIMIT 10', layer_name),
+                quiet = TRUE),
     error = function(e) e)
   
   if (inherits(osm_validation, "error")) {
