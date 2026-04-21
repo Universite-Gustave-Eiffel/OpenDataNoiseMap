@@ -1740,16 +1740,38 @@ build_france_tiles <- function(tile_size_m = 200000) {
     error = function(e) e)
   
   if (inherits(osm_validation, "error")) {
+    # Diagnosis: check of layers in GPKG file and columns without loading full data
+    layers_info <- try(expr = sf::st_layers(dsn = osm_roads_path), 
+                       silent = TRUE)
+
+    if (!inherits(layers_info, "try-error") && length(layers_info$name) > 0) {
+      pipeline_message(sprintf("GPKG Layers found: %s", 
+                               paste(layers_info$name, collapse = ", ")), 
+                       process = "info")
+      
+      # Tentative de lecture des noms de colonnes via SQL (très léger)
+      cols <- try(names(sf::st_read(osm_roads_path, 
+                                   query = sprintf("SELECT * FROM %s LIMIT 0", 
+                                                   layers_info$name[1]), 
+                                   quiet = TRUE)), silent = TRUE)
+      if (!inherits(cols, "try-error")) {
+        pipeline_message(sprintf("Columns in layer '%s': %s", 
+                                 layers_info$name[1], paste(cols, collapse = ", ")), 
+                         process = "info")
+      }
+    }
     pipeline_message(sprintf("Source OSM network file is corrupted or invalid: %s", 
                              osm_validation$message), 
                      process = "stop")
   }
   
-  # Repair geometry if needed
-  osm_validation <- sf::st_make_valid(x = osm_validation)
-  
-  if (!inherits(osm_validation, "sf")) {
-    pipeline_message("Source OSM network file does not contain valid sf geometry", 
+  # Réparer la géométrie seulement si l'objet est spatial (sf)
+  if (inherits(osm_validation, "sf")) {
+    osm_validation <- sf::st_make_valid(x = osm_validation)
+  } else {
+    col_names <- paste(names(osm_validation), collapse = ", ")
+    pipeline_message(sprintf("File loaded as %s but missing spatial attributes. Columns: %s", 
+                             class(osm_validation)[1], col_names), 
                      process = "stop")
   }
   
@@ -1780,10 +1802,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
   pipeline_message(sprintf("Source OSM network validated: %s rows with geometry", 
                           fmt(nrow(osm_validation))), 
                   level = 1, progress = "end", process = "valid")
-  
-  pipeline_message(sprintf("Source OSM network validated: %s rows with geometry", 
-                           fmt(nrow(osm_validation))), 
-                   level = 1, progress = "end", process = "valid")
 
   # --- Load models (once for all tiles) ---
   pipeline_message("Loading trained XGBoost models", level = 1, 
