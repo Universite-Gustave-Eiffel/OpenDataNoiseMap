@@ -172,16 +172,29 @@ write_sf_gpkg_atomic <- function(sf_obj, dsn) {
                delete_dsn = TRUE,
                quiet      = TRUE)
 
+  # Validate the written file: explicitly get layer name and use SQL query for metadata
+  layers_info_temp <- try(sf::st_layers(dsn = temp_fp), silent = TRUE)
+
+  if (inherits(layers_info_temp, "try-error") || length(layers_info_temp$name) == 0) {
+    unlink(temp_fp)
+    stop(sprintf("GeoPackage validation failed: cannot read layers from temporary file %s: %s",
+                 temp_fp,
+                 if (inherits(layers_info_temp, "try-error")) attr(layers_info_temp, "condition")$message else "no layers found"))
+  }
+
+  temp_layer_name <- layers_info_temp$name[1]
+
   validation_sf <- tryCatch(
     sf::st_read(dsn   = temp_fp,
-                quiet = TRUE,
-                n_max = 0),
+                layer = temp_layer_name, # Explicitly specify layer
+                query = sprintf('SELECT * FROM "%s" LIMIT 0', temp_layer_name), # Use query for metadata
+                quiet = TRUE),
     error = function(e) e)
 
   if (inherits(validation_sf, "error") || !inherits(validation_sf, "sf")) {
     unlink(temp_fp)
-    stop(sprintf("GeoPackage validation failed for temporary file %s: %s",
-                 temp_fp,
+    stop(sprintf("GeoPackage validation failed for temporary file %s (layer '%s'): %s",
+                 temp_fp, temp_layer_name,
                  if (inherits(validation_sf, "error")) validation_sf$message else "output is not an sf object"))
   }
 
@@ -238,11 +251,21 @@ validate_tile_chunk_files <- function(tile_files, target_crs) {
   # Check CRS of each file
   for (tile_fp in tile_files) {
     sf_obj <- tryCatch(
-      sf::st_read(dsn   = tile_fp,
-                  quiet = TRUE,
-                  n_max = 0),
+      {
+        layers_info_tile <- try(sf::st_layers(dsn = tile_fp), silent = TRUE)
+        if (inherits(layers_info_tile, "try-error") || length(layers_info_tile$name) == 0) {
+          # If st_layers fails or finds no layers, it's an error
+          stop(sprintf("cannot read layers (%s)",
+                       if (inherits(layers_info_tile, "try-error")) attr(layers_info_tile, "condition")$message else "no layers found"))
+        }
+        tile_layer_name <- layers_info_tile$name[1]
+        sf::st_read(dsn   = tile_fp,
+                    layer = tile_layer_name, # Explicitly specify layer
+                    query = sprintf('SELECT * FROM "%s" LIMIT 0', tile_layer_name), # Use query for metadata
+                    quiet = TRUE)
+      },
       error = function(e) e)
-    # If st_read fails (e.g., file is corrupted), report as an issue
+    # If st_read (or st_layers within the block) fails, report as an issue
     if (inherits(x = sf_obj, "error")) {
       issues[[basename(tile_fp)]] <- sprintf(
         "cannot read (%s)", 
