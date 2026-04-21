@@ -368,8 +368,13 @@ load_network_for_prediction <- function(bbox, cfg) {
                         xmin, ymax, 
                         xmin, ymin)
     
+    # Detect layer name for explicit read (prevents auto-detection failure in GDAL 2.4)
+    layers_info <- sf::st_layers(osm_roads_path)
+    layer_name  <- layers_info$name[1]
+
     osm_network <- sf::st_read(
       dsn        = osm_roads_path,
+      layer      = layer_name,
       wkt_filter = wkt_bbox,
       quiet      = TRUE)
     
@@ -449,11 +454,15 @@ load_network_around_points <- function(points, buffer_radius, config) {
                       pts_bbox["xmin"] - buffer_radius,
                       pts_bbox["ymin"] - buffer_radius)
   
+  # Detect layer name
+  layers_info <- sf::st_layers(osm_roads_path)
+  layer_name  <- layers_info$name[1]
+
   # Read only the bbox region from GPKG (much faster + less memory)
-  osm_network <- sf::st_read(
-    dsn        = osm_roads_path,
-    wkt_filter = wkt_bbox,
-    quiet      = TRUE)
+  osm_network <- sf::st_read(dsn        = osm_roads_path, 
+                             layer      = layer_name, 
+                             wkt_filter = wkt_bbox, 
+                             quiet      = TRUE)
   
   # Ensure correct CRS
   osm_network <- ensure_target_crs(sf_obj     = osm_network, 
@@ -1934,6 +1943,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
           tile$xmin, tile$ymin)
 
         tile_sf <- sf::st_read(dsn        = osm_roads_path,
+                               layer      = layer_name,
                                wkt_filter = wkt_bbox,
                                quiet      = TRUE)
 
