@@ -2368,21 +2368,14 @@ build_france_tiles <- function(tile_size_m = 200000) {
       sf_obj
     })
 
-    # Ensure all tiles share the same target CRS before bind
-    tile_crs <- vapply(X = tile_sf_list, FUN = function(x) {
-      sf_crs_to_string(crs = sf::st_crs(x))
-    }, character(1))
-    if (length(x = unique(x = tile_crs)) > 1) {
-      pipeline_message(
-        sprintf("CRS mismatch detected across tile chunk files: %s",
-                paste(unique(tile_crs), collapse = " | ")),
-        process = "warning")
-      tile_sf_list <- lapply(X   = tile_sf_list, 
-                             FUN = function(sf_obj) {
-        ensure_target_crs(sf_obj     = sf_obj,
-                          target_crs = cfg$TARGET_CRS)
-      })
-    }
+    # Force exact target CRS object on all tiles before bind to avoid 'different crs' error.
+    # Even if they represent the same projection, sf::rbind requires identical CRS metadata objects.
+    target_crs_obj <- sf::st_crs(x = cfg$TARGET_CRS)
+    tile_sf_list <- lapply(X   = tile_sf_list, 
+                           FUN = function(sf_obj) {
+      sf::st_set_crs(x     = sf_obj, 
+                     value = target_crs_obj)
+    })
 
     # Combine all tiles
     combined_sf <- do.call(
