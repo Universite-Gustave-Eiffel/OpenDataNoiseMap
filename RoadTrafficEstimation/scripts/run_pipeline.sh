@@ -93,6 +93,11 @@ if hostname | grep -qi "hpc\|cluster"; then
   module load R/R-4.4.2 || { echo "❌ R module failed"; exit 1; }
   module load gdal/gdal-3.7.2.gcc11 || { echo "❌ gdal module failed"; exit 1; }
   
+  # Fix for RedHat/CentOS GCC annobin plugin error during package compilation
+  export CFLAGS="-O2 -g -fPIC"
+  export CXXFLAGS="-O2 -g -fPIC"
+  export CXX11FLAGS="-O2 -g -fPIC"
+
   export R_LIBS_USER=$HOME/R/x86_64-pc-linux-gnu-library/4.4.2
   export UDUNITS2_INCLUDE=$HOME/local/udunits/include
   export UDUNITS2_LIBS=$HOME/local/udunits/lib

@@ -430,10 +430,11 @@ pipeline_message <- function(text,
   
   # Secure process
   process <- if (is.null(process)) {NA_character_} else {process}
+  indent  <- strrep("\t", level)
   
   # INFO / WARNING / STOP — no level, no timer
   if (process == "info") {
-    message("\t\t ", icon, " ", text)
+    message(indent, " ", icon, " ", text)
     flush_log()
     return(invisible(NULL))
   }
@@ -463,33 +464,27 @@ pipeline_message <- function(text,
   if (level == 1) {
     if (progress == "start") {
       pipeline_timer_start(level = 1)
-      message("\t ", icon, " ", text)
+      message(indent, " ", icon, " ", text)
       flush_log()
       return(invisible(NULL))
     }
     if (progress == "end") {
       elapsed <- pipeline_timer_stop(level = 1)
-      message("\t\t ✓ ", text, sprintf(" in %.1f s", elapsed))
+      message(indent, " ✓ ", text, sprintf(" in %.1f s", elapsed))
       flush_log()
       return(invisible(NULL))
     }
   }
 
-  # LEVEL 2 — Timed internal computations
-  if (level == 2) {
-    if (progress == "start") {
-      pipeline_timer_start(level = 2)
-      message("\t\t ", icon, " ", text)
-      flush_log()
-      return(invisible(NULL))
-    }
-    if (progress == "end") {
-      elapsed <- pipeline_timer_stop(level = 2)
-      message("\t\t\t ✓ ", text, sprintf(" in %.1f s", elapsed))
-      flush_log()
-      return(invisible(NULL))
-    }
+  # GENERIC LEVEL (Level 2, 3, etc.) — Timed internal computations
+  if (progress == "start") {
+    pipeline_timer_start(level = level)
+    message(indent, " ", icon, " ", text)
+  } else {
+    elapsed <- pipeline_timer_stop(level = level)
+    message(indent, " ✓ ", text, sprintf(" in %.1f s", elapsed))
   }
+  flush_log()
   invisible(NULL)
 }
 #'

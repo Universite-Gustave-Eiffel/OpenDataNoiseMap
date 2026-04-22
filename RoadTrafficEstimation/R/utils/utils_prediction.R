@@ -558,8 +558,8 @@ apply_xgboost_predictions <- function(network_data,
                                       models_list, 
                                       feature_info, 
                                       default_vehicle_speed = 50) {
-  pipeline_message("Applying XGBoost models to network", 
-                   level = 1, process = "wait")
+  pipeline_message("Applying XGBoost models to network",
+                   level = 2, progress = "start", process = "wait")
   
   # Memory check: predictions will create ~n_roads x n_periods x 3 columns
   n_roads   <- nrow(x = network_data)
@@ -586,14 +586,13 @@ apply_xgboost_predictions <- function(network_data,
     }
     network_data$lane_number[is.na(x = network_data$lane_number) | 
                              !is.finite(x = network_data$lane_number)] <- 1
-    pipeline_message(paste("lane_number missing in prediction input;", 
-                           "derived proxy from OSM lane attributes"), 
-                     process = "info")
+    pipeline_message("lane_number missing in prediction input; derived proxy from OSM lane attributes", 
+                     level = 3, process = "info")
   }
 
   pipeline_message(sprintf("Constructing feature matrix for %s roads", 
                            fmt(n_roads)), 
-                   level = 2, progress = "start", process = "calc")
+                   level = 3, progress = "start", process = "build")
   
   # Prepare feature matrix (same encoding as training: sparse.model.matrix)
   rownames(x = network_data) <- seq_len(nrow(x = network_data))
@@ -626,7 +625,7 @@ apply_xgboost_predictions <- function(network_data,
   pipeline_message(
     sprintf("Feature matrix constructed with %d rows and %d features", 
             nrow(x = feature_matrix), ncol(x = feature_matrix)), 
-            level = 2, progress = "end", process = "valid")
+            level = 3, progress = "end", process = "valid")
 #' 
 # ------------------------------------------------------------------------------
 # Apply XGBoost models to network data
@@ -726,7 +725,7 @@ apply_xgboost_predictions <- function(network_data,
         sprintf("Feature matrix aligned (%s): %d columns (base %d, aligned %d)", 
                 target_source, ncol(x = fm), ncol(x = feature_matrix_base), 
                 length(x = target_features)),
-        process = "info")
+        level = 3, process = "info")
     } else {
       pipeline_message(
         paste("No training feature names available;", 
@@ -940,8 +939,8 @@ apply_xgboost_predictions <- function(network_data,
   
   pipeline_message(sprintf("Predictions completed for %s roads x %s periods", 
                            fmt(nrow(x = results)), 
-                           fmt(length(x = feature_info$all_periods))), 
-                   process = "valid")
+                           fmt(length(x = feature_info$all_periods))),
+                   level = 2, progress = "end", process = "valid")
   
   return(results)
 }
@@ -1869,6 +1868,30 @@ build_france_tiles <- function(tile_size_m = 200000) {
                            paste(names(x = temporal_chunks), 
                                  collapse = ", ")),
     process = "info")
+  
+  # Verify all periods are covered
+  covered         <- unlist(x = temporal_chunks, use.names = FALSE)
+  missing_periods <- setdiff(x = all_periods, y = covered)
+  if (length(x = missing_periods) > 0) {
+    pipeline_message(
+      sprintf("Warning: %d periods not in any temporal chunk: %s",
+              length(x = missing_periods),
+              paste(head(x = missing_periods, n = 10), 
+                    collapse = ", ")),
+      process = "warning")
+  }
+  
+  chunk_paths <- chunk_paths_all[names(x = temporal_chunks)]
+  
+  # --- Create output directories if needed ---
+  for (fp in unlist(x = chunk_paths)) {
+    output_dir_chunk <- dirname(path = fp)
+    if (!dir.exists(paths = output_dir_chunk)) {
+      dir.create(path = output_dir_chunk, recursive = TRUE)
+    }
+  }
+  
+  # --- Build spatial tiles ---
 
   # Verify all periods are covered
   covered         <- unlist(x = temporal_chunks, use.names = FALSE)
@@ -1882,16 +1905,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
       process = "warning")
   }
 
-  chunk_paths <- chunk_paths_all[names(x = temporal_chunks)]
-
-  # --- Create output directories if needed ---
-  for (fp in unlist(x = chunk_paths)) {
-    output_dir <- dirname(path = fp)
-    if (!dir.exists(paths = output_dir)) {
-      dir.create(path = output_dir, recursive = TRUE)
-    }
-  }
-
   # --- Build spatial tiles ---
   tiles <- build_france_tiles(tile_size_m = tile_size_m)
   pipeline_message(sprintf("Tile grid: %d tiles of %d km each",
@@ -1902,11 +1915,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
   n_tiles  <- nrow(x = tiles)
   n_digits <- floor(log10(n_tiles)) + 1L
 
-  # --- Process tiles ---
-  force_reprocess <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
+  # Process tiles
+  force_reprocess  <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
   tile_jobs        <- list()
   tile_results     <- list()
-  tile_seq_counter <- 0L
 
   if (force_reprocess && dir.exists(output_dir)) {
     old_tile_dirs <- list.dirs(path = output_dir, recursive = FALSE, full.names = TRUE)
@@ -1934,20 +1946,68 @@ build_france_tiles <- function(tile_size_m = 200000) {
   for (i in seq_len(n_tiles)) {
     tile           <- tiles[i, ]
     tile_id_str    <- sprintf("%0*d", n_digits, i)
+    tile_dir       <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+    
+    # Check if tile already processed and valid
+    is_processed <- FALSE
+    if (!force_reprocess && dir.exists(tile_dir)) {
+      # Check for the presence of the traffic CSV as a marker of completion
+      # All expected output files for this tile must exist
+      
+      # Geometry GPKG
+      geometry_gpkg_file <- file.path(tile_dir,
+                                      sprintf("07_predictions_%s_geometry_tile_%s.gpkg",
+                                              mode, tile_id_str))
+      # Traffic CSV
+      traffic_csv_file <- file.path(tile_dir,
+                                    sprintf("07_predictions_%s_traffic_tile_%s.csv",
+                                            mode, tile_id_str))
+      # Traffic chunk GPKG files (for each requested chunk)
+      expected_chunk_gpkg_files <- c()
+      for (chunk_name in names(x = temporal_chunks)) {
+        expected_chunk_gpkg_files <- c(expected_chunk_gpkg_files,
+                                       file.path(tile_dir,
+                                                 sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
+                                                         mode, chunk_name, tile_id_str)))
+      }
+      if (all(file.exists(c(geometry_gpkg_file, 
+                            traffic_csv_file, 
+                            expected_chunk_gpkg_files)))) {
+        is_processed <- TRUE # All expected files exist, so skip recalculation
+      }
+    }
+
+    if (is_processed) {
+      pipeline_message(sprintf("Tile %s already exists; skipping recalculation", 
+                               tile_id_str), 
+                       level = 2, process = "info")
+      
+      # Add to results for summary (we don't read the file for speed, use NA)
+      tile_results[[length(tile_results) + 1L]] <- list(
+        tile_roads        = NA_integer_,
+        with_data         = TRUE,
+        elapsed           = 0,
+        grid_tile_id_str  = tile_id_str,
+        tile_dir_id       = tile_id_str
+      )
+      next
+    }
 
     tile_jobs[[length(tile_jobs) + 1L]] <- list(
       tile_index       = i,
       tile             = tile,
-      grid_tile_id_str = tile_id_str
+      grid_tile_id_str = tile_id_str,
+      tile_dir_id      = tile_id_str  # Use grid ID as directory ID for stability
     )
   }
 
-  if (length(x = tile_jobs) == 0) {
+  if (length(x = tile_jobs) == 0 && length(x = tile_results) == 0) {
     pipeline_message("All tiles already exist and are valid; no tile processing needed.",
                      level = 1, progress = "end", process = "info")
     total_roads           <- 0L
     total_tiles_with_data <- 0L
-  } else {
+  } else if (length(x = tile_jobs) > 0) {
+
     process_tile <- function(job) {
       i                 <- job$tile_index
       tile              <- job$tile
@@ -1988,10 +2048,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
         n_tile <- nrow(x = tile_sf)
         pipeline_message(
           sprintf("Tile %s: %s roads", grid_tile_id_str, fmt(n_tile)),
-          level = 2, process = "calc")
+          level = 1, process = "calc")
 
-        tile_seq_counter <<- tile_seq_counter + 1L
-        tile_dir_id <- sprintf("%0*d", n_digits, tile_seq_counter)
+        tile_dir_id <- job$tile_dir_id
         tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_dir_id))
         if (dir.exists(path = tile_dir)) {
           unlink(x = tile_dir, recursive = TRUE, force = TRUE)
@@ -2111,7 +2170,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
             pipeline_message(
               sprintf("Tile %s chunk '%s' file written: %s",
                       grid_tile_id_str, chunk_name, rel_path(tile_file)),
-              level = 2, process = "info")
+              level = 2, process = "save")
           }
         }
 
@@ -2120,9 +2179,9 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         elapsed <- proc.time()["elapsed"] - t0
         pipeline_message(
-          sprintf("Tile %s completed: %s roads in %.1f s", 
-                  grid_tile_id_str, fmt(n_tile), elapsed),
-          process = "info")
+          sprintf("Tile %s completed: %s roads", 
+                  grid_tile_id_str, fmt(n_tile)),
+          level = 1, progress = "end", process = "valid")
 
         list(tile_roads        = n_tile,
              with_data        = TRUE,
@@ -2147,7 +2206,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
       sprintf("Processing %d tiles sequentially", length(x = tile_jobs)),
       level = 1, progress = "start", process = "calc")
     append_tile_progress(sprintf("Tile processing sequential"))
-    tile_results <- list()
     for (job in tile_jobs) {
       append_tile_progress(sprintf("Tile %s start", job$grid_tile_id_str))
       res <- process_tile(job)
@@ -2280,7 +2338,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     pipeline_message(
       sprintf("Merging chunk '%s' with %d tile files", chunk_name, 
-              length(X = tile_files)),
+              length(x = tile_files)),
       level = 1, process = "join")
 
     # Read and combine all tile sf objects
