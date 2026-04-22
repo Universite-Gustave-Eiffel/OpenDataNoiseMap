@@ -94,8 +94,8 @@ child_files <- list(
                                          "CHILD_RANDOM_LYONrf/CHILD_RANDOM_LYON_CBS.shp"),
   CHILD_RANDOM_STRASBOURG_RF = file.path(DATA_DIR, 
                                          "CHILD_RANDOM_STRASBOURGrf/CHILD_RANDOM_STRASBOURG_CBS.shp"),
-  CHILD_STRASBOURG_GEO       = file.path(DATA_DIR, 
-                                         "CHILD_STRASBOURGgeoclimate/CHILD_RANDOM_STRASBOURG_CBS.shp"
+  CHILD_STRASBOURG_GEO       = file.path(DATA_DIR,
+                                         "CHILD_STRASBOURGgeoclimate/CHILD_RANDOM_STRASBOURG_CBS.shp")
 )
 
 for (source_name in names(x = child_files)) {
@@ -126,8 +126,11 @@ if (length(x = sensors_list) == 0) {
 } else {
 
   # Combine all sensors
-  all_sensors <- do.call(what = rbind, 
-                         args = sensors_list)
+  # Ensure all sensor sources have the exact same CRS representation to avoid 'different crs' error
+  sensors_list <- lapply(X = sensors_list, FUN = function(x) {
+    sf::st_set_crs(x, CFG$TARGET_CRS)
+  })
+  all_sensors  <- do.call(what = rbind, args = sensors_list)
 
   # Load network around sensors
   osm_sensors <- load_network_around_points(

@@ -2183,7 +2183,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                   grid_tile_id_str, fmt(n_tile)),
           level = 1, progress = "end", process = "valid")
 
-        list(tile_roads        = n_tile,
+        list(tile_roads       = n_tile,
              with_data        = TRUE,
              elapsed          = elapsed,
              grid_tile_id_str = grid_tile_id_str,
@@ -2260,12 +2260,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
       level = 1, progress = "end", process = "info")
 
     tile_grid_fp <- file.path(output_dir,
-                               sprintf("07_predictions_%s_tile_grid.gpkg", mode))
+                              sprintf("07_predictions_%s_tile_grid.gpkg", mode))
 
     tile_metadata <- tiles
     tile_metadata$tile_id_str <- sprintf("%0*d", n_digits, tile_metadata$tile_id)
     tile_metadata$tile_roads  <- NA_integer_
-    tile_metadata$with_data  <- FALSE
+    tile_metadata$with_data   <- FALSE
     tile_metadata$tile_status <- "skipped"
 
     if (length(x = tile_results) > 0) {
@@ -2348,7 +2348,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
       min_gb         = 4, 
       warn_gb        = 8)
 
-    tile_sf_list <- lapply(X = tile_files, FUN= function(tf) {
+    tile_sf_list <- lapply(X = tile_files, FUN = function(tf) {
       pipeline_message(
         sprintf("Reading tile file %s for chunk '%s'", rel_path(tf), chunk_name),
         level = 2, process = "search")
@@ -2377,7 +2377,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
         sprintf("CRS mismatch detected across tile chunk files: %s",
                 paste(unique(tile_crs), collapse = " | ")),
         process = "warning")
-      tile_sf_list <- lapply(X = tile_sf_list, FUN = function(sf_obj) {
+      tile_sf_list <- lapply(X   = tile_sf_list, 
+                             FUN = function(sf_obj) {
         ensure_target_crs(sf_obj     = sf_obj,
                           target_crs = cfg$TARGET_CRS)
       })
