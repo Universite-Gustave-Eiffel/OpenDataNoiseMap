@@ -2368,21 +2368,49 @@ build_france_tiles <- function(tile_size_m = 200000) {
       sf_obj
     })
 
-    # Force exact target CRS object on all tiles before bind to avoid 'different crs' error.
-    # Even if they represent the same projection, sf::rbind requires identical CRS metadata objects.
+    # Combine all tiles robustly. sf::rbind is very strict about CRS object 
+    # identity and geometry column names. We use data.table::rbindlist to bypass
+    # these checks and then convert back to sf.
+    pipeline_message(
+      sprintf("Merging tiles for chunk '%s' using robust approach", chunk_name),
+      level = 1, process = "join")
+      
     target_crs_obj <- sf::st_crs(x = cfg$TARGET_CRS)
-    tile_sf_list <- lapply(X   = tile_sf_list, 
-                           FUN = function(sf_obj) {
-      sf::st_set_crs(x     = sf_obj, 
-                     value = target_crs_obj)
+    
+    # Standardize column names and classes before rbindlist
+    tile_sf_list <- lapply(tile_sf_list, function(x) {
+      if (nrow(x) == 0) return(NULL)
+      
+      # Ensure geometry column name is consistent
+      current_geom <- attr(x, "sf_column")
+      if (current_geom != "geom") {
+        names(x)[names(x) == current_geom] <- "geom"
+        sf::st_geometry(x) <- "geom"
+      }
+      
+      # Drop sf class temporarily to ensure rbindlist treats it as a list of 
+      # geometries without checking CRS identity
+      class(x) <- setdiff(x = class(x), y = "sf")
+      x
     })
+    # Remove empty tiles
+    tile_sf_list <- tile_sf_list[!vapply(X         = tile_sf_list, 
+                                         FUN       = is.null, 
+                                         FUN.VALUE = logical(1))]
 
-    # Combine all tiles
-    combined_sf <- do.call(
-      what = rbind,
-      args = c(tile_sf_list, 
-               list(make.row.names = FALSE))
-    )
+    if (length(tile_sf_list) > 0) {
+      # Robust merge: bind using data.table then convert back to sf
+      combined_df <- data.table::rbindlist(tile_sf_list, 
+                                           use.names = TRUE, 
+                                           fill = TRUE)
+      combined_sf <- sf::st_as_sf(x   = combined_df, 
+                                  crs = target_crs_obj)
+    } else {
+      pipeline_message(
+        sprintf("No tiles with data found for chunk '%s'; skipping", chunk_name),
+        process = "warning")
+      next
+    }
 
     if (any(duplicated(x = combined_sf$osm_id))) {
       pipeline_message(
