@@ -2424,14 +2424,6 @@ build_france_tiles <- function(tile_size_m = 200000) {
       next
     }
 
-    if (any(duplicated(x = combined_sf$osm_id))) {
-      pipeline_message(
-        sprintf("Removing %d duplicated osm_id rows from merged chunk '%s'",
-                sum(duplicated(x = combined_sf$osm_id)), chunk_name),
-        process = "warning")
-      combined_sf <- combined_sf[!duplicated(x = combined_sf$osm_id), ]
-    }
-
     # Write final chunk file
     pipeline_message(
       sprintf("Writing merged chunk '%s': %d rows with geometry", 
