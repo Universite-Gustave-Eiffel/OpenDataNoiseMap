@@ -2320,6 +2320,14 @@ build_france_tiles <- function(tile_size_m = 200000) {
   for (chunk_name in names(x = temporal_chunks)) {
     chunk_file <- chunk_paths[[chunk_name]]
     
+    # Skip merge if file already exists and force_reprocess is FALSE
+    if (file.exists(chunk_file) && !force_reprocess) {
+      pipeline_message(sprintf("Chunk '%s' already exists at %s; skipping merge", 
+                               chunk_name, rel_path(chunk_file)), 
+                       process = "info")
+      next
+    }
+
     all_tile_files <- list.files(path       = output_dir,
                                  pattern    = "^07_predictions_.*_tile_.*\\.gpkg$",
                                  recursive  = TRUE,
@@ -2399,12 +2407,16 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                          FUN.VALUE = logical(1))]
 
     if (length(tile_sf_list) > 0) {
-      # Robust merge: bind using data.table then convert back to sf
+      # Robust merge: bind using data.table then convert back to sf.
+      # We remove the list immediately after rbindlist to save memory.
       combined_df <- data.table::rbindlist(tile_sf_list, 
                                            use.names = TRUE, 
                                            fill = TRUE)
+      rm(tile_sf_list)
+      gc(verbose = FALSE)
       combined_sf <- sf::st_as_sf(x   = combined_df, 
                                   crs = target_crs_obj)
+      rm(combined_df)
     } else {
       pipeline_message(
         sprintf("No tiles with data found for chunk '%s'; skipping", chunk_name),
