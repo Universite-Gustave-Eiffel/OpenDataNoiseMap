@@ -98,6 +98,10 @@ if hostname | grep -qi "hpc\|cluster"; then
   export CXXFLAGS="-O2 -g -fPIC"
   export CXX11FLAGS="-O2 -g -fPIC"
 
+  # Limit memory fragmentation for large spatial processing
+  # preventing glibc from creating too many memory arenas
+  export MALLOC_ARENA_MAX=2
+
   export R_LIBS_USER=$HOME/R/x86_64-pc-linux-gnu-library/4.4.2
   export UDUNITS2_INCLUDE=$HOME/local/udunits/include
   export UDUNITS2_LIBS=$HOME/local/udunits/lib
