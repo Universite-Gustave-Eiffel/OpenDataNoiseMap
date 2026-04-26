@@ -2310,10 +2310,11 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     if (length(x = tile_results) > 0) {
       for (res in tile_results) {
-        tidx <- which(tile_metadata$tile_id_str == as.character(x = res$grid_tile_id_str))
+        tidx <- which(tile_metadata$tile_id_str == 
+                      as.character(x = res$grid_tile_id_str))
         if (length(x = tidx) == 1L) {
-          tile_metadata$tile_roads[tidx] <- as.integer(x = res$tile_roads)
-          tile_metadata$with_data[tidx] <- isTRUE(x = res$with_data)
+          tile_metadata$tile_roads[tidx]  <- as.integer(x = res$tile_roads)
+          tile_metadata$with_data[tidx]   <- isTRUE(x = res$with_data)
           tile_metadata$tile_status[tidx] <- if ("error" %in% names(x = res)) {
             "error"
           } else if (isTRUE(x = res$with_data)) {
@@ -2358,35 +2359,41 @@ build_france_tiles <- function(tile_size_m = 200000) {
                    level = 1, progress = "start", process = "save")
 
   # Check if ogr2ogr is available for high-performance merging
-  ogr_path <- Sys.which("ogr2ogr")
+  ogr_path <- Sys.which(names = "ogr2ogr")
   has_ogr2ogr <- (ogr_path != "")
 
   for (chunk_name in names(x = temporal_chunks)) {
-    chunk_file <- chunk_paths[[chunk_name]]
-    merged_log <- paste0(chunk_file, ".merged_tiles.log")
+    chunk_file   <- chunk_paths[[chunk_name]]
+    merged_log   <- paste0(chunk_file, ".merged_tiles.log")
     journal_file <- paste0(chunk_file, "-journal")
     
     # Handle potentially corrupted file from previous crash (detected by journal)
     if (file.exists(journal_file)) {
-      pipeline_message(sprintf("Journal file found for '%s', suggesting previous interruption. Cleaning up.", chunk_name), 
-                       process = "warning")
-      unlink(chunk_file)
-      unlink(journal_file)
-      unlink(merged_log)
+      pipeline_message(
+        sprintf("Journal file found for '%s', suggesting previous interruption. Cleaning up.", 
+                chunk_name), 
+        process = "warning")
+      unlink(x = chunk_file)
+      unlink(x = journal_file)
+      unlink(x = merged_log)
     }
 
     # Determine already processed tiles for resume capability
     already_merged <- character(0)
-    if (file.exists(chunk_file) && file.exists(merged_log) && !force_reprocess) {
+    if (file.exists(chunk_file) && 
+        file.exists(merged_log) && 
+        !force_reprocess) {
       already_merged <- readLines(merged_log)
-      pipeline_message(sprintf("Resume detected for chunk '%s': %d tiles already merged", 
-                               chunk_name, length(already_merged)), 
-                       process = "info")
+      pipeline_message(
+        sprintf("Resume detected for chunk '%s': %d tiles already merged", 
+                chunk_name, length(already_merged)), 
+        process = "info")
     } else if (file.exists(chunk_file) && !force_reprocess) {
       # File exists but no log: assume it's complete
-      pipeline_message(sprintf("Chunk '%s' already exists at %s; skipping merge", 
-                               chunk_name, rel_path(chunk_file)), 
-                       process = "info")
+      pipeline_message(
+        sprintf("Chunk '%s' already exists at %s; skipping merge", 
+                chunk_name, rel_path(chunk_file)), 
+        process = "info")
       next
     } else {
       # Fresh start or force reprocess
@@ -2405,7 +2412,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
     tile_files <- sort(tile_files)
 
     # Filter out already merged tiles
-    files_to_merge <- tile_files[!(basename(tile_files) %in% already_merged)]
+    files_to_merge <- tile_files[
+      !(basename(path = tile_files) %in% already_merged)]
 
     if (length(files_to_merge) == 0) {
       pipeline_message(sprintf("No new tile files to merge for chunk '%s'", 
@@ -2424,50 +2432,78 @@ build_france_tiles <- function(tile_size_m = 200000) {
       for (i in seq_along(files_to_merge)) {
         tf <- files_to_merge[i]
         if (i %% 50 == 0 || i == 1) {
-           pipeline_message(sprintf("[%s] Merging tile %d/%d (ogr2ogr)", chunk_name, i, length(files_to_merge)), level = 2)
+           pipeline_message(
+            sprintf("[%s] Merging tile %d/%d (ogr2ogr)", 
+            chunk_name, i, length(files_to_merge)), level = 2, process = "join")
         }
         
         # Build command: use -update -append if file exists, else simple creation
         if (file.exists(chunk_file)) {
           cmd <- sprintf("%s -update -append -f GPKG %s %s -nln %s -quiet", 
-                         shQuote(ogr_path), shQuote(chunk_file), shQuote(tf), shQuote(chunk_name))
+                         shQuote(string = ogr_path), 
+                         shQuote(string = chunk_file), 
+                         shQuote(string = tf), 
+                         shQuote(string = chunk_name))
         } else {
           # Disable spatial index for initial creation to speed up subsequent appends
           cmd <- sprintf("%s -f GPKG %s %s -nln %s -lco SPATIAL_INDEX=NO -quiet", 
-                         shQuote(ogr_path), shQuote(chunk_file), shQuote(tf), shQuote(chunk_name))
+                         shQuote(string = ogr_path), 
+                         shQuote(string = chunk_file), 
+                         shQuote(string = tf), 
+                         shQuote(string = chunk_name))
         }
         
-        res <- system(cmd)
+        res <- system(command = cmd)
         if (res == 0) {
-          cat(basename(tf), file = merged_log, append = TRUE, sep = "\n")
+          cat(basename(path   = tf), 
+                       file   = merged_log, 
+                       append = TRUE, 
+                       sep    = "\n")
         } else {
-          pipeline_message(sprintf("Failed to merge tile %s with ogr2ogr", basename(tf)), process = "stop")
+          pipeline_message(sprintf("Failed to merge tile %s with ogr2ogr", 
+                                   basename(path = tf)), 
+                           process = "stop")
         }
       }
       
       # Re-build spatial index at the very end for the whole file
-      pipeline_message(sprintf("Finalizing chunk '%s': building spatial index", chunk_name), level = 1, process = "calc")
-      sql_index <- sprintf("SELECT CreateSpatialIndex('%s', 'geom')", chunk_name)
+      pipeline_message(
+        sprintf("Finalizing chunk '%s': building spatial index", 
+                chunk_name), 
+        level = 1, process = "calc")
+      sql_index <- sprintf("SELECT CreateSpatialIndex('%s', 'geom')", 
+                           chunk_name)
       # Use ogrinfo to execute the SQL command
-      system(sprintf("ogrinfo %s -sql %s", shQuote(chunk_file), shQuote(sql_index)))
+      system(command = sprintf("ogrinfo %s -sql %s", 
+                               shQuote(string = chunk_file), 
+                               shQuote(string = sql_index)))
       
     } else {
-      # FALLBACK: INCREMENTAL R MERGE (Memory efficient but slower than ogr2ogr)
-      pipeline_message("ogr2ogr not found; falling back to incremental R merge (slower)", process = "warning")
+      # Incremental R merge (Memory efficient but slower than ogr2ogr)
+      pipeline_message(
+        "ogr2ogr not found; falling back to incremental R merge (slower)", 
+        process = "warning")
       
       for (i in seq_along(files_to_merge)) {
         tf <- files_to_merge[i]
         if (i %% 50 == 0 || i == 1) {
-           pipeline_message(sprintf("[%s] Merging tile %d/%d (R incremental)", chunk_name, i, length(files_to_merge)), level = 2)
+           pipeline_message(sprintf("[%s] Merging tile %d/%d (R incremental)", 
+                                    chunk_name, i, length(x = files_to_merge)), 
+                            process = "info")
         }
         
-        sf_obj <- try(sf::st_read(dsn = tf, quiet = TRUE), silent = TRUE)
-        if (!inherits(sf_obj, "try-error") && nrow(sf_obj) > 0) {
+        sf_obj <- try(sf::st_read(dsn    = tf, 
+                                  quiet  = TRUE), 
+                                  silent = TRUE)
+        if (!inherits(x    = sf_obj, 
+                      what = "try-error") && 
+            nrow(x = sf_obj) > 0) {
           # Standardize geom column
-          current_geom <- attr(sf_obj, "sf_column")
+          current_geom <- attr(x     = sf_obj, 
+                               which = "sf_column")
           if (current_geom != "geom") {
-            names(sf_obj)[names(sf_obj) == current_geom] <- "geom"
-            sf::st_geometry(sf_obj) <- "geom"
+            names(x = sf_obj)[names(x = sf_obj) == current_geom] <- "geom"
+            sf::st_geometry(obj = sf_obj) <- "geom"
           }
           
           # Write/Append
@@ -2479,10 +2515,15 @@ build_france_tiles <- function(tile_size_m = 200000) {
             delete_dsn = FALSE,
             quiet      = TRUE
           )
-          cat(basename(tf), file = merged_log, append = TRUE, sep = "\n")
+          cat(basename(path   = tf), 
+                       file   = merged_log, 
+                       append = TRUE, 
+                       sep    = "\n")
         }
         rm(sf_obj)
-        if (i %% 20 == 0) gc(verbose = FALSE)
+        if (i %% 20 == 0){
+          gc(verbose = FALSE)
+        }
       }
     }
 
@@ -2490,7 +2531,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                      level = 1, progress = "end", process = "save")
     
     # Remove the temporary merge log upon successful completion
-    unlink(merged_log)
+    unlink(x = merged_log)
   }
 
   pipeline_message("Tile merging phase completed", 
