@@ -161,25 +161,46 @@ ensure_target_crs <- function(sf_obj, target_crs) {
 #'              final destination to avoid leaving partially written files.
 #' @param sf_obj An sf object to write.
 #' @param dsn Destination GeoPackage path.
+#' @param layer Character. Optional layer name. Defaults to file name.
 #' @return TRUE if writing and rename succeeded, otherwise throws.
-write_sf_gpkg_atomic <- function(sf_obj, dsn) {
+write_sf_gpkg_atomic <- function(sf_obj, dsn, layer = NULL) {
   dest_dir <- dirname(dsn)
-  dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
-  temp_fp <- tempfile(pattern = "tmp_tile_", fileext = ".gpkg", tmpdir = dest_dir)
+  dir.create(path         = dest_dir, 
+             recursive    = TRUE, 
+             showWarnings = FALSE)
+  temp_fp <- tempfile(pattern = "tmp_tile_", 
+                      fileext = ".gpkg", 
+                      tmpdir  = dest_dir)
+
+  # Default layer name to filename without extension if not provided
+  if (is.null(x = layer)) {
+    layer <- tools::file_path_sans_ext(x = basename(path = dsn))
+  }
 
   sf::st_write(obj        = sf_obj,
                dsn        = temp_fp,
+               layer      = layer,
                delete_dsn = TRUE,
                quiet      = TRUE)
 
   # Validate the written file: explicitly get layer name and use SQL query for metadata
-  layers_info_temp <- try(sf::st_layers(dsn = temp_fp), silent = TRUE)
+  layers_info_temp <- try(sf::st_layers(dsn    = temp_fp), 
+                                        silent = TRUE)
 
-  if (inherits(layers_info_temp, "try-error") || length(layers_info_temp$name) == 0) {
-    unlink(temp_fp)
-    stop(sprintf("GeoPackage validation failed: cannot read layers from temporary file %s: %s",
-                 temp_fp,
-                 if (inherits(layers_info_temp, "try-error")) attr(layers_info_temp, "condition")$message else "no layers found"))
+  if (inherits(x    = layers_info_temp, 
+               what = "try-error") || 
+      length(x = layers_info_temp$name) == 0) {
+    unlink(x = temp_fp)
+    pipeline_message(
+       sprintf("GeoPackage validation failed: cannot read layers from temporary file %s: %s",
+               temp_fp,
+               if (inherits(x = layers_info_temp, "try-error")) {
+                 attr(x     = layers_info_temp, 
+                      which = "condition")$message
+               } else {
+                "no layers found"
+               }),
+       process = "stop")
   }
 
   temp_layer_name <- layers_info_temp$name[1]
@@ -187,25 +208,42 @@ write_sf_gpkg_atomic <- function(sf_obj, dsn) {
   validation_sf <- tryCatch(
     sf::st_read(dsn   = temp_fp,
                 layer = temp_layer_name, # Explicitly specify layer
-                query = sprintf('SELECT * FROM "%s" LIMIT 0', temp_layer_name), # Use query for metadata
+                query = sprintf('SELECT * FROM "%s" LIMIT 0', 
+                                temp_layer_name), # Use query for metadata
                 quiet = TRUE),
     error = function(e) e)
 
-  if (inherits(validation_sf, "error") || !inherits(validation_sf, "sf")) {
-    unlink(temp_fp)
-    stop(sprintf("GeoPackage validation failed for temporary file %s (layer '%s'): %s",
-                 temp_fp, temp_layer_name,
-                 if (inherits(validation_sf, "error")) validation_sf$message else "output is not an sf object"))
+  if (inherits(x    = validation_sf, 
+               what = "error") || 
+      !inherits(x    = validation_sf, 
+                what = "sf")) {
+    unlink(x = temp_fp)
+    pipeline_message(
+      sprintf("GeoPackage validation failed for temporary file %s (layer '%s'): %s",
+              temp_fp, temp_layer_name,
+              if (inherits(x    = validation_sf, 
+                           what = "error")) {
+                validation_sf$message
+              } else {
+                "output is not an sf object"
+              }), 
+      process = "stop")
   }
 
-  if (!file.rename(from = temp_fp, to = dsn)) {
-    if (!file.copy(from = temp_fp, to = dsn, overwrite = TRUE)) {
-      unlink(temp_fp)
-      stop(sprintf("Cannot move temporary GeoPackage to %s", dsn))
+  if (!file.rename(from = temp_fp, 
+                   to   = dsn)) {
+    if (!file.copy(from      = temp_fp, 
+                   to        = dsn, 
+                   overwrite = TRUE)) {
+      unlink(x = temp_fp)
+      pipeline_message(
+        sprintf("Cannot move temporary GeoPackage to %s", dsn), 
+        process = "stop"
+      )
     }
-    unlink(temp_fp)
+    unlink(x = temp_fp)
   }
-  invisible(TRUE)
+  invisible(x = TRUE)
 }
 #' 
 # -------------------------------------------------------------------------------
@@ -2103,7 +2141,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                    sprintf("07_predictions_%s_geometry_tile_%s.gpkg",
                                            mode, tile_dir_id))
         write_sf_gpkg_atomic(sf_obj = geom_for_merge,
-                             dsn    = tile_geom_file)
+                             dsn    = tile_geom_file,
+                             layer  = "geometry")
         pipeline_message(
           sprintf("Tile %s geometry file written: %s",
                   grid_tile_id_str, rel_path(tile_geom_file)),
@@ -2166,7 +2205,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                    sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
                                            mode, chunk_name, tile_dir_id))
             write_sf_gpkg_atomic(sf_obj = tile_chunk_sf,
-                                 dsn    = tile_file)
+                                 dsn    = tile_file,
+                                 layer  = chunk_name)
             pipeline_message(
               sprintf("Tile %s chunk '%s' file written: %s",
                       grid_tile_id_str, chunk_name, rel_path(tile_file)),
@@ -2317,17 +2357,44 @@ build_france_tiles <- function(tile_size_m = 200000) {
   pipeline_message("Merging tiles into final chunk files", 
                    level = 1, progress = "start", process = "save")
 
+  # Check if ogr2ogr is available for high-performance merging
+  ogr_path <- Sys.which("ogr2ogr")
+  has_ogr2ogr <- (ogr_path != "")
+
   for (chunk_name in names(x = temporal_chunks)) {
     chunk_file <- chunk_paths[[chunk_name]]
+    merged_log <- paste0(chunk_file, ".merged_tiles.log")
+    journal_file <- paste0(chunk_file, "-journal")
     
-    # Skip merge if file already exists and force_reprocess is FALSE
-    if (file.exists(chunk_file) && !force_reprocess) {
+    # Handle potentially corrupted file from previous crash (detected by journal)
+    if (file.exists(journal_file)) {
+      pipeline_message(sprintf("Journal file found for '%s', suggesting previous interruption. Cleaning up.", chunk_name), 
+                       process = "warning")
+      unlink(chunk_file)
+      unlink(journal_file)
+      unlink(merged_log)
+    }
+
+    # Determine already processed tiles for resume capability
+    already_merged <- character(0)
+    if (file.exists(chunk_file) && file.exists(merged_log) && !force_reprocess) {
+      already_merged <- readLines(merged_log)
+      pipeline_message(sprintf("Resume detected for chunk '%s': %d tiles already merged", 
+                               chunk_name, length(already_merged)), 
+                       process = "info")
+    } else if (file.exists(chunk_file) && !force_reprocess) {
+      # File exists but no log: assume it's complete
       pipeline_message(sprintf("Chunk '%s' already exists at %s; skipping merge", 
                                chunk_name, rel_path(chunk_file)), 
                        process = "info")
       next
+    } else {
+      # Fresh start or force reprocess
+      unlink(chunk_file)
+      unlink(merged_log)
     }
 
+    # Identify tile files for this chunk
     all_tile_files <- list.files(path       = output_dir,
                                  pattern    = "^07_predictions_.*_tile_.*\\.gpkg$",
                                  recursive  = TRUE,
@@ -2337,113 +2404,93 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                        fixed   = TRUE)]
     tile_files <- sort(tile_files)
 
-    if (length(tile_files) == 0) {
-      pipeline_message(sprintf("No tile files found for chunk '%s'", 
+    # Filter out already merged tiles
+    files_to_merge <- tile_files[!(basename(tile_files) %in% already_merged)]
+
+    if (length(files_to_merge) == 0) {
+      pipeline_message(sprintf("No new tile files to merge for chunk '%s'", 
                                chunk_name),
-                       process = "warning")
+                       process = "info")
       next
     }
 
     pipeline_message(
-      sprintf("Merging chunk '%s' with %d tile files", chunk_name, 
-              length(x = tile_files)),
+      sprintf("Merging chunk '%s' (%d new tiles)", chunk_name, 
+              length(x = files_to_merge)),
       level = 1, process = "join")
 
-    # Read and combine all tile sf objects
-    check_memory_available(
-      operation_name = sprintf("Merge %d tiles for chunk '%s'", 
-                               length(tile_files), chunk_name),
-      min_gb         = 4, 
-      warn_gb        = 8)
-
-    tile_sf_list <- lapply(X = tile_files, FUN = function(tf) {
-      pipeline_message(
-        sprintf("Reading tile file %s for chunk '%s'", rel_path(tf), chunk_name),
-        level = 2, process = "search")
-      sf_obj <- sf::st_read(dsn   = tf, 
-                            quiet = TRUE)
-      sf_obj <- ensure_target_crs(sf_obj     = sf_obj, 
-                                  target_crs = cfg$TARGET_CRS)
-      if (is.na(x = sf::st_crs(sf_obj))) {
-        pipeline_message(
-          sprintf("Tile chunk file %s has missing CRS after read", rel_path(tf)),
-          level = 2, process = "fail")
-      } else {
-        pipeline_message(
-          sprintf("Tile file %s loaded with %d rows", rel_path(tf), nrow(sf_obj)),
-          level = 2, process = "valid")
-      }
-      sf_obj
-    })
-
-    # Combine all tiles robustly. sf::rbind is very strict about CRS object 
-    # identity and geometry column names. We use data.table::rbindlist to bypass
-    # these checks and then convert back to sf.
-    pipeline_message(
-      sprintf("Merging tiles for chunk '%s' using robust approach", chunk_name),
-      level = 1, process = "join")
-      
-    target_crs_obj <- sf::st_crs(x = cfg$TARGET_CRS)
-    
-    # Standardize column names and classes before rbindlist
-    tile_sf_list <- lapply(tile_sf_list, function(x) {
-      if (nrow(x) == 0) return(NULL)
-      
-      # Ensure geometry column name is consistent
-      current_geom <- attr(x, "sf_column")
-      if (current_geom != "geom") {
-        names(x)[names(x) == current_geom] <- "geom"
-        sf::st_geometry(x) <- "geom"
+    if (has_ogr2ogr) {
+      # HIGH PERFORMANCE MERGE USING OGR2OGR (External system call)
+      for (i in seq_along(files_to_merge)) {
+        tf <- files_to_merge[i]
+        if (i %% 50 == 0 || i == 1) {
+           pipeline_message(sprintf("[%s] Merging tile %d/%d (ogr2ogr)", chunk_name, i, length(files_to_merge)), level = 2)
+        }
+        
+        # Build command: use -update -append if file exists, else simple creation
+        if (file.exists(chunk_file)) {
+          cmd <- sprintf("%s -update -append -f GPKG %s %s -nln %s -quiet", 
+                         shQuote(ogr_path), shQuote(chunk_file), shQuote(tf), shQuote(chunk_name))
+        } else {
+          # Disable spatial index for initial creation to speed up subsequent appends
+          cmd <- sprintf("%s -f GPKG %s %s -nln %s -lco SPATIAL_INDEX=NO -quiet", 
+                         shQuote(ogr_path), shQuote(chunk_file), shQuote(tf), shQuote(chunk_name))
+        }
+        
+        res <- system(cmd)
+        if (res == 0) {
+          cat(basename(tf), file = merged_log, append = TRUE, sep = "\n")
+        } else {
+          pipeline_message(sprintf("Failed to merge tile %s with ogr2ogr", basename(tf)), process = "stop")
+        }
       }
       
-      # Drop sf class temporarily to ensure rbindlist treats it as a list of 
-      # geometries without checking CRS identity
-      class(x) <- setdiff(x = class(x), y = "sf")
-      x
-    })
-    # Remove empty tiles
-    tile_sf_list <- tile_sf_list[!vapply(X         = tile_sf_list, 
-                                         FUN       = is.null, 
-                                         FUN.VALUE = logical(1))]
-
-    if (length(tile_sf_list) > 0) {
-      # Robust merge: bind using data.table then convert back to sf.
-      # We remove the list immediately after rbindlist to save memory.
-      combined_df <- data.table::rbindlist(tile_sf_list, 
-                                           use.names = TRUE, 
-                                           fill = TRUE)
-      rm(tile_sf_list)
-      gc(verbose = FALSE)
-      combined_sf <- sf::st_as_sf(x   = combined_df, 
-                                  crs = target_crs_obj)
-      rm(combined_df)
+      # Re-build spatial index at the very end for the whole file
+      pipeline_message(sprintf("Finalizing chunk '%s': building spatial index", chunk_name), level = 1, process = "calc")
+      sql_index <- sprintf("SELECT CreateSpatialIndex('%s', 'geom')", chunk_name)
+      # Use ogrinfo to execute the SQL command
+      system(sprintf("ogrinfo %s -sql %s", shQuote(chunk_file), shQuote(sql_index)))
+      
     } else {
-      pipeline_message(
-        sprintf("No tiles with data found for chunk '%s'; skipping", chunk_name),
-        process = "warning")
-      next
+      # FALLBACK: INCREMENTAL R MERGE (Memory efficient but slower than ogr2ogr)
+      pipeline_message("ogr2ogr not found; falling back to incremental R merge (slower)", process = "warning")
+      
+      for (i in seq_along(files_to_merge)) {
+        tf <- files_to_merge[i]
+        if (i %% 50 == 0 || i == 1) {
+           pipeline_message(sprintf("[%s] Merging tile %d/%d (R incremental)", chunk_name, i, length(files_to_merge)), level = 2)
+        }
+        
+        sf_obj <- try(sf::st_read(dsn = tf, quiet = TRUE), silent = TRUE)
+        if (!inherits(sf_obj, "try-error") && nrow(sf_obj) > 0) {
+          # Standardize geom column
+          current_geom <- attr(sf_obj, "sf_column")
+          if (current_geom != "geom") {
+            names(sf_obj)[names(sf_obj) == current_geom] <- "geom"
+            sf::st_geometry(sf_obj) <- "geom"
+          }
+          
+          # Write/Append
+          sf::st_write(
+            obj        = sf_obj,
+            dsn        = chunk_file,
+            layer      = chunk_name,
+            append     = file.exists(chunk_file),
+            delete_dsn = FALSE,
+            quiet      = TRUE
+          )
+          cat(basename(tf), file = merged_log, append = TRUE, sep = "\n")
+        }
+        rm(sf_obj)
+        if (i %% 20 == 0) gc(verbose = FALSE)
+      }
     }
 
-    # Write final chunk file
-    pipeline_message(
-      sprintf("Writing merged chunk '%s': %d rows with geometry", 
-              chunk_name, nrow(x = combined_sf)),
-      level = 2, progress = "start", process = "save")
-
-    sf::st_write(
-      obj        = combined_sf,
-      dsn        = chunk_file,
-      delete_dsn = TRUE,
-      quiet      = FALSE
-    )
-
-    pipeline_message(
-      sprintf("Chunk '%s' written to %s", 
-              chunk_name, rel_path(chunk_file)),
-      level = 2, progress = "end", process = "save")
-
-    rm(tile_sf_list, combined_sf)
-    gc(verbose = FALSE)
+    pipeline_message(sprintf("Chunk '%s' merge completed", chunk_name), 
+                     level = 1, progress = "end", process = "save")
+    
+    # Remove the temporary merge log upon successful completion
+    unlink(merged_log)
   }
 
   pipeline_message("Tile merging phase completed", 
