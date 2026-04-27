@@ -2362,32 +2362,40 @@ build_france_tiles <- function() {
     unlink(x = merged_log)
   }
 
-} # Close .predict_france_tiled_impl
+  pipeline_message("Tile merging phase completed", level = 1, 
+                   progress = "end", process = "save")
 
-  pipeline_message("Tile merging phase completed", 
-                   level = 1, progress = "end", process = "save")
+  # Calculate summary stats from results
+  total_roads <- sum(vapply(
+    X   = tile_results, 
+    FUN = function(x){
+            if("tile_roads" %in% names(x)){
+              as.integer(x = x$tile_roads)
+            } else {
+              0L
+            }, integer(1)
+          }), na.rm = TRUE)
+  total_tiles_with_data <- sum(vapply(
+    X   = tile_results, 
+    FUN = function(x){
+            if(isTRUE(x$with_data)){
+              1L
+            } else {0L}, 
+            integer(1)}))
 
-  # Summary
   pipeline_message("France-wide prediction summary:", 
                    process = "info")
-  pipeline_message(sprintf("\t- Roads predicted: %s across %d tiles", 
-                           fmt(total_roads), total_tiles_with_data), 
-                   process = "info")
-  pipeline_message(sprintf("\t- Note: Geometry included in each temporal chunk file"), 
-                   process = "info")
+  pipeline_message(
+    sprintf("\t- Roads predicted: %s across %d tiles", 
+            fmt(total_roads), total_tiles_with_data), 
+    process = "info")
+  
   for (cn in names(x = chunk_paths)) {
     if (file.exists(chunk_paths[[cn]])) {
       sz <- round(x = file.info(chunk_paths[[cn]])$size / 1024^2, 1)
-      pipeline_message(sprintf("\t- Traffic [%s]: %s (%.1f MB)", 
-                               cn, rel_path(chunk_paths[[cn]]), sz), 
-                   process = "info")
+      pipeline_message(
+        sprintf("\t- Traffic [%s]: %s (%.1f MB)", cn, rel_path(chunk_paths[[cn]]), sz), 
+                process = "info")
     }
-  }
-  if (exists("geometry_output_file", inherits = FALSE) && 
-      file.exists(geometry_output_file)) {
-    sz <- round(x = file.info(geometry_output_file)$size / 1024^2, 1)
-    pipeline_message(sprintf("\t- Geometry: %s (%.1f MB)", 
-                             rel_path(geometry_output_file), sz), 
-                     process = "info")
   }
 }
