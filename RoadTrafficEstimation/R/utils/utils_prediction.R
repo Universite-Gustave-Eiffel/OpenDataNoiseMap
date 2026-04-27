@@ -1788,7 +1788,6 @@ build_france_tiles <- function() {
 #'     hourly_wd = "data/prediction/france/traffic_hourly_wd.gpkg",
 #'     hourly_we = "data/prediction/france/traffic_hourly_we.gpkg"
 #'   ),
-#'   tile_size_m = 200000,
 #'   chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")
 #' )
 #' }

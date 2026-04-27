@@ -53,8 +53,7 @@ predict_traffic(
   output_config = france_output_config,
   method        = "tiled",
   mode          = mode_suffix,
-  chunks        = c("DEN", "hourly", "hourly_wd", "hourly_we"),
-  tile_size_m   = 50000)  # 50 km tiles
+  chunks        = c("DEN", "hourly", "hourly_wd", "hourly_we"))
 
 pipeline_message("France-wide prediction completed",
                  level = 0, progress = "end", process = "valid")
