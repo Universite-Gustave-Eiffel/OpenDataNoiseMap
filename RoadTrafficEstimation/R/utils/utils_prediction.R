@@ -496,7 +496,8 @@ load_network_around_points <- function(points, buffer_radius, config) {
     warn_gb        = 4)
   
   # Ensure points CRS
-  if (!sf_crs_matches(sf::st_crs(x = points), target_crs)) {
+  if (!sf_crs_matches(x = sf::st_crs(x = points), 
+                      y = target_crs)) {
     points <- points %>% 
       st_transform(crs = target_crs)
   }
@@ -1331,7 +1332,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
 predict_traffic <- function(region_name, 
                             cfg, 
                             bbox = NULL,
-                            output_config = NULL,
+                            output_config,
                             method = "auto",
                             mode = NULL,
                             chunks = c("DEN"),
@@ -1348,7 +1349,10 @@ predict_traffic <- function(region_name,
   }
 
   # --- Validate output_config ---
-  if (is.null(x = output_config) || !is.list(x = output_config)) {
+  # If output_config is not provided, try to build it using build_prediction_filepaths
+  if (is.null(x = output_config)) {
+    output_config <- build_prediction_filepaths(extent = mode, mode = mode)
+  } else if (!is.list(x = output_config) || length(output_config) == 0) {
     pipeline_message("output_config must be a non-empty list", 
                      process = "stop")
   }
@@ -1378,7 +1382,6 @@ predict_traffic <- function(region_name,
     .predict_france_tiled_impl(
       cfg           = cfg,
       region_name   = region_name,
-      output_config = output_config,
       mode          = mode,
       tile_size_m   = tile_size_m,
       chunks        = chunks
@@ -1682,25 +1685,75 @@ get_temporal_chunks <- function() {
 #' france_tiles <- build_france_tiles()
 #' }
 #' @export
-build_france_tiles <- function(tile_size_m = 200000) {
-  # France extent in EPSG:2154 (Lambert-93) — rounded outward
-  france_xmin <- 100000
-  france_ymin <- 6050000
-  france_xmax <- 1250000
-  france_ymax <- 7150000
+build_france_tiles <- function() {
+  pipeline_message("Using hardcoded French region bounding boxes (no internet access)",
+                   process = "info")
 
-  xs <- seq(from = france_xmin, to = france_xmax, by = tile_size_m)
-  ys <- seq(from = france_ymin, to = france_ymax, by = tile_size_m)
+  # Hardcoded metropolitan regions data (WGS84 bboxes)
+  # Format: name, xmin, ymin, xmax, ymax
+  regions_raw <- data.frame(
+    nom = c(
+      "AUVERGNE-RHONE-ALPES", "BOURGOGNE-FRANCHE-COMTE", "BRETAGNE",
+      "CENTRE-VAL DE LOIRE", "CORSE", "GRAND EST", "HAUTS-DE-FRANCE",
+      "ILE-DE-FRANCE", "NORMANDIE", "NOUVELLE-AQUITAINE", "OCCITANIE",
+      "PAYS DE LA LOIRE", "PROVENCE-ALPES-COTE D'AZUR"
+    ),
+    xmin_wgs84 = c(2.0629, 2.8452, -5.1413, 0.053, 8.5347, 3.3833, 1.3797, 
+                   1.4465, -1.9485, -1.7909, -0.3272, -2.6245, 4.2303),
+    ymin_wgs84 = c(44.1154, 46.1559, 47.278, 46.3471, 41.3336, 47.4202, 
+                   48.8372, 48.1205, 48.1799, 42.7775, 42.3331, 46.2664, 42.9818),
+    xmax_wgs84 = c(7.1859, 7.1435, -1.0158, 3.1286, 9.56, 8.2333, 4.2557, 3.5587, 
+                   1.8027, 2.6116, 4.8456, 0.9167, 7.7188),
+    ymax_wgs84 = c(46.804, 48.4001, 48.9008, 48.9411, 43.0277, 50.1692, 51.089, 
+                   49.2413, 50.0722, 47.1758, 45.0467, 48.568, 45.1268),
+    stringsAsFactors = FALSE
+  )
 
-  tiles         <- expand.grid(x = xs, y = ys, stringsAsFactors = FALSE)
-  tiles$tile_id <- seq_len(nrow(x = tiles))
-  tiles$xmin    <- tiles$x
-  tiles$ymin    <- tiles$y
-  tiles$xmax    <- tiles$x + tile_size_m
-  tiles$ymax    <- tiles$y + tile_size_m
-  tiles[, c("tile_id", "xmin", "ymin", "xmax", "ymax")]
+  # Create polygons from WGS84 bboxes
+  polys <- lapply(X   = 1:nrow(x = regions_raw), 
+                  FUN = function(i) {
+    sf::st_as_sfc(x = sf::st_bbox(obj = c(
+      xmin = regions_raw$xmin_wgs84[i],
+      ymin = regions_raw$ymin_wgs84[i],
+      xmax = regions_raw$xmax_wgs84[i],
+      ymax = regions_raw$ymax_wgs84[i]
+    ), crs = 4326))[[1]]
+  })
+
+  regions_sf <- sf::st_sf(
+    nom = regions_raw$nom,
+    geometry = sf::st_sfc(polys, crs = 4326)
+  )
+
+  # Transform to target CRS (Lambert-93, EPSG:2154)
+  regions_sf <- sf::st_transform(x          = regions_sf, 
+                                 target_crs = 2154)
+
+  # Extract bounding boxes for each region in Lambert-93
+  bboxes_2154 <- do.call(what = rbind, 
+                         args = lapply(
+                          X   = sf::st_geometry(regions_sf), 
+                          FUN = function(x){
+                            sf::st_bbox}))
+
+  regions_df <- data.frame(
+    region_id        = seq_len(length.out = nrow(regions_sf)),
+    region_name      = tolower(
+                         x = gsub(pattern     = "[ -]", 
+                                  replacement = "_", 
+                                  x           = regions_sf$nom)),
+    original_name    = regions_sf$nom,
+    xmin             = as.numeric(x = bboxes_2154[, "xmin"]),
+    ymin             = as.numeric(x = bboxes_2154[, "ymin"]),
+    xmax             = as.numeric(x = bboxes_2154[, "xmax"]),
+    ymax             = as.numeric(x = bboxes_2154[, "ymax"]),
+    stringsAsFactors = FALSE
+  )
+
+  regions_df$geometry <- sf::st_geometry(obj = regions_sf)
+
+  return(regions_df)
 }
-#' 
 # ------------------------------------------------------------------------------
 # Internal function for tiled prediction
 # ------------------------------------------------------------------------------
@@ -1761,8 +1814,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
 .predict_france_tiled_impl <- function(cfg, 
                                        region_name = "France",
                                        output_config,
-                                       mode = NULL,
-                                       tile_size_m = 200000,
+                                       mode, # Made mandatory
                                        chunks = c("DEN")) {
   
   # Ensure mode is a valid character string (not NULL or empty)
@@ -1780,7 +1832,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
   
   # Output paths from output_config
-  output_dir <- output_config$output_dir  # Base directory for tile subdirs
+  output_dir <- output_config$output_dir
   chunk_paths_all <- list(
     DEN       = output_config$den,
     hourly    = output_config$hourly,
@@ -1802,15 +1854,19 @@ build_france_tiles <- function(tile_size_m = 200000) {
   }
   
   # Metadata check using st_layers (much faster and avoids geometry detection bugs with n_max)
-  layers_info <- try(expr = sf::st_layers(dsn = osm_roads_path), silent = TRUE)
+  layers_info <- try(expr = sf::st_layers(dsn    = osm_roads_path), 
+                                          silent = TRUE)
   
-  if (inherits(layers_info, "try-error")) {
+  if (inherits(x    = layers_info, 
+               what = "try-error")) {
     pipeline_message(sprintf("Source OSM network file is unreadable by GDAL: %s", 
-                             attr(layers_info, "condition")$message), 
+                             attr(x     = layers_info, 
+                                  which = "condition")$message), 
                      process = "stop")
   }
-  if (length(layers_info$name) == 0) {
-    pipeline_message("Source OSM network file contains no layers", process = "stop")
+  if (length(x = layers_info$name) == 0) {
+    pipeline_message("Source OSM network file contains no layers", 
+                     process = "stop")
   }
 
   layer_name <- layers_info$name[1]
@@ -1819,60 +1875,70 @@ build_france_tiles <- function(tile_size_m = 200000) {
                    process = "info")
 
   # Safe column name check without loading data (using quoted identifier for SQLite)
-  cols <- try(names(sf::st_read(osm_roads_path, 
-                               query = sprintf('SELECT * FROM "%s" LIMIT 0', layer_name), 
-                               quiet = TRUE)), silent = TRUE)
-  if (!inherits(cols, "try-error")) {
-    pipeline_message(sprintf("Columns in layer: %s", paste(cols, collapse = ", ")), 
+  cols <- try(expr   = names(sf::st_read(osm_roads_path, 
+                                         query = sprintf('SELECT * FROM "%s" LIMIT 0', layer_name), 
+                                         quiet = TRUE)), 
+              silent = TRUE)
+  if (!inherits(x    = cols, 
+                what = "try-error")) {
+    pipeline_message(sprintf("Columns in layer: %s", 
+                             paste(cols, collapse = ", ")), 
                      process = "info")
   }
 
   # Validation check: using a SQL query with LIMIT is more robust than n_max 
   # for geometry detection in older GDAL (2.4.x) environments.
   osm_validation <- tryCatch(
-    sf::st_read(dsn   = osm_roads_path,
-                query = sprintf('SELECT * FROM "%s" LIMIT 10', layer_name),
-                quiet = TRUE),
+    expr = sf::st_read(dsn   = osm_roads_path, 
+                       query = sprintf('SELECT * FROM "%s" LIMIT 10', layer_name),
+                       quiet = TRUE),
     error = function(e) e)
   
-  if (inherits(osm_validation, "error")) {
+  if (inherits(x    = osm_validation, 
+               what = "error")) {
     pipeline_message(sprintf("Source OSM network file validation failed: %s", 
                              osm_validation$message), 
                      process = "stop")
   }
   
-  if (!inherits(osm_validation, "sf")) {
-    pipeline_message("Source OSM network layer does not contain a valid simple features geometry column", 
-                     process = "stop")
+  if (!inherits(x    = osm_validation, 
+                what = "sf")) {
+    pipeline_message(
+      "Source OSM network layer does not contain a valid simple features geometry column", 
+      process = "stop")
   }
 
   # Repair geometry if needed (safe because checked as sf above)
   osm_validation <- sf::st_make_valid(x = osm_validation)
   
-  geom_col <- attr(osm_validation, "sf_column")
-  if (!geom_col %in% names(osm_validation)) {
+  geom_col <- attr(x     = osm_validation, 
+                   which = "sf_column")
+  if (!geom_col %in% names(x = osm_validation)) {
     pipeline_message(sprintf("Source OSM network file missing geometry column '%s'", 
                              geom_col), 
                      process = "stop")
   }
   
   # Check CRS
-  if (is.na(sf::st_crs(osm_validation))) {
+  if (is.na(x = sf::st_crs(x = osm_validation))) {
     pipeline_message("Source OSM network file has missing CRS", 
                      process = "warning")
-  } else if (!sf_crs_matches(sf::st_crs(osm_validation), cfg$TARGET_CRS)) {
-    pipeline_message(sprintf("Source OSM network file CRS mismatch: expected %s, got %s",
-                             sf_crs_to_string(cfg$TARGET_CRS),
-                             sf_crs_to_string(sf::st_crs(osm_validation))), 
-                     process = "warning")
+  } else if (!sf_crs_matches(sf::st_crs(x = osm_validation), 
+                                        y = cfg$TARGET_CRS)) {
+    pipeline_message(
+      sprintf("Source OSM network file CRS mismatch: expected %s, got %s", 
+              sf_crs_to_string(crs = cfg$TARGET_CRS), 
+              sf_crs_to_string(crs = sf::st_crs(x = osm_validation))), 
+      process = "warning")
   }
   
   # Check that all rows have geometry
-  pipeline_message(sprintf("Source OSM network validated: %s rows with geometry", 
-                          fmt(nrow(osm_validation))), 
-                  level = 1, progress = "end", process = "valid")
+  pipeline_message(
+    sprintf("Source OSM network validated: %s rows with geometry", 
+            fmt(nrow(x = osm_validation))), 
+    level = 1, progress = "end", process = "valid")
 
-  # --- Load models (once for all tiles) ---
+  # Load models (once for all tiles)
   pipeline_message("Loading trained XGBoost models", level = 1, 
                    progress = "start", process = "load")
 
@@ -1921,19 +1987,22 @@ build_france_tiles <- function(tile_size_m = 200000) {
   
   chunk_paths <- chunk_paths_all[names(x = temporal_chunks)]
   
-  # --- Create output directories if needed ---
+  # Create output directories if needed
   for (fp in unlist(x = chunk_paths)) {
     output_dir_chunk <- dirname(path = fp)
     if (!dir.exists(paths = output_dir_chunk)) {
-      dir.create(path = output_dir_chunk, recursive = TRUE)
+      dir.create(path      = output_dir_chunk, 
+                 recursive = TRUE)
     }
   }
   
-  # --- Build spatial tiles ---
+  # Build spatial tiles
 
   # Verify all periods are covered
-  covered         <- unlist(x = temporal_chunks, use.names = FALSE)
-  missing_periods <- setdiff(x = all_periods, y = covered)
+  covered         <- unlist(x         = temporal_chunks, 
+                            use.names = FALSE)
+  missing_periods <- setdiff(x = all_periods, 
+                             y = covered)
   if (length(x = missing_periods) > 0) {
     pipeline_message(
       sprintf("Warning: %d periods not in any temporal chunk: %s",
@@ -1943,70 +2012,78 @@ build_france_tiles <- function(tile_size_m = 200000) {
       process = "warning")
   }
 
-  # --- Build spatial tiles ---
-  tiles <- build_france_tiles(tile_size_m = tile_size_m)
-  pipeline_message(sprintf("Tile grid: %d tiles of %d km each",
-                          nrow(x = tiles), tile_size_m / 1000),
+  # Build spatial tiles
+  regions <- build_france_tiles() # This now returns metropolitan regions
+  pipeline_message(sprintf("Region grid: %d metropolitan regions",
+                           nrow(x = regions)),
                    process = "info")
 
-  # Calculate number of digits for tile numbering
-  n_tiles  <- nrow(x = tiles)
-  n_digits <- floor(log10(n_tiles)) + 1L
+  # Process regions
+  force_reprocess  <- isTRUE(x = cfg$FORCE_REPROCESS_ALL_TILES)
+  region_jobs      <- list()
+  region_results   <- list()
 
-  # Process tiles
-  force_reprocess  <- isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)
-  tile_jobs        <- list()
-  tile_results     <- list()
-
-  if (force_reprocess && dir.exists(output_dir)) {
-    old_tile_dirs <- list.dirs(path = output_dir, recursive = FALSE, full.names = TRUE)
-    old_tile_dirs <- old_tile_dirs[grepl(pattern = "^tile_[0-9]+$", x = basename(old_tile_dirs))]
+  # Clean up old tile directories if force_reprocess is true
+  if (force_reprocess && dir.exists(paths = output_dir)) {
+    old_tile_dirs <- list.dirs(path       = output_dir, 
+                               recursive  = FALSE, 
+                               full.names = TRUE)
+    old_tile_dirs <- old_tile_dirs[
+      grepl(pattern = "^tile_[0-9]+$", 
+            x       = basename(path = old_tile_dirs))]
     if (length(x = old_tile_dirs) > 0L) {
-      unlink(old_tile_dirs, recursive = TRUE, force = TRUE)
-      pipeline_message(sprintf("Removed %d existing tile directories due to force reprocess", 
-                               length(x = old_tile_dirs)),
-                       level = 2, process = "warning")
+      unlink(x         = old_tile_dirs, 
+             recursive = TRUE, 
+             force     = TRUE)
+      pipeline_message(
+        sprintf("Removed %d existing tile directories due to force reprocess", 
+                length(x = old_tile_dirs)), 
+        process = "warning")
     }
   }
-
-  tile_progress_log <- if (exists("PROJECT_ROOT", envir = .GlobalEnv)) {
-    file.path(PROJECT_ROOT, "logs", "pipeline_prediction_tiles.log")
+  
+  # Log file for region processing progress
+  region_progress_log <- if (exists(x     = "PROJECT_ROOT", 
+                                    envir = .GlobalEnv)) {
+    file.path(PROJECT_ROOT, "logs", "pipeline_prediction_regions.log")
   } else {
-    file.path("logs", "pipeline_prediction_tiles.log")
+    file.path("logs", "pipeline_prediction_regions.log")
   }
-  dir.create(dirname(tile_progress_log), recursive = TRUE, showWarnings = FALSE)
-  append_tile_progress <- function(msg) {
+  dir.create(path         = dirname(path = region_progress_log), 
+             recursive    = TRUE, 
+             showWarnings = FALSE)
+  append_region_progress <- function(msg) {
     cat(sprintf("%s %s\n", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), msg),
-        file = tile_progress_log,
+        file   = region_progress_log,
         append = TRUE)
   }
 
-  for (i in seq_len(n_tiles)) {
-    tile           <- tiles[i, ]
-    tile_id_str    <- sprintf("%0*d", n_digits, i)
-    tile_dir       <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
+    tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_id_str))
     
     # Check if tile already processed and valid
     is_processed <- FALSE
-    if (!force_reprocess && dir.exists(tile_dir)) {
+    if (!force_reprocess && dir.exists(paths = tile_dir)) {
       # Check for the presence of the traffic CSV as a marker of completion
       # All expected output files for this tile must exist
       
       # Geometry GPKG
-      geometry_gpkg_file <- file.path(tile_dir,
-                                      sprintf("07_predictions_%s_geometry_tile_%s.gpkg",
-                                              mode, tile_id_str))
+      geometry_gpkg_file <- file.path(
+        tile_dir, 
+        sprintf("07_predictions_%s_geometry_tile_%s.gpkg", 
+                mode, tile_id_str))
       # Traffic CSV
-      traffic_csv_file <- file.path(tile_dir,
-                                    sprintf("07_predictions_%s_traffic_tile_%s.csv",
-                                            mode, tile_id_str))
+      traffic_csv_file <- file.path(
+        tile_dir, 
+        sprintf("07_predictions_%s_traffic_tile_%s.csv", 
+                mode, tile_id_str))
       # Traffic chunk GPKG files (for each requested chunk)
       expected_chunk_gpkg_files <- c()
       for (chunk_name in names(x = temporal_chunks)) {
-        expected_chunk_gpkg_files <- c(expected_chunk_gpkg_files,
-                                       file.path(tile_dir,
-                                                 sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
-                                                         mode, chunk_name, tile_id_str)))
+        expected_chunk_gpkg_files <- 
+          c(expected_chunk_gpkg_files, 
+          file.path(tile_dir, 
+                    sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+                            mode, chunk_name, tile_id_str)))
       }
       if (all(file.exists(c(geometry_gpkg_file, 
                             traffic_csv_file, 
@@ -2018,10 +2095,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
     if (is_processed) {
       pipeline_message(sprintf("Tile %s already exists; skipping recalculation", 
                                tile_id_str), 
-                       level = 2, process = "info")
+                       process = "info")
       
       # Add to results for summary (we don't read the file for speed, use NA)
-      tile_results[[length(tile_results) + 1L]] <- list(
+      tile_results[[length(x = tile_results) + 1L]] <- list(
         tile_roads        = NA_integer_,
         with_data         = TRUE,
         elapsed           = 0,
@@ -2031,7 +2108,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
       next
     }
 
-    tile_jobs[[length(tile_jobs) + 1L]] <- list(
+    tile_jobs[[length(x = tile_jobs) + 1L]] <- list(
       tile_index       = i,
       tile             = tile,
       grid_tile_id_str = tile_id_str,
@@ -2080,7 +2157,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                       tile_dir_id      = NA_character_))
         }
 
-        tile_sf <- ensure_target_crs(sf_obj = tile_sf, 
+        tile_sf <- ensure_target_crs(sf_obj     = tile_sf, 
                                      target_crs = cfg$TARGET_CRS)
 
         n_tile <- nrow(x = tile_sf)
@@ -2089,19 +2166,27 @@ build_france_tiles <- function(tile_size_m = 200000) {
           level = 1, process = "calc")
 
         tile_dir_id <- job$tile_dir_id
-        tile_dir <- file.path(output_dir, sprintf("tile_%s", tile_dir_id))
+        tile_dir    <- file.path(output_dir, sprintf("tile_%s", tile_dir_id))
         if (dir.exists(path = tile_dir)) {
-          unlink(x = tile_dir, recursive = TRUE, force = TRUE)
+          unlink(x         = tile_dir, 
+                 recursive = TRUE, 
+                 force     = TRUE)
         }
-        dir.create(path = tile_dir, recursive = TRUE, showWarnings = FALSE)
+        dir.create(path         = tile_dir, 
+                   recursive    = TRUE, 
+                   showWarnings = FALSE)
 
         # Keep geometry and osm_id for later merge
-        geom_col_name <- attr(tile_sf, "sf_column")
+        geom_col_name <- attr(x     = tile_sf, 
+                              which = "sf_column")
         geom_for_merge <- tile_sf[, c("osm_id", geom_col_name), drop = FALSE]
         geom_for_merge$osm_id <- as.character(x = geom_for_merge$osm_id)
-        if (!inherits(geom_for_merge, "sf") || is.null(sf::st_geometry(geom_for_merge))) {
-          stop(sprintf("Tile %s failed to preserve geometry from source OSM road layer", 
-                       grid_tile_id_str))
+        if (!inherits(x = geom_for_merge, what = "sf") || 
+            is.null(x = sf::st_geometry(obj = geom_for_merge))) {
+              pipeline_message(
+                sprintf("Tile %s failed to preserve geometry from source OSM road layer", 
+                        grid_tile_id_str),
+                process = "stop")
         }
         tile_dt <- as.data.frame(x = sf::st_drop_geometry(x = tile_sf))
         rm(tile_sf)
@@ -2137,9 +2222,10 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
         predictions_long <- add_period_datetime_columns(predictions_long, cfg)
 
-        tile_geom_file <- file.path(tile_dir,
-                                   sprintf("07_predictions_%s_geometry_tile_%s.gpkg",
-                                           mode, tile_dir_id))
+        tile_geom_file <- 
+        file.path(tile_dir, 
+                  sprintf("07_predictions_%s_geometry_tile_%s.gpkg", 
+                          mode, tile_dir_id))
         write_sf_gpkg_atomic(sf_obj = geom_for_merge,
                              dsn    = tile_geom_file,
                              layer  = "geometry")
@@ -2148,12 +2234,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
                   grid_tile_id_str, rel_path(tile_geom_file)),
           level = 2, process = "save")
 
-        tile_csv_file <- file.path(tile_dir,
-                                   sprintf("07_predictions_%s_traffic_tile_%s.csv",
-                                           mode, tile_dir_id))
+        tile_csv_file <- 
+          file.path(tile_dir, 
+                    sprintf("07_predictions_%s_traffic_tile_%s.csv", 
+                            mode, tile_dir_id))
         write.csv(
-          x = predictions_long %>%
-              dplyr::mutate(period = as.character(x = period)),
+          x        = predictions_long %>%
+                       dplyr::mutate(period = as.character(x = period)),
           file     = tile_csv_file,
           row.names = FALSE)
         pipeline_message(
@@ -2161,11 +2248,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
                   grid_tile_id_str, rel_path(tile_csv_file)),
           level = 2, process = "save")
 
-        validation       <- validate_predictions(predictions_long)
+        validation <- validate_predictions(predictions_long)
         if (!validation$is_valid) {
-          pipeline_message(sprintf("Validation warnings in tile %s: %s issues",
-                                   grid_tile_id_str, length(x = validation$issues)),
-                           process = "warning")
+          pipeline_message(
+            sprintf("Validation warnings in tile %s: %s issues", 
+                    grid_tile_id_str, length(x = validation$issues)), 
+            process = "warning")
         }
 
         for (chunk_name in names(x = temporal_chunks)) {
@@ -2179,7 +2267,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
             chunk_long_df$osm_id <- as.character(x = chunk_long_df$osm_id)
 
             geom_for_merge$osm_id <- as.character(x = geom_for_merge$osm_id)
-            geom_col_name <- attr(geom_for_merge, "sf_column")
+            geom_col_name <- attr(x     = geom_for_merge, 
+                                  which = "sf_column")
 
             tile_chunk_sf <- dplyr::left_join(
               x  = geom_for_merge,
@@ -2187,23 +2276,29 @@ build_france_tiles <- function(tile_size_m = 200000) {
               by = "osm_id"
             )
 
-            if (!inherits(tile_chunk_sf, "sf")) {
+            if (!inherits(x    = tile_chunk_sf, 
+                          what = "sf")) {
               tile_chunk_sf <- sf::st_as_sf(
                 x              = tile_chunk_sf,
                 sf_column_name = geom_col_name)
             }
 
-            if (!inherits(tile_chunk_sf, "sf") || is.null(sf::st_geometry(tile_chunk_sf))) {
-              stop(sprintf("Tile %s chunk '%s' failed to build a valid sf object", 
-                           grid_tile_id_str, chunk_name))
+            if (!inherits(x    = tile_chunk_sf, 
+                          what = "sf") || 
+                is.null(x = sf::st_geometry(tile_chunk_sf))) {
+                  pipeline_message(
+                    sprintf("Tile %s chunk '%s' failed to build a valid sf object", 
+                            grid_tile_id_str, chunk_name),
+                    process = "stop")
             }
 
             tile_chunk_sf <- ensure_target_crs(sf_obj     = tile_chunk_sf,
                                                target_crs = cfg$TARGET_CRS)
 
-            tile_file <- file.path(tile_dir,
-                                   sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg",
-                                           mode, chunk_name, tile_dir_id))
+            tile_file <- 
+              file.path(tile_dir, 
+                        sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+                                mode, chunk_name, tile_dir_id))
             write_sf_gpkg_atomic(sf_obj = tile_chunk_sf,
                                  dsn    = tile_file,
                                  layer  = chunk_name)
@@ -2233,12 +2328,12 @@ build_france_tiles <- function(tile_size_m = 200000) {
         pipeline_message(
           sprintf("Tile %s failed: %s", grid_tile_id_str, conditionMessage(e)),
           level = 1, process = "error")
-        list(tile_roads     = NA_integer_,
-           with_data        = FALSE,
-           elapsed          = elapsed,
-           grid_tile_id_str = grid_tile_id_str,
-           tile_dir_id      = NA_character_,
-           error            = conditionMessage(e))
+        list(tile_roads      = NA_integer_,
+             with_data        = FALSE,
+             elapsed          = elapsed,
+             grid_tile_id_str = grid_tile_id_str,
+             tile_dir_id      = NA_character_,
+             error            = conditionMessage(e))
       })
     }
 
@@ -2249,21 +2344,22 @@ build_france_tiles <- function(tile_size_m = 200000) {
     for (job in tile_jobs) {
       append_tile_progress(sprintf("Tile %s start", job$grid_tile_id_str))
       res <- process_tile(job)
-      tile_results[[length(tile_results) + 1L]] <- res
-      append_tile_progress(sprintf("Tile %s end (roads=%s, elapsed=%s s)",
-                                 job$grid_tile_id_str,
-                                 ifelse(test = is.na(x = res$tile_roads),
-                                        yes  = "unknown",
-                                        no   = fmt(res$tile_roads)),
-                                 ifelse(test = is.na(x = res$elapsed),
-                                        yes  = "unknown",
-                                        no   = sprintf("%.1f", res$elapsed))))
+      tile_results[[length(x = tile_results) + 1L]] <- res
+      append_tile_progress(
+        sprintf("Tile %s end (roads=%s, elapsed=%s s)", 
+                job$grid_tile_id_str, 
+                ifelse(test = is.na(x = res$tile_roads),
+                      yes  = "unknown",
+                      no   = fmt(res$tile_roads)),
+                ifelse(test = is.na(x = res$elapsed),
+                      yes  = "unknown",
+                      no   = sprintf("%.1f", res$elapsed))))
     }
 
     total_roads           <- sum(vapply(X   = tile_results,
                                         FUN = function(x) {
-                                          if (is.list(x) && "tile_roads" %in% names(x)) {
-                                            as.integer(x$tile_roads)
+                                          if (is.list(x) && "tile_roads" %in% names(x = x)) {
+                                            as.integer(x = x$til  e_roads)
                                           } else {
                                             NA_integer_
                                           }
@@ -2271,8 +2367,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                         integer(1)), na.rm = TRUE)
     total_tiles_with_data <- sum(vapply(X   = tile_results,
                                         FUN = function(x) {
-                                          if (is.list(x) && "with_data" %in% names(x)) {
-                                            as.integer(x$with_data)
+                                          if (is.list(x) && "with_data" %in% names(x = x)) {
+                                            as.integer(x = x$with_data)
                                           } else {
                                             0L
                                           }
@@ -2280,8 +2376,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
                                         integer(1)), na.rm = TRUE)
     tile_times            <- vapply(X   = tile_results,
                                     FUN = function(x) {
-                                      if (is.list(x) && "elapsed" %in% names(x)) {
-                                        as.numeric(x$elapsed)
+                                      if (is.list(x) && "elapsed" %in% names(x = x)) {
+                                        as.numeric(x = x$elapsed)
                                       } else {
                                         NA_real_
                                       }
@@ -2326,7 +2422,8 @@ build_france_tiles <- function(tile_size_m = 200000) {
       }
     }
 
-    tile_polys <- lapply(seq_len(nrow(x = tile_metadata)), FUN = function(i) {
+    tile_polys <- lapply(X   = seq_len(nrow(x = tile_metadata)), 
+                         FUN = function(i) {
       sf::st_polygon(x =list(matrix(
         data  = c(tile_metadata$xmin[i], tile_metadata$ymin[i], 
                   tile_metadata$xmax[i], tile_metadata$ymin[i], 
@@ -2340,15 +2437,17 @@ build_france_tiles <- function(tile_size_m = 200000) {
       tile_metadata[, c("tile_id_str", "tile_roads", "with_data", "tile_status")],
       geometry = sf::st_sfc(tile_polys, crs = cfg$TARGET_CRS))
 
-    pipeline_message(sprintf("Writing France tile grid overview: %s", rel_path(tile_grid_fp)),
-                     level = 1, progress = "start", process = "save")
+    pipeline_message(
+      sprintf("Writing France tile grid overview: %s", rel_path(tile_grid_fp)), 
+      level = 1, progress = "start", process = "save")
     sf::st_write(
       obj        = tile_grid_sf,
       dsn        = tile_grid_fp,
       delete_dsn = TRUE,
       quiet      = TRUE)
-    pipeline_message(sprintf("France tile grid overview written: %s", rel_path(tile_grid_fp)),
-                     level = 1, progress = "end", process = "save")
+    pipeline_message(
+      sprintf("France tile grid overview written: %s", rel_path(tile_grid_fp)), 
+              level = 1, progress = "end", process = "save")
   }
 
   rm(models_list, feature_info)
@@ -2383,7 +2482,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
     if (file.exists(chunk_file) && 
         file.exists(merged_log) && 
         !force_reprocess) {
-      already_merged <- readLines(merged_log)
+      already_merged <- readLines(con = merged_log)
       pipeline_message(
         sprintf("Resume detected for chunk '%s': %d tiles already merged", 
                 chunk_name, length(already_merged)), 
@@ -2397,25 +2496,27 @@ build_france_tiles <- function(tile_size_m = 200000) {
       next
     } else {
       # Fresh start or force reprocess
-      unlink(chunk_file)
-      unlink(merged_log)
+      unlink(x = chunk_file)
+      unlink(x = merged_log)
     }
 
     # Identify tile files for this chunk
-    all_tile_files <- list.files(path       = output_dir,
-                                 pattern    = "^07_predictions_.*_tile_.*\\.gpkg$",
-                                 recursive  = TRUE,
-                                 full.names = TRUE)
-    tile_files <- all_tile_files[grepl(pattern = paste0("_", chunk_name, "_tile_"), 
-                                       x       = all_tile_files, 
-                                       fixed   = TRUE)]
+    all_tile_files <- list.files(
+      path       = output_dir,
+      pattern    = "^07_predictions_.*_tile_.*\\.gpkg$",
+      recursive  = TRUE,
+      full.names = TRUE)
+    tile_files <- all_tile_files[
+      grepl(pattern = paste0("_", chunk_name, "_tile_"), 
+            x       = all_tile_files, 
+            fixed   = TRUE)]
     tile_files <- sort(tile_files)
 
     # Filter out already merged tiles
     files_to_merge <- tile_files[
       !(basename(path = tile_files) %in% already_merged)]
 
-    if (length(files_to_merge) == 0) {
+    if (length(x = files_to_merge) == 0) {
       pipeline_message(sprintf("No new tile files to merge for chunk '%s'", 
                                chunk_name),
                        process = "info")
@@ -2429,12 +2530,13 @@ build_france_tiles <- function(tile_size_m = 200000) {
 
     if (has_ogr2ogr) {
       # HIGH PERFORMANCE MERGE USING OGR2OGR (External system call)
-      for (i in seq_along(files_to_merge)) {
+      for (i in seq_along(along.with = files_to_merge)) {
         tf <- files_to_merge[i]
         if (i %% 50 == 0 || i == 1) {
            pipeline_message(
             sprintf("[%s] Merging tile %d/%d (ogr2ogr)", 
-            chunk_name, i, length(files_to_merge)), level = 2, process = "join")
+                    chunk_name, i, length(x = files_to_merge)), 
+            level = 2, process = "join")
         }
         
         # Build command: use -update -append if file exists, else simple creation
@@ -2492,7 +2594,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
                             process = "info")
         }
         
-        sf_obj <- try(sf::st_read(dsn    = tf, 
+        sf_obj <- try(expr = sf::st_read(dsn    = tf, 
                                   quiet  = TRUE), 
                                   silent = TRUE)
         if (!inherits(x    = sf_obj, 
@@ -2537,7 +2639,7 @@ build_france_tiles <- function(tile_size_m = 200000) {
   pipeline_message("Tile merging phase completed", 
                    level = 1, progress = "end", process = "save")
 
-  # --- Summary ---
+  # Summary
   pipeline_message("France-wide prediction summary:", 
                    process = "info")
   pipeline_message(sprintf("\t- Roads predicted: %s across %d tiles", 
