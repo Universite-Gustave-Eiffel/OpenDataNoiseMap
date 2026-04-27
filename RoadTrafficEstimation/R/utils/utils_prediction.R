@@ -2367,21 +2367,16 @@ build_france_tiles <- function() {
 
   # Calculate summary stats from results
   total_roads <- sum(vapply(
-    X   = tile_results, 
-    FUN = function(x){
-            if("tile_roads" %in% names(x)){
-              as.integer(x = x$tile_roads)
-            } else {
-              0L
-            }, integer(1)
-          }), na.rm = TRUE)
+    X         = tile_results,
+    FUN       = function(x) if ("tile_roads" %in% names(x)) as.integer(x$tile_roads) else 0L,
+    FUN.VALUE = integer(1)
+  ), na.rm = TRUE)
+
   total_tiles_with_data <- sum(vapply(
-    X   = tile_results, 
-    FUN = function(x){
-            if(isTRUE(x$with_data)){
-              1L
-            } else {0L}, 
-            integer(1)}))
+    X         = tile_results,
+    FUN       = function(x) if (isTRUE(x$with_data)) 1L else 0L,
+    FUN.VALUE = integer(1)
+  ))
 
   pipeline_message("France-wide prediction summary:", 
                    process = "info")
