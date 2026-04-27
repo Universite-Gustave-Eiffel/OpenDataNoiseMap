@@ -2359,7 +2359,7 @@ build_france_tiles <- function() {
     total_roads           <- sum(vapply(X   = tile_results,
                                         FUN = function(x) {
                                           if (is.list(x) && "tile_roads" %in% names(x = x)) {
-                                            as.integer(x = x$til  e_roads)
+                                            as.integer(x = x$tile_roads)
                                           } else {
                                             NA_integer_
                                           }
