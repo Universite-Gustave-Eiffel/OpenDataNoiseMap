@@ -1726,15 +1726,15 @@ build_france_tiles <- function() {
   )
 
   # Transform to target CRS (Lambert-93, EPSG:2154)
-  regions_sf <- sf::st_transform(x          = regions_sf, 
-                                 target_crs = 2154)
+  regions_sf <- sf::st_transform(x   = regions_sf, 
+                                 crs = 2154)
 
   # Extract bounding boxes for each region in Lambert-93
   bboxes_2154 <- do.call(what = rbind, 
                          args = lapply(
                           X   = sf::st_geometry(regions_sf), 
                           FUN = function(x){
-                            sf::st_bbox}))
+                            sf::st_bbox(x)}))
 
   regions_df <- data.frame(
     region_id        = seq_len(length.out = nrow(regions_sf)),
@@ -2028,9 +2028,9 @@ build_france_tiles <- function() {
     old_tile_dirs <- list.dirs(path       = output_dir, 
                                recursive  = FALSE, 
                                full.names = TRUE)
-    old_tile_dirs <- old_tile_dirs[
-      grepl(pattern = "^tile_[0-9]+$", 
-            x       = basename(path = old_tile_dirs))]
+    # Remove directories that are not the final chunk files
+    old_tile_dirs <- old_tile_dirs[!grepl(pattern = "\\.gpkg$", 
+                                          x       = old_tile_dirs)]
     if (length(x = old_tile_dirs) > 0L) {
       unlink(x         = old_tile_dirs, 
              recursive = TRUE, 
@@ -2166,7 +2166,7 @@ build_france_tiles <- function() {
           level = 1, process = "calc")
 
         tile_dir_id <- job$tile_dir_id
-        tile_dir    <- file.path(output_dir, sprintf("tile_%s", tile_dir_id))
+        tile_dir    <- file.path(output_dir, tile_dir_id)
         if (dir.exists(path = tile_dir)) {
           unlink(x         = tile_dir, 
                  recursive = TRUE, 
@@ -2224,7 +2224,7 @@ build_france_tiles <- function() {
 
         tile_geom_file <- 
         file.path(tile_dir, 
-                  sprintf("07_predictions_%s_geometry_tile_%s.gpkg", 
+                  sprintf("07_predictions_%s_geometry_%s.gpkg", 
                           mode, tile_dir_id))
         write_sf_gpkg_atomic(sf_obj = geom_for_merge,
                              dsn    = tile_geom_file,
@@ -2236,7 +2236,7 @@ build_france_tiles <- function() {
 
         tile_csv_file <- 
           file.path(tile_dir, 
-                    sprintf("07_predictions_%s_traffic_tile_%s.csv", 
+                    sprintf("07_predictions_%s_traffic_%s.csv", 
                             mode, tile_dir_id))
         write.csv(
           x        = predictions_long %>%
@@ -2297,7 +2297,7 @@ build_france_tiles <- function() {
 
             tile_file <- 
               file.path(tile_dir, 
-                        sprintf("07_predictions_%s_traffic_%s_tile_%s.gpkg", 
+                        sprintf("07_predictions_%s_traffic_%s_%s.gpkg", 
                                 mode, chunk_name, tile_dir_id))
             write_sf_gpkg_atomic(sf_obj = tile_chunk_sf,
                                  dsn    = tile_file,
@@ -2398,8 +2398,8 @@ build_france_tiles <- function() {
     tile_grid_fp <- file.path(output_dir,
                               sprintf("07_predictions_%s_tile_grid.gpkg", mode))
 
-    tile_metadata <- tiles
-    tile_metadata$tile_id_str <- sprintf("%0*d", n_digits, tile_metadata$tile_id)
+    tile_metadata <- regions
+    tile_metadata$tile_id_str <- tile_metadata$region_name
     tile_metadata$tile_roads  <- NA_integer_
     tile_metadata$with_data   <- FALSE
     tile_metadata$tile_status <- "skipped"
@@ -2503,11 +2503,11 @@ build_france_tiles <- function() {
     # Identify tile files for this chunk
     all_tile_files <- list.files(
       path       = output_dir,
-      pattern    = "^07_predictions_.*_tile_.*\\.gpkg$",
+      pattern    = sprintf("^07_predictions_%s_traffic_.*\\.gpkg$", mode),
       recursive  = TRUE,
       full.names = TRUE)
     tile_files <- all_tile_files[
-      grepl(pattern = paste0("_", chunk_name, "_tile_"), 
+      grepl(pattern = paste0("_traffic_", chunk_name, "_"), 
             x       = all_tile_files, 
             fixed   = TRUE)]
     tile_files <- sort(tile_files)
