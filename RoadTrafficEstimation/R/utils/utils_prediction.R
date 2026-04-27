@@ -1298,8 +1298,6 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
 #'               Default: c("DEN") for memory efficiency.
 #'               For full export use: c("DEN", "hourly", "hourly_wd", 
 #'               "hourly_we").
-#' @param tile_size_m Numeric. Tile side length in meters for tiled method.
-#'                    Default: 200000 (200 km).
 #' @return Invisible NULL. Side effects: writes GPKG file(s) to disk.
 #' @examples
 #' \dontrun{
@@ -1323,8 +1321,7 @@ add_period_datetime_columns <- function(predictions_long, cfg = NULL) {
 #'     hourly_we = "data/prediction/france/traffic_hourly_we.gpkg"
 #'   ),
 #'   method = "tiled",
-#'   chunks = c("DEN", "hourly", "hourly_wd", "hourly_we"),
-#'   tile_size_m = 200000
+#'   chunks = c("DEN", "hourly", "hourly_wd", "hourly_we")
 #' )
 #' }
 #' @export
@@ -1334,8 +1331,7 @@ predict_traffic <- function(region_name,
                             output_config,
                             method = "auto",
                             mode = NULL,
-                            chunks = c("DEN"),
-                            tile_size_m = 200000) {
+                            chunks = c("DEN")) {
 
   # --- Auto-detect method ---
   if (method == "auto") {
@@ -1381,8 +1377,8 @@ predict_traffic <- function(region_name,
     .predict_france_tiled_impl(
       cfg           = cfg,
       region_name   = region_name,
+      output_config = output_config,
       mode          = mode,
-      tile_size_m   = tile_size_m,
       chunks        = chunks
     )
   }
@@ -1677,7 +1673,6 @@ get_temporal_chunks <- function() {
 #' @title Build spatial tile grid
 #' @description Build spatial tile grid covering France extent. Used in
 #'              `predict_traffic()`.
-#' @param tile_size_m Tile side length in meters (Lambert-93)
 #' @return data.frame with columns: tile_id, xmin, ymin, xmax, ymax
 #' @examples
 #' \dontrun{
@@ -1777,7 +1772,6 @@ build_france_tiles <- function() {
 #'                      }
 #'                      Note: `output_config$geom` is no longer used (geometry 
 #'                      is integrated into each chunk file).
-#' @param tile_size_m Tile side in meters (default 200 km)
 #' @param chunks Character vector of temporal chunks to export. 
 #'               Valid values: "DEN", "hourly", "hourly_wd", "hourly_we". 
 #'               Default: c("DEN") for memory efficiency.   
@@ -1987,22 +1981,6 @@ build_france_tiles <- function() {
     }
   }
   
-  # Build spatial tiles
-
-  # Verify all periods are covered
-  covered         <- unlist(x         = temporal_chunks, 
-                            use.names = FALSE)
-  missing_periods <- setdiff(x = all_periods, 
-                             y = covered)
-  if (length(x = missing_periods) > 0) {
-    pipeline_message(
-      sprintf("Warning: %d periods not in any temporal chunk: %s",
-              length(x = missing_periods),
-              paste(head(x = missing_periods, n = 10), 
-                    collapse = ", ")),
-      process = "warning")
-  }
-
   # Build spatial tiles
   regions <- build_france_tiles() # This now returns metropolitan regions
   pipeline_message(sprintf("Region grid: %d metropolitan regions",
