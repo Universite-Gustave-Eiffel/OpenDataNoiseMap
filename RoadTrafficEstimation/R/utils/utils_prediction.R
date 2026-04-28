@@ -1547,24 +1547,27 @@ predict_traffic <- function(region_name,
   rm(predictions_wide)
   gc(verbose = FALSE)
 
-  pipeline_message(sprintf("Long format: %s rows (roads x periods)", 
-                           fmt(nrow(x = predictions_long))), 
-                   level = 1, progress = "end", process = "valid")
+  pipeline_message(
+    sprintf("Long format: %s rows (roads x periods)", 
+            fmt(nrow(x = predictions_long))), 
+    level = 1, progress = "end", process = "valid")
 
-  # --- Validate ---
+  # Validate
   validation <- validate_predictions(predictions_long)
   if (!validation$is_valid) {
-    pipeline_message(sprintf("Validation warnings: %s issues detected", 
-                             length(x = validation$issues)), 
-                     process = "warning")
+    pipeline_message(
+      sprintf("Validation warnings: %s issues detected", 
+              length(x = validation$issues)), 
+      process = "warning")
     for (issue_name in names(x = validation$issues)) {
-      pipeline_message(sprintf("\t- %s: %s cases", 
-                               issue_name, validation$issues[[issue_name]]), 
-                       process = "warning")
+      pipeline_message(
+        sprintf("\t- %s: %s cases", 
+                issue_name, validation$issues[[issue_name]]), 
+        process = "warning")
     }
   }
 
-  # --- Export ---
+  # Export
   pipeline_message("Exporting predictions with geometry", level = 1, 
                    progress = "start", process = "save")
 
@@ -1739,6 +1742,7 @@ build_france_tiles <- function() {
 
   return(regions_df)
 }
+
 # ------------------------------------------------------------------------------
 # Internal function for tiled prediction
 # ------------------------------------------------------------------------------
@@ -1986,6 +1990,20 @@ build_france_tiles <- function() {
                            nrow(x = regions)),
                    process = "info")
 
+  # Export tile grid geometry for reference (as in previous versions)
+  grid_path <- file.path(output_dir, sprintf("07_predictions_%s_tile_grid.gpkg", mode))
+  if (!file.exists(grid_path) || isTRUE(cfg$FORCE_REPROCESS_ALL_TILES)) {
+    pipeline_message(
+      sprintf("Exporting region grid geometry to %s", rel_path(grid_path)), 
+              level = 1, process = "save")
+    # Standardize to sf for export
+    regions_sf_out <- sf::st_sf(regions)
+    write_sf_gpkg_atomic(sf_obj = regions_sf_out, 
+                         dsn    = grid_path, 
+                         layer  = "region_grid")
+    rm(regions_sf_out)
+  }
+
   # Process regions
   force_reprocess  <- isTRUE(x = cfg$FORCE_REPROCESS_ALL_TILES)
   region_jobs      <- list()
@@ -2051,18 +2069,48 @@ build_france_tiles <- function() {
       tile_dt <- as.data.frame(sf::st_drop_geometry(x = tile_sf))
 
       predictions_wide <- apply_xgboost_predictions(tile_dt, models_list, feature_info, cfg$DEFAULT_VEHICLE_SPEED)
-      predictions_long <- predictions_wide %>%
-        tidyr::pivot_longer(
-          cols          = matches("^(flow|truck_pct|speed)_"), 
-          names_to      = c(".value", "period"), 
-          names_pattern = "^(flow|truck_pct|speed)_(.+)$") %>%
-        mutate(HGV    = flow * (truck_pct / 100), 
-               LV     = flow - HGV, 
-               TV     = flow, 
-               period = factor(x     = period, 
-                              levels = all_periods))
+      
+      # Conversion to long format using data.table (faster and more memory efficient than pivot_longer)
+      dt <- data.table::as.data.table(predictions_wide)
+      rm(predictions_wide)
+      
+      flow_cols  <- grep("^flow_", names(dt), value = TRUE)
+      truck_cols <- grep("^truck_pct_", names(dt), value = TRUE)
+      speed_cols <- grep("^speed_", names(dt), value = TRUE)
+
+      flow_long <- data.table::melt(dt, 
+                                   id.vars = c("osm_id"), 
+                                   measure.vars = flow_cols, 
+                                   variable.name = "period", value.name = "flow")
+      flow_long[, period := sub("^flow_", "", period)]
+
+      truck_long <- data.table::melt(dt, 
+                                    id.vars = c("osm_id"), 
+                                    measure.vars = truck_cols, 
+                                    variable.name = "period", value.name = "truck_pct")
+      truck_long[, period := sub("^truck_pct_", "", period)]
+
+      speed_long <- data.table::melt(dt, 
+                                    id.vars = c("osm_id"), 
+                                    measure.vars = speed_cols, 
+                                    variable.name = "period", value.name = "speed")
+      speed_long[, period := sub("^speed_", "", period)]
+
+      predictions_long <- flow_long[truck_long, on = c("osm_id", "period")][speed_long, on = c("osm_id", "period")]
+      rm(flow_long, truck_long, speed_long)
+
+      # Re-attach basic attributes
+      attr_cols <- c("osm_id", "highway", "osm_speed", "osm_speed_imputed")
+      predictions_long <- merge(predictions_long, dt[, ..attr_cols], by = "osm_id", all.x = TRUE)
+      rm(dt)
+
+      predictions_long[, HGV := flow * (truck_pct / 100)]
+      predictions_long[, LV := flow - HGV]
+      predictions_long[, TV := flow]
+      predictions_long[, period := factor(period, levels = all_periods)]
       
       predictions_long <- add_period_datetime_columns(predictions_long, cfg)
+      
       tile_dir <- file.path(output_dir, grid_tile_id_str)
       dir.create(path         = tile_dir, 
                  recursive    = TRUE, 
@@ -2094,11 +2142,15 @@ build_france_tiles <- function() {
                             mode, chunk_name, grid_tile_id_str)), 
           layer = chunk_name)
       }
+      
+      rm(predictions_long, tile_sf, tile_dt)
+      gc(verbose = FALSE)
 
       return(list(tile_roads       = nrow(x = tile_sf), 
                   with_data        = TRUE, elapsed = proc.time()["elapsed"] - t0, 
                   grid_tile_id_str = grid_tile_id_str))
     }, error = function(e){
+        gc(verbose = FALSE)
         list(tile_roads       = NA, 
              with_data        = FALSE, 
              error            = e$message, 
@@ -2155,7 +2207,12 @@ build_france_tiles <- function() {
 
   # Execute jobs
   if (length(x = tile_jobs) > 0) {
-    for (job in tile_jobs) {
+    for (i in seq_along(along.with = tile_jobs)) {
+      job <- tile_jobs[[i]]
+      pipeline_message(
+        sprintf("Processing region %d/%d: %s", i, 
+                length(tile_jobs), job$grid_tile_id_str), 
+        level = 1, progress = "start", process = "calc")
       tile_results[[length(x = tile_results) + 1L]] <- process_region_tile(job)
     }
   }
