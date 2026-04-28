@@ -772,7 +772,8 @@ apply_xgboost_predictions <- function(network_data,
     }
     
     # Create DMatrix and predict
-    dmat <- xgboost::xgb.DMatrix(data = as.matrix(x = fm))
+    # Limit threads to avoid OOM and IO contention on HPC
+    dmat <- xgboost::xgb.DMatrix(data = as.matrix(x = fm), nthread = 1)
     predict(object = model_obj, newdata = dmat)
   }
   
@@ -2047,8 +2048,19 @@ build_france_tiles <- function() {
     tile             <- job$tile
     grid_tile_id_str <- job$grid_tile_id_str
     t0               <- proc.time()["elapsed"]
+    tile_dir         <- file.path(output_dir, grid_tile_id_str)
 
     tryCatch(expr = {
+      pipeline_message(
+        sprintf("Processing region: %s", grid_tile_id_str), 
+        level = 2, process = "calc")
+      
+      # Check memory before heavy lifting
+      check_memory_available(
+        operation_name = sprintf("Region %s", grid_tile_id_str), 
+        min_gb         = 16, 
+        warn_gb        = 32) # Increased for large regions
+
       wkt_bbox <- sprintf("POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))",
                           tile$xmin, tile$ymin, tile$xmax, tile$ymin,
                           tile$xmax, tile$ymax, tile$xmin, tile$ymax,
@@ -2068,50 +2080,70 @@ build_france_tiles <- function() {
       tile_sf <- ensure_target_crs(tile_sf, cfg$TARGET_CRS)
       tile_dt <- as.data.frame(sf::st_drop_geometry(x = tile_sf))
 
-      predictions_wide <- apply_xgboost_predictions(tile_dt, models_list, feature_info, cfg$DEFAULT_VEHICLE_SPEED)
+      predictions_wide <- apply_xgboost_predictions(
+        network_data          = tile_dt, 
+        models_list           = models_list, 
+        feature_info          = feature_info, 
+        default_vehicle_speed = cfg$DEFAULT_VEHICLE_SPEED)
       
       # Conversion to long format using data.table (faster and more memory efficient than pivot_longer)
       dt <- data.table::as.data.table(predictions_wide)
       rm(predictions_wide)
       
-      flow_cols  <- grep("^flow_", names(dt), value = TRUE)
-      truck_cols <- grep("^truck_pct_", names(dt), value = TRUE)
-      speed_cols <- grep("^speed_", names(dt), value = TRUE)
+      flow_cols  <- grep(pattern = "^flow_", 
+                         x       = names(dt), 
+                         value   = TRUE)
+      truck_cols <- grep(pattern = "^truck_pct_", 
+                         x       = names(dt), 
+                         value   = TRUE)
+      speed_cols <- grep(pattern = "^speed_", 
+                         x       = names(dt), 
+                         value   = TRUE)
 
-      flow_long <- data.table::melt(dt, 
-                                   id.vars = c("osm_id"), 
-                                   measure.vars = flow_cols, 
-                                   variable.name = "period", value.name = "flow")
+      flow_long <- data.table::melt(
+        dt, 
+        id.vars       = c("osm_id"), 
+        measure.vars  = flow_cols, 
+        variable.name = "period", 
+        value.name    = "flow")
       flow_long[, period := sub("^flow_", "", period)]
 
-      truck_long <- data.table::melt(dt, 
-                                    id.vars = c("osm_id"), 
-                                    measure.vars = truck_cols, 
-                                    variable.name = "period", value.name = "truck_pct")
+      truck_long <- data.table::melt(
+        dt, 
+        id.vars       = c("osm_id"), 
+        measure.vars  = truck_cols, 
+        variable.name = "period", 
+        value.name    = "truck_pct")
       truck_long[, period := sub("^truck_pct_", "", period)]
 
-      speed_long <- data.table::melt(dt, 
-                                    id.vars = c("osm_id"), 
-                                    measure.vars = speed_cols, 
-                                    variable.name = "period", value.name = "speed")
+      speed_long <- data.table::melt(
+        dt, 
+        id.vars       = c("osm_id"), 
+        measure.vars  = speed_cols, 
+        variable.name = "period", 
+        value.name    = "speed")
       speed_long[, period := sub("^speed_", "", period)]
 
-      predictions_long <- flow_long[truck_long, on = c("osm_id", "period")][speed_long, on = c("osm_id", "period")]
+      predictions_long <- flow_long[truck_long, 
+                                    on = c("osm_id", "period")][
+                                      speed_long, on = c("osm_id", "period")]
       rm(flow_long, truck_long, speed_long)
 
       # Re-attach basic attributes
       attr_cols <- c("osm_id", "highway", "osm_speed", "osm_speed_imputed")
-      predictions_long <- merge(predictions_long, dt[, ..attr_cols], by = "osm_id", all.x = TRUE)
+      predictions_long <- merge(x     = predictions_long, 
+                                y     = dt[, ..attr_cols], 
+                                by    = "osm_id", 
+                                all.x = TRUE)
       rm(dt)
 
-      predictions_long[, HGV := flow * (truck_pct / 100)]
-      predictions_long[, LV := flow - HGV]
-      predictions_long[, TV := flow]
+      predictions_long[, HGV    := flow * (truck_pct / 100)]
+      predictions_long[, LV     := flow - HGV]
+      predictions_long[, TV     := flow]
       predictions_long[, period := factor(period, levels = all_periods)]
       
       predictions_long <- add_period_datetime_columns(predictions_long, cfg)
       
-      tile_dir <- file.path(output_dir, grid_tile_id_str)
       dir.create(path         = tile_dir, 
                  recursive    = TRUE, 
                  showWarnings = FALSE)
@@ -2121,7 +2153,8 @@ build_france_tiles <- function() {
         tile_sf[, c("osm_id", attr(x     = tile_sf, 
                                    which = "sf_column"))], 
         file.path(tile_dir, 
-                  sprintf("07_predictions_%s_geometry_%s.gpkg", mode, grid_tile_id_str)), 
+                  sprintf("07_predictions_%s_geometry_%s.gpkg", 
+                          mode, grid_tile_id_str)), 
         layer = "geometry")
       # Save traffic CSV
       write.csv(x = predictions_long, 
@@ -2149,8 +2182,14 @@ build_france_tiles <- function() {
       return(list(tile_roads       = nrow(x = tile_sf), 
                   with_data        = TRUE, elapsed = proc.time()["elapsed"] - t0, 
                   grid_tile_id_str = grid_tile_id_str))
-    }, error = function(e){
+    }, error = function(e) {
+        pipeline_message(
+          sprintf("Error in region %s: %s", grid_tile_id_str, e$message), 
+          process = "fail")
         gc(verbose = FALSE)
+        # Cleanup temp files in case of crash to avoid leaving journals
+        temp_files <- list.files(tile_dir, pattern = "tmp_tile_", full.names = TRUE)
+        if(length(temp_files) > 0) unlink(temp_files)
         list(tile_roads       = NA, 
              with_data        = FALSE, 
              error            = e$message, 

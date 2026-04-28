@@ -144,4 +144,4 @@ echo "📜 R LOG: ${OUT_LOG}"
 echo "🔧 Using line-buffered Rscript output"
 
 # Pass all arguments to Rscript and redirect output to log file
-stdbuf -oL -eL Rscript --vanilla "${MAIN_R}" "$@" > "${OUT_LOG}" 2>&1
+Rscript --vanilla "${MAIN_R}" "$@" > "${OUT_LOG}" 2>&1
