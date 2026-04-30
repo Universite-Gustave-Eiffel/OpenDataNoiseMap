@@ -2316,6 +2316,12 @@ build_france_tiles <- function() {
       pattern    = sprintf("^07_predictions_%s_traffic_.*\\.gpkg$", mode),
       recursive  = TRUE,
       full.names = TRUE)
+    
+    # Exclude the final merged chunk files from the list of potential tile files
+    merged_output_files <- unlist(x = chunk_paths_all)
+    all_tile_files <- all_tile_files[! (all_tile_files %in% merged_output_files)]
+
+    
     tile_files <- all_tile_files[
       grepl(pattern = paste0("_traffic_", chunk_name, "_"), 
             x       = all_tile_files, 
