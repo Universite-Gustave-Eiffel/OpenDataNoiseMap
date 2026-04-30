@@ -1334,7 +1334,7 @@ predict_traffic <- function(region_name,
                             mode = NULL,
                             chunks = c("DEN")) {
 
-  # --- Auto-detect method ---
+  # Auto-detect method
   if (method == "auto") {
     method <- if (is.null(x = bbox)) "tiled" else "region"
   }
@@ -1344,7 +1344,7 @@ predict_traffic <- function(region_name,
                      process = "stop")
   }
 
-  # --- Validate output_config ---
+  # Validate output_config
   # If output_config is not provided, try to build it using build_prediction_filepaths
   if (is.null(x = output_config)) {
     output_config <- build_prediction_filepaths(extent = mode, mode = mode)
@@ -1353,7 +1353,7 @@ predict_traffic <- function(region_name,
                      process = "stop")
   }
 
-  # --- Route to appropriate method ---
+  # Route to appropriate method
   if (method == "region") {
     if (is.null(x = bbox)) {
       pipeline_message("bbox must be provided for method='region'", 
@@ -1419,7 +1419,7 @@ predict_traffic <- function(region_name,
   xgb_models_path <- cfg$XGB_MODELS_WITH_RATIOS_FILEPATH
   xgb_feature_path <- cfg$XGB_RATIO_FEATURE_INFO_FILEPATH
 
-  # --- Load models ---
+  # Load models
   pipeline_message("Loading trained XGBoost models", level = 1, 
                    progress = "start", process = "load")
 
@@ -1437,19 +1437,19 @@ predict_traffic <- function(region_name,
                            length(x = feature_info$all_periods)), 
                    level = 1, progress = "end", process = "valid")
 
-  # --- Bbox ---
+  # Bbox
   pipeline_message(sprintf("Bbox: [%s, %s, %s, %s]", 
                            bbox[1], bbox[2], bbox[3], bbox[4]), 
                    process = "info")
 
-  # --- Load network ---
+  # Load network
   osm_region <- load_network_for_prediction(bbox = bbox, cfg = cfg)
 
   pipeline_message(sprintf("Network loaded: %s roads in %s", 
                            fmt(nrow(x = osm_region)), region_name), 
                    process = "info")
 
-  # --- Apply predictions ---
+  # Apply predictions
   pipeline_message(sprintf("Applying XGBoost models to %s network", 
                            region_name), 
                    level = 1, progress = "start", process = "calc")
@@ -1471,7 +1471,7 @@ predict_traffic <- function(region_name,
   rm(models_list, feature_info, osm_region_dt)
   gc(verbose = FALSE)
 
-  # --- Long format ---
+  # Long format
   pipeline_message("Converting to long format", level = 1, 
                    progress = "start", process = "calc")
 
@@ -1612,7 +1612,7 @@ predict_traffic <- function(region_name,
                            rel_path(output_filepath)), 
                    level = 1, progress = "end", process = "save")
 
-  # --- Summary ---
+  # Summary
   pipeline_message(sprintf("Prediction summary for %s:", region_name),
                    process = "info")
   pipeline_message(sprintf("\t- Roads: %s", 
@@ -1708,7 +1708,7 @@ build_france_tiles <- function() {
   )
 
   # Create polygons from WGS84 bboxes
-  polys <- lapply(1:nrow(regions_raw), function(i) {
+  polys <- lapply(X = 1:nrow(regions_raw), FUN = function(i) {
     sf::st_as_sfc(sf::st_bbox(c(
       xmin = regions_raw$xmin_wgs84[i],
       ymin = regions_raw$ymin_wgs84[i],
@@ -1727,16 +1727,20 @@ build_france_tiles <- function() {
                                  crs = 2154)
 
   # Extract bounding boxes for each region in Lambert-93
-  bboxes_2154 <- do.call(rbind, lapply(sf::st_geometry(regions_sf), sf::st_bbox))
+  bboxes_2154 <- do.call(what = rbind, 
+                         args = lapply(X   = sf::st_geometry(obj = regions_sf), 
+                                       FUN = sf::st_bbox))
 
   regions_df <- data.frame(
-    region_id        = seq_len(nrow(regions_sf)),
-    region_name      = tolower(gsub("[ -]", "_", regions_sf$nom)),
+    region_id        = seq_len(length.out = nrow(regions_sf)),
+    region_name      = tolower(x = gsub(pattern     = "[ -]",  
+                                        replacement = "_", 
+                                        x           = regions_sf$nom)),
     original_name    = regions_sf$nom,
-    xmin             = as.numeric(bboxes_2154[, "xmin"]),
-    ymin             = as.numeric(bboxes_2154[, "ymin"]),
-    xmax             = as.numeric(bboxes_2154[, "xmax"]),
-    ymax             = as.numeric(bboxes_2154[, "ymax"]),
+    xmin             = as.numeric(x = bboxes_2154[, "xmin"]),
+    ymin             = as.numeric(x = bboxes_2154[, "ymin"]),
+    xmax             = as.numeric(x = bboxes_2154[, "xmax"]),
+    ymax             = as.numeric(x = bboxes_2154[, "ymax"]),
     stringsAsFactors = FALSE
   )
   regions_df$geometry <- sf::st_geometry(regions_sf)
@@ -1831,7 +1835,7 @@ build_france_tiles <- function() {
   pipeline_message(sprintf("%s tiled prediction", region_name), level = 0, 
                    progress = "start", process = "calc")
 
-  # --- Validate source OSM network ---
+  # Validate source OSM network
   pipeline_message("Validating source OSM network file", level = 1, 
                    progress = "start", process = "search")
   
@@ -1943,7 +1947,7 @@ build_france_tiles <- function() {
             length(x = models_list), length(x = all_periods)),
     level = 1, progress = "end", process = "valid")
 
-  # --- Define temporal chunks ---
+  # Define temporal chunks
   temporal_chunks <- get_temporal_chunks()
   temporal_chunks <- temporal_chunks[
                         intersect(
@@ -2256,6 +2260,13 @@ build_france_tiles <- function() {
     }
   }
 
+  # Clear memory before merging
+  pipeline_message("Clearing memory before merging phase (models and jobs list)", 
+                   process = "info")
+  # Remove heavy objects no longer needed for merging
+  rm(models_list, feature_info, regions, tile_jobs, process_region_tile, all_periods)
+  gc(verbose = FALSE)
+
   # Check if ogr2ogr is available for high-performance merging
   ogr_path <- Sys.which(names = "ogr2ogr")
   has_ogr2ogr <- (ogr_path != "")
@@ -2433,6 +2444,9 @@ build_france_tiles <- function() {
     
     # Remove the temporary merge log upon successful completion
     unlink(x = merged_log)
+
+    # Force memory cleanup between temporal chunks
+    gc(verbose = FALSE)
   }
 
   pipeline_message("Tile merging phase completed", level = 1, 
