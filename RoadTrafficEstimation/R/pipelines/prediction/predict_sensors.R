@@ -266,7 +266,7 @@ if (length(x = sensors_list) == 0) {
       
       # Export
       output_file <- file.path(
-        CFG$SENSORS_PREDICTION_FILEPATH,
+        CFG$SENSORS_OUTPUT_DIR,
         sprintf("07_predictions_sensors_%s.gpkg", source_name))
       
       sf::st_write(obj        = predictions_source, 

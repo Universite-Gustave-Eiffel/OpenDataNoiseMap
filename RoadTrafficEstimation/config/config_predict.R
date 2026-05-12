@@ -27,9 +27,9 @@ CONFIG_PREDICT <- list(
   
   # Sensors (all noise monitoring stations)
   SENSORS_DATA_DIR                = file.path(DATA_DIR, "noise_sensors"), 
-  SENSORS_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, mode_suffix, 
-                                          sprintf("07_predictions_%s.gpkg", 
-                                                  mode_suffix)), 
+  SENSORS_OUTPUT_DIR              = file.path(PREDICTION_DIR, mode_suffix),
+  SENSORS_PREDICTION_FILEPATH     = file.path(SENSORS_OUTPUT_DIR, 
+                                              "07_predictions_sensors.gpkg"), 
   
   # Nantes  
   NANTES_PREDICTION_FILEPATH  = file.path(PREDICTION_DIR, mode_suffix,
