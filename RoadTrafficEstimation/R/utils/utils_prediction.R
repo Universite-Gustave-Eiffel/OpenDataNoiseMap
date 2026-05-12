@@ -137,10 +137,30 @@ load_sensor_source <- function(base_dir, dir_name, file_root, target_crs) {
 #' @param crs_a First CRS object or numeric EPSG code to compare (reference).
 #' @param crs_b Second CRS object or numeric EPSG code to compare (target).
 #' @return Logical scalar. TRUE if the CRS definitions are equivalent.
+is_undefined_sf_crs <- function(crs) {
+  crs <- sf::st_crs(x = crs)
+  if (is.na(x = crs)) {
+    return(TRUE)
+  }
+  wkt <- crs$wkt
+  if (!is.null(x = wkt) && nzchar(x = wkt)) {
+    return(grepl(pattern = "Undefined SRS", 
+                 x       = wkt, 
+                 fixed   = TRUE))
+  }
+  proj4 <- crs$proj4string
+  if (!is.null(x = proj4) && nzchar(x = proj4)) {
+    return(grepl(pattern = "Undefined SRS", 
+                 x       = proj4, 
+                 fixed   = TRUE))
+  }
+  return(FALSE)
+}
+
 sf_crs_matches <- function(x, y) {
   x <- sf::st_crs(x = x)
   y <- sf::st_crs(x = y)
-  if (is.na(x = x) || is.na(x = y)) {
+  if (is_undefined_sf_crs(x) || is_undefined_sf_crs(y)) {
     return(FALSE)
   }
   if (!is.null(x = x$epsg) && !is.null(x = y$epsg) &&
@@ -198,7 +218,7 @@ ensure_target_crs <- function(sf_obj, target_crs) {
   }
   target_crs  <- sf::st_crs(x = target_crs)
   current_crs <- sf::st_crs(x = sf_obj)
-  if (is.na(x = current_crs)) {
+  if (is_undefined_sf_crs(current_crs)) {
     sf::st_crs(x = sf_obj) <- target_crs
     return(sf_obj)
   }
