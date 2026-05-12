@@ -15,6 +15,10 @@
 #   - 07_predictions_sensors_{SOURCE}.gpkg : predictions for each source
 # ==============================================================================
 
+# Extract local variables from configuration
+SENSORS_DATA_DIR <- CFG$SENSORS_DATA_DIR
+PREDICTION_DIR <- CFG$PREDICTION_DIR
+
 pipeline_message("Noise sensors traffic prediction", level = 0, 
                  progress = "start", process = "calc")
 
