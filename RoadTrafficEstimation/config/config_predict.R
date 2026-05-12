@@ -9,6 +9,7 @@ PREDICTION_DIR <- file.path("data", "prediction")
 mode_suffix    <- if (exists("MODE") && nzchar(MODE)) { MODE } else { "all" }
 
 # Build all prediction paths for direct CONFIG access (backward-compatible)
+SENSORS_OUTPUT_DIR <- file.path(PREDICTION_DIR, mode_suffix)
 CONFIG_PREDICT <- list(
   
   # Directories
@@ -27,7 +28,7 @@ CONFIG_PREDICT <- list(
   
   # Sensors (all noise monitoring stations)
   SENSORS_DATA_DIR                = file.path(DATA_DIR, "noise_sensors"), 
-  SENSORS_OUTPUT_DIR              = file.path(PREDICTION_DIR, mode_suffix),
+  SENSORS_OUTPUT_DIR              = SENSORS_OUTPUT_DIR,
   SENSORS_PREDICTION_FILEPATH     = file.path(SENSORS_OUTPUT_DIR, 
                                               "07_predictions_sensors.gpkg"), 
   
