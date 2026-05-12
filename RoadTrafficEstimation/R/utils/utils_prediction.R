@@ -72,6 +72,55 @@ build_prediction_filepaths <- function(extent, mode = NULL) {
 }
 #' 
 # -------------------------------------------------------------------------------
+# Find sensor file by extension
+# -------------------------------------------------------------------------------
+#' @title Locate a sensor source file in the sensor data directory
+#' @description Search for either a Shapefile or GeoPackage representation of a
+#'              noise sensor source inside the configured sensor subdirectory.
+#'              This helper is used by sensor prediction pipelines to load either
+#'              `*.shp` or `*.gpkg` without hardcoding the format.
+#' @param base_dir Character path to the base sensor data directory.
+#' @param dir_name Character subdirectory containing the sensor source data.
+#' @param file_root Character dataset base name without extension.
+#' @return Character file path if found, otherwise NULL.
+find_sensor_file <- function(base_dir, dir_name, file_root) {
+  shp_path  <- file.path(base_dir, dir_name, sprintf("%s.shp", file_root))
+  gpkg_path <- file.path(base_dir, dir_name, sprintf("%s.gpkg", file_root))
+  if (file.exists(shp_path)) {
+    return(shp_path)
+  }
+  if (file.exists(gpkg_path)) {
+    return(gpkg_path)
+  }
+  return(NULL)
+}
+#' 
+# -------------------------------------------------------------------------------
+# Load sensor source SF object
+# -------------------------------------------------------------------------------
+#' @title Load a noise sensor source file and enforce CRS
+#' @description Load a noise sensor source file from the configured sensor
+#'              dataset directory. The helper supports both Shapefile and
+#'              GeoPackage formats, then transforms the result to the target CRS.
+#' @param base_dir Character path to the base sensor data directory.
+#' @param dir_name Character subdirectory name for the sensor source.
+#' @param file_root Character dataset base name without extension.
+#' @param target_crs Target CRS code or CRS object to enforce.
+#' @return An sf object if the file exists, otherwise NULL.
+load_sensor_source <- function(base_dir, dir_name, file_root, target_crs) {
+  path <- find_sensor_file(base_dir = base_dir,
+                           dir_name  = dir_name,
+                           file_root = file_root)
+  if (is.null(path)) {
+    return(NULL)
+  }
+  sensor_data <- sf::st_read(dsn = path, quiet = TRUE)
+  sensor_data <- sf::st_transform(x   = sensor_data,
+                                  crs = target_crs)
+  return(sensor_data)
+}
+#' 
+# -------------------------------------------------------------------------------
 # CRS objects utilities for tile validation and alignment
 # -------------------------------------------------------------------------------
 #' @title Compare sf CRS objects safely
