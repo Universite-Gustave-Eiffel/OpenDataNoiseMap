@@ -262,7 +262,7 @@ if (length(x = sensors_list) == 0) {
 
   # Summary statistics
   pipeline_message("Prediction summary for noise sensors:", level = 1, 
-                  progress = "start" process = "search")
+                  progress = "start", process = "search")
 
   pipeline_message(sprintf("- Total sensors: %s (13 sources)", 
                           fmt(nrow(all_sensors))), 
