@@ -116,19 +116,16 @@ load_sensor_source <- function(base_dir, dir_name, file_root, target_crs) {
   }
   sensor_data <- sf::st_read(dsn   = path, 
                              quiet = TRUE)
-  original_crs <- sf::st_crs(x = sensor_data)
+  target_crs  <- sf::st_crs(x = target_crs)
 
-  if (is.na(original_crs)) {
-    pipeline_message(sprintf("Sensor source '%s' has undefined CRS; assuming %s.",
+  if (is.na(x = sf::st_crs(x = sensor_data))) {
+    pipeline_message(sprintf("Sensor source '%s' has undefined CRS; assigning target CRS %s.",
                              path,
-                             target_crs),
+                             sf_crs_to_string(crs = target_crs)),
                      process = "warning")
-    sensor_data <- sf::st_set_crs(x     = sensor_data, 
-                                  value = target_crs)
-  } else if (!sf_crs_matches(original_crs, target_crs)) {
-    sensor_data <- sf::st_transform(x   = sensor_data,
-                                    crs = target_crs)
   }
+  sensor_data <- ensure_target_crs(sf_obj     = sensor_data,
+                                  target_crs = target_crs)
   return(sensor_data)
 }
 #' 
