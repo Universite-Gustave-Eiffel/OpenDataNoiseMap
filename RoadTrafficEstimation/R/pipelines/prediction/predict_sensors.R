@@ -255,10 +255,16 @@ if (length(x = sensors_list) == 0) {
                    progress = "start", process = "save")
 
   for (source_name in names(x = sensors_list)) {
+    pipeline_message(sprintf("%s: %s sensors", source_name, 
+                             nrow(sensors_list[[source_name]])), 
+                     process = "info")
     # Create buffer union for this source
     source_buffer <- sf::st_buffer(x    = sensors_list[[source_name]], 
                                    dist = SENSOR_BUFFER_RADIUS)
     source_union  <- sf::st_union(x = source_buffer)
+    pipeline_message(sprintf("%s: buffer union area %.0f m²", source_name, 
+                             sf::st_area(source_union)), 
+                     process = "info")
     
     # Filter roads in this source's buffer
     roads_in_source <- sf::st_filter(x = osm_sensors, 

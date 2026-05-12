@@ -118,11 +118,17 @@ load_sensor_source <- function(base_dir, dir_name, file_root, target_crs) {
                              quiet = TRUE)
   target_crs  <- sf::st_crs(x = target_crs)
 
-  if (is.na(x = sf::st_crs(x = sensor_data))) {
+  original_crs <- sf::st_crs(x = sensor_data)
+  if (is_undefined_sf_crs(original_crs)) {
     pipeline_message(sprintf("Sensor source '%s' has undefined CRS; assigning target CRS %s.",
                              path,
                              sf_crs_to_string(crs = target_crs)),
                      process = "warning")
+  } else {
+    pipeline_message(sprintf("Sensor source '%s' has CRS: %s",
+                             path,
+                             sf_crs_to_string(crs = original_crs)),
+                     process = "info")
   }
   sensor_data <- ensure_target_crs(sf_obj     = sensor_data,
                                   target_crs = target_crs)
