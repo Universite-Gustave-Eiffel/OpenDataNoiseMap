@@ -151,12 +151,13 @@ if (length(x = sensors_list) == 0) {
 } else {
 
   # Combine all sensors
-  # Ensure all sensor sources have the exact same CRS representation to avoid 'different crs' error
+  # Ensure all sensor sources use the target CRS and merge rows even when
+  # source attribute schemas differ.
   sensors_list <- lapply(X   = sensors_list, 
                          FUN = function(x) {
-                                sf::st_set_crs(x, CFG$TARGET_CRS)})
-  all_sensors  <- do.call(what = rbind, 
-                          args = sensors_list)
+                                ensure_target_crs(sf_obj = x, 
+                                                  target_crs = CFG$TARGET_CRS)})
+  all_sensors  <- dplyr::bind_rows(sensors_list)
 
   # Load network around sensors
   osm_sensors <- load_network_around_points(
