@@ -58,9 +58,11 @@ sensors_list <- list()
 
 # Bruitparif sensors
 if (file.exists(file.path(SENSORS_DATA_DIR, 
+                          "POINT_NOISE_BRUITPARIF_COMPARE",
                           "POINT_NOISE_BRUITPARIF_COMPARE.shp"))) {
   sensors_list[["BRUITPARIF"]] <- sf::st_read(
     dsn   = file.path(SENSORS_DATA_DIR, 
+                      "POINT_NOISE_BRUITPARIF_COMPARE",
                       "POINT_NOISE_BRUITPARIF_COMPARE.shp"), 
     quiet = TRUE) %>% 
     st_transform(CFG$TARGET_CRS)
@@ -72,9 +74,11 @@ if (file.exists(file.path(SENSORS_DATA_DIR,
 
 # Acoucité sensors
 if (file.exists(file.path(SENSORS_DATA_DIR, 
+                          "POINT_NOISE_ACOUCITE",
                           "POINT_NOISE_ACOUCITE_COMPARE.shp"))) {
   sensors_list[["ACOUCITE"]] <- sf::st_read(
     dsn   = file.path(SENSORS_DATA_DIR, 
+                      "POINT_NOISE_ACOUCITE",
                       "POINT_NOISE_ACOUCITE_COMPARE.shp"), 
     quiet = TRUE) %>% 
     st_transform(CFG$TARGET_CRS)
@@ -116,11 +120,11 @@ for (source_name in names(x = child_files)) {
         dsn   = child_files[[source_name]], 
         quiet = TRUE) %>% 
       st_transform(CFG$TARGET_CRS)
+    
+    pipeline_message(sprintf("%s sensors loaded: %s sensors", 
+                             source_name, nrow(sensors_list[[source_name]])), 
+                     process = "info")
   }
-  
-  pipeline_message(sprintf("%s sensors loaded: %s sensors", 
-                           source_name, nrow(sensors_list[[source_name]])), 
-                   process = "info")
 }
 
 pipeline_message(sprintf("Sensors loaded: %d sources", length(x = sensors_list)), 
