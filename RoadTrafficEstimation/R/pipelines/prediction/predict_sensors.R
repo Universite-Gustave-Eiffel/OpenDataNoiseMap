@@ -36,8 +36,8 @@ if (!file.exists(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)) {
 }
 
 # Load models and feature info
-models_list  <- readRDS(CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
-feature_info <- readRDS(CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
+models_list  <- readRDS(file = CFG$XGB_MODELS_WITH_RATIOS_FILEPATH)
+feature_info <- readRDS(file = CFG$XGB_RATIO_FEATURE_INFO_FILEPATH)
 
 pipeline_message(sprintf("Models loaded: %s models for %s periods", 
                          length(x = models_list), length(x = feature_info$all_periods)), 
@@ -53,48 +53,56 @@ pipeline_message("Loading noise sensors", level = 1,
 sensors_list <- list()
 
 # Bruitparif sensors
-if (file.exists(file.path(DATA_DIR, 
+if (file.exists(file.path(SENSORS_DATA_DIR, 
                           "POINT_NOISE_BRUITPARIF_COMPARE.shp"))) {
   sensors_list[["BRUITPARIF"]] <- sf::st_read(
-    dsn   = file.path(DATA_DIR, 
+    dsn   = file.path(SENSORS_DATA_DIR, 
                       "POINT_NOISE_BRUITPARIF_COMPARE.shp"), 
     quiet = TRUE) %>% 
     st_transform(CFG$TARGET_CRS)
+  
+  pipeline_message(sprintf("Bruitparif sensors loaded: %s sensors", 
+                           nrow(sensors_list[["BRUITPARIF"]])), 
+                   process = "info")
 }
 
 # Acoucité sensors
-if (file.exists(file.path(DATA_DIR, 
+if (file.exists(file.path(SENSORS_DATA_DIR, 
                           "POINT_NOISE_ACOUCITE_COMPARE.shp"))) {
   sensors_list[["ACOUCITE"]] <- sf::st_read(
-    dsn   = file.path(DATA_DIR, 
+    dsn   = file.path(SENSORS_DATA_DIR, 
                       "POINT_NOISE_ACOUCITE_COMPARE.shp"), 
     quiet = TRUE) %>% 
     st_transform(CFG$TARGET_CRS)
+  
+  pipeline_message(sprintf("Acoucité sensors loaded: %s sensors", 
+                           nrow(sensors_list[["ACOUCITE"]])), 
+                   process = "info")
 }
 
 # Child project sensors (11 sources)
 child_files <- list(
-  CHILD_HOME_BORDEAUX        = file.path(DATA_DIR, 
+  CHILD_HOME_BORDEAUX        = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_HOME_BORDEAUXrfhome/CHILD_HOME_BORDEAUX_CBS.shp"),
-  CHILD_HOME_BREST           = file.path(DATA_DIR, 
+  CHILD_HOME_BREST           = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_HOME_BRESTrfhome/CHILD_HOME_BREST_CBS.shp"),
-  CHILD_HOME_LYON            = file.path(DATA_DIR, 
+  CHILD_HOME_LYON            = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_HOME_LYONrfhome/CHILD_HOME_LYON_CBS.shp"),
-  CHILD_HOME_STRASBOURG_GEO  = file.path(DATA_DIR, 
+  CHILD_HOME_STRASBOURG_GEO  = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_HOME_STRASBOURGgeoclimateHome/CHILD_HOME_STRASBOURG_CBS.shp"),
-  CHILD_HOME_STRASBOURG_RF   = file.path(DATA_DIR, 
+  CHILD_HOME_STRASBOURG_RF   = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_HOME_STRASBOURGrfhome/CHILD_HOME_STRASBOURG_CBS.shp"),
-  CHILD_RANDOM_BORDEAUX_GEO  = file.path(DATA_DIR, 
+  CHILD_RANDOM_BORDEAUX_GEO  = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_RANDOM_BORDEAUXgeoclimate/CHILD_RANDOM_BORDEAUX_CBS.shp"),
-  CHILD_RANDOM_BORDEAUX_RF   = file.path(DATA_DIR, 
+  CHILD_RANDOM_BORDEAUX_RF   = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_RANDOM_BORDEAUXrf/CHILD_RANDOM_BORDEAUX_CBS.shp"),
-  CHILD_RANDOM_BREST         = file.path(DATA_DIR, 
+  CHILD_RANDOM_BREST         = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_RANDOM_BRESTrf/CHILD_RANDOM_BREST_CBS.shp"),
-  CHILD_RANDOM_LYON          = file.path(DATA_DIR, 
+  CHILD_RANDOM_LYON          = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_RANDOM_LYONrf/CHILD_RANDOM_LYON_CBS.shp"),
-  CHILD_RANDOM_STRASBOURG_RF = file.path(DATA_DIR, 
+  CHILD_RANDOM_STRASBOURG_RF = file.path(SENSORS_DATA_DIR, 
                                          "CHILD_RANDOM_STRASBOURGrf/CHILD_RANDOM_STRASBOURG_CBS.shp"),
-  CHILD_STRASBOURG_GEO       = file.path(DATA_DIR,
+  CHILD_STRASBOURG_GEO       = file.path(SENSORS_DATA_DIR,
                                          "CHILD_STRASBOURGgeoclimate/CHILD_RANDOM_STRASBOURG_CBS.shp")
 )
 
@@ -105,6 +113,10 @@ for (source_name in names(x = child_files)) {
         quiet = TRUE) %>% 
       st_transform(CFG$TARGET_CRS)
   }
+  
+  pipeline_message(sprintf("%s sensors loaded: %s sensors", 
+                           source_name, nrow(sensors_list[[source_name]])), 
+                   process = "info")
 }
 
 pipeline_message(sprintf("Sensors loaded: %d sources", length(x = sensors_list)), 
@@ -127,16 +139,17 @@ if (length(x = sensors_list) == 0) {
 
   # Combine all sensors
   # Ensure all sensor sources have the exact same CRS representation to avoid 'different crs' error
-  sensors_list <- lapply(X = sensors_list, FUN = function(x) {
-    sf::st_set_crs(x, CFG$TARGET_CRS)
-  })
-  all_sensors  <- do.call(what = rbind, args = sensors_list)
+  sensors_list <- lapply(X   = sensors_list, 
+                         FUN = function(x) {
+                                sf::st_set_crs(x, CFG$TARGET_CRS)})
+  all_sensors  <- do.call(what = rbind, 
+                          args = sensors_list)
 
   # Load network around sensors
   osm_sensors <- load_network_around_points(
-    points = all_sensors,
+    points        = all_sensors,
     buffer_radius = SENSOR_BUFFER_RADIUS,
-    config = CONFIG)
+    config        = CONFIG)
 
   # Apply predictions
   pipeline_message("Applying XGBoost models", level = 1, 
