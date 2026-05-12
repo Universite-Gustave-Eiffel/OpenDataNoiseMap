@@ -27,28 +27,24 @@ CONFIG_PREDICT <- list(
   
   # Sensors (all noise monitoring stations)
   SENSORS_DATA_DIR                = file.path(DATA_DIR, "noise_sensors"), 
-  SENSORS_ALL_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, 
-                                              mode_suffix, 
-                                              sprintf("07_predictions_%s.gpkg", 
-                                                      mode_suffix)), 
+  SENSORS_PREDICTION_FILEPATH = file.path(PREDICTION_DIR, mode_suffix, 
+                                          sprintf("07_predictions_%s.gpkg", 
+                                                  mode_suffix)), 
   
   # Nantes  
-  NANTES_PREDICTION_FILEPATH      = file.path(PREDICTION_DIR, 
-                                              mode_suffix,
-                                              sprintf("07_predictions_%s.gpkg", 
-                                                      mode_suffix)),
+  NANTES_PREDICTION_FILEPATH  = file.path(PREDICTION_DIR, mode_suffix,
+                                          sprintf("07_predictions_%s.gpkg", 
+                                                  mode_suffix)),
   
   # Paris
-  PARIS_PREDICTION_FILEPATH       = file.path(PREDICTION_DIR, 
-                                              mode_suffix,
-                                              sprintf("07_predictions_%s.gpkg", 
-                                                      mode_suffix)),
+  PARIS_PREDICTION_FILEPATH   = file.path(PREDICTION_DIR, mode_suffix,
+                                          sprintf("07_predictions_%s.gpkg", 
+                                                  mode_suffix)),
   
   # PEMB (Paris Est Marne & Bois)
-  PEMB_PREDICTION_FILEPATH        = file.path(PREDICTION_DIR, 
-                                              mode_suffix,
-                                              sprintf("07_predictions_%s.gpkg", 
-                                                      mode_suffix)),
+  PEMB_PREDICTION_FILEPATH    = file.path(PREDICTION_DIR, mode_suffix,
+                                          sprintf("07_predictions_%s.gpkg", 
+                                                  mode_suffix)),
   
   # ============================================================================
   # France tiled predictions (geometry + temporal chunks)

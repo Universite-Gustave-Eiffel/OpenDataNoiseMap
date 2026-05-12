@@ -236,12 +236,12 @@ if (length(x = sensors_list) == 0) {
                    progress = "start", process = "save")
 
   sf::st_write(obj        = predictions_sf, 
-               dsn        = CFG$SENSORS_ALL_PREDICTION_FILEPATH, 
+               dsn        = CFG$SENSORS_PREDICTION_FILEPATH, 
                delete_dsn = TRUE, 
                quiet      = FALSE)
 
   pipeline_message(sprintf("Combined export: %s", 
-                           rel_path(CFG$SENSORS_ALL_PREDICTION_FILEPATH)), 
+                           rel_path(CFG$SENSORS_PREDICTION_FILEPATH)), 
                    level = 1, progress = "end", process = "save")
 
   # Export predictions for each sensor source
@@ -266,7 +266,7 @@ if (length(x = sensors_list) == 0) {
       
       # Export
       output_file <- file.path(
-        CFG$FORECAST_DATA_DIR,
+        CFG$SENSORS_PREDICTION_FILEPATH,
         sprintf("07_predictions_sensors_%s.gpkg", source_name))
       
       sf::st_write(obj        = predictions_source, 
