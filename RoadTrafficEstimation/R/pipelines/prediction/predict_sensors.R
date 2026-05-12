@@ -264,6 +264,10 @@ if (length(x = sensors_list) == 0) {
     roads_in_source <- sf::st_filter(x = osm_sensors, 
                                      y = source_union)
     
+    pipeline_message(sprintf("%s: checking %s roads in buffer", source_name, 
+                             nrow(roads_in_source)), 
+                     process = "info")
+    
     if (nrow(roads_in_source) > 0) {
       # Filter predictions
       predictions_source <- predictions_sf[
@@ -283,6 +287,10 @@ if (length(x = sensors_list) == 0) {
       pipeline_message(sprintf("- %s: %s roads", source_name, 
                                length(x = unique(x = predictions_source$osm_id))), 
                        process = "info")
+    } else {
+      pipeline_message(sprintf("- %s: no roads within %sm buffer", source_name, 
+                               SENSOR_BUFFER_RADIUS), 
+                       process = "warning")
     }
   }
 
