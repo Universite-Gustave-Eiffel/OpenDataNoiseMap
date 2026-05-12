@@ -114,9 +114,21 @@ load_sensor_source <- function(base_dir, dir_name, file_root, target_crs) {
   if (is.null(path)) {
     return(NULL)
   }
-  sensor_data <- sf::st_read(dsn = path, quiet = TRUE)
-  sensor_data <- sf::st_transform(x   = sensor_data,
-                                  crs = target_crs)
+  sensor_data <- sf::st_read(dsn   = path, 
+                             quiet = TRUE)
+  original_crs <- sf::st_crs(x = sensor_data)
+
+  if (is.na(original_crs)) {
+    pipeline_message(sprintf("Sensor source '%s' has undefined CRS; assuming %s.",
+                             path,
+                             target_crs),
+                     process = "warning")
+    sensor_data <- sf::st_set_crs(x     = sensor_data, 
+                                  value = target_crs)
+  } else if (!sf_crs_matches(original_crs, target_crs)) {
+    sensor_data <- sf::st_transform(x   = sensor_data,
+                                    crs = target_crs)
+  }
   return(sensor_data)
 }
 #' 
