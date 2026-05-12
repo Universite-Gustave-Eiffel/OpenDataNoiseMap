@@ -157,13 +157,15 @@ if (length(x = sensors_list) == 0) {
   osm_sensors <- load_network_around_points(
     points        = all_sensors,
     buffer_radius = SENSOR_BUFFER_RADIUS,
-    config        = CONFIG)
+    target_crs    = TARGET_CRS, 
+    osm_roads_path= OSM_ROADS_FRANCE_ENGINEERED_FILEPATH)
 
   # Apply predictions
   pipeline_message("Applying XGBoost models", level = 1, 
                    progress = "start", process = "calc")
 
-  osm_sensors_dt <- as.data.frame(x = sf::st_drop_geometry(x = osm_sensors))
+  osm_sensors_dt <- as.data.frame(
+    x = sf::st_drop_geometry(x = osm_sensors))
 
   predictions_wide <- apply_xgboost_predictions(
     network_data = osm_sensors_dt,

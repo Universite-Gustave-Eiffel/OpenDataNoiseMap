@@ -478,11 +478,10 @@ load_network_for_prediction <- function(bbox, cfg) {
 #'              sensor points.
 #' @param points sf data.frame with point geometries
 #' @param buffer_radius numeric buffer radius in meters
-#' @param config CONFIG list with file paths
+#' @param target_crs character target CRS
+#' @param osm_roads_path character path to OSM France engineered network GeoPackage
 #' @return sf data.frame with filtered network by point buffers 
-load_network_around_points <- function(points, buffer_radius, config) {
-  target_crs     <- config$TARGET_CRS
-  osm_roads_path <- config$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH
+load_network_around_points <- function(points, buffer_radius, target_crs, osm_roads_path) {
 
   pipeline_message(sprintf("Loading network within %sm of %s points", 
                            buffer_radius, nrow(x = points)), 
