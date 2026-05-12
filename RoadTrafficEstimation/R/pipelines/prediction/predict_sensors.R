@@ -277,7 +277,7 @@ if (length(x = sensors_list) == 0) {
                   process = "info")
 
   pipeline_message("End of prediction summary for noise sensors:", level = 1, 
-                  progress = "end" process = "valid")
+                  progress = "end", process = "valid")
 
   pipeline_message("Noise sensors traffic prediction completed", level = 0, 
                   progress = "end", process = "valid")
