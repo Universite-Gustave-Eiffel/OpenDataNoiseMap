@@ -73,7 +73,7 @@ if (!is.null(bruitparif_data)) {
 acoucite_data <- load_sensor_source(
   base_dir   = SENSORS_DATA_DIR,
   dir_name   = "POINT_NOISE_ACOUCITE",
-  file_root  = "POINT_NOISE_ACOUCITE_COMPARE",
+  file_root  = "POINT_NOISE_ACOUCITE_2154",
   target_crs = CFG$TARGET_CRS)
 if (!is.null(acoucite_data)) {
   sensors_list[["ACOUCITE"]] <- acoucite_data
