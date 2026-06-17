@@ -1080,44 +1080,33 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(x = models_list)) &&
            aggregate_flow >= 1)
 
   if (nrow(d_data) > 0) {
-    d_matrix <- safe_sparse_model_matrix(
+    d_matrix_unaligned <- safe_sparse_model_matrix(
       formula_obj = road_feature_formula, 
       data_df = d_data)
 
-    if (nrow(d_matrix) != nrow(d_data)) {
-      kept_rows <- as.integer(x = rownames(x = d_matrix))
+    if (nrow(d_matrix_unaligned) != nrow(d_data)) {
+      kept_rows <- as.integer(x = rownames(x = d_matrix_unaligned))
       d_data    <- d_data[kept_rows, ]
     }
 
-    # Align feature columns with what the model expects
-    # (subset of test data may have fewer factor levels → fewer columns)
-    model_features <- models_list[["flow_D"]]$model$feature_names
-    if (!is.null(x = model_features)) {
-      current_cols <- colnames(x = d_matrix)
-      missing_cols <- setdiff(x = model_features, y = current_cols)
-      if (length(x = missing_cols) > 0) {
-        zero_mat <- Matrix::Matrix(data   = 0, 
-                                   nrow   = nrow(d_matrix),
-                                   ncol   = length(x = missing_cols),
-                                   sparse = TRUE)
-        colnames(x = zero_mat) <- missing_cols
-        d_matrix <- cbind(d_matrix, zero_mat)
-      }
-      d_matrix <- d_matrix[, model_features, drop = FALSE]
-    }
+    # The manual alignment block for d_matrix is removed.
+    # Alignment will now be handled by predict_with_alignment for each model.
 
-    if (nrow(d_matrix) > 0) {
+    if (nrow(d_matrix_unaligned) > 0) {
       # --- Base predictions (period D) ---
-      pred_flow_D_log         <- predict(
-                                    object  = models_list[["flow_D"]]$model, 
-                                    newdata = d_matrix)
+      pred_flow_D_log         <- predict_with_alignment(
+                                    model_entry = models_list[["flow_D"]],
+                                    feature_matrix_base = d_matrix_unaligned,
+                                    feature_info = feature_info)
       pred_flow_D             <- 10^pred_flow_D_log
-      pred_truck_D            <- predict(
-                                    object  = models_list[["truck_pct_D"]]$model, 
-                                    newdata = d_matrix)
-      pred_speed_ratio_to_osm <- predict(
-                                    object  = models_list[["speed_D"]]$model, 
-                                    newdata = d_matrix)
+      pred_truck_D            <- predict_with_alignment(
+                                    model_entry = models_list[["truck_pct_D"]],
+                                    feature_matrix_base = d_matrix_unaligned,
+                                    feature_info = feature_info)
+      pred_speed_ratio_to_osm <- predict_with_alignment(
+                                    model_entry = models_list[["speed_D"]],
+                                    feature_matrix_base = d_matrix_unaligned,
+                                    feature_info = feature_info)
 
       osm_speed_raw        <- suppressWarnings(expr = as.numeric(x = d_data$speed))
       osm_speed_missing    <- is.na(x = osm_speed_raw) | osm_speed_raw < 5
