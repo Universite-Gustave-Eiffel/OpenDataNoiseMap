@@ -319,6 +319,10 @@ for (model_name in names(x = all_configs)) {
   
   # Filter data
   clean_training_data_over_period <- training_data_over_period[valid_idx, ]
+  # Reset rownames to ensure safe_sparse_model_matrix returns positional indices
+  rownames(clean_training_data_over_period) <- seq_len(nrow(clean_training_data_over_period))
+  
+  # Filter target
   clean_training_data_target      <- training_data_target[valid_idx]
   quality_col                     <- get_quality_indicator_column(
     target_name    = model_config$target,
@@ -389,6 +393,16 @@ for (model_name in names(x = all_configs)) {
     next
   }
   
+  # Acceptable limits for training (moved up to inform the split fallback)
+  min_train_xgb <- 30
+  min_test_xgb  <- 10
+  
+  # Even more permissive for truck and speed models (base or ratio)
+  if (grepl(pattern = "truck|speed", x = model_config$target)) {
+    min_train_xgb <- 10
+    min_test_xgb  <- 5
+  }
+
   # Train/test split on synchronized data
   set.seed(123)
   n_final           <- nrow(x = sparse_data_matrix)
@@ -402,7 +416,7 @@ for (model_name in names(x = all_configs)) {
       # can merge test predictions from all 3 models without row loss
       train_idx <- which(!sensor_ids %in% shared_base_test_sensors)
       test_idx  <- which(sensor_ids %in% shared_base_test_sensors)
-      if (length(x = train_idx) == 0 || length(x = test_idx) == 0) {
+      if (length(x = train_idx) < min_train_xgb || length(x = test_idx) < min_test_xgb) {
         train_idx <- sample(x    = seq_len(n_final),
                             size = floor(x = 0.8 * n_final))
         test_idx  <- setdiff(x = seq_len(n_final), 
@@ -413,7 +427,7 @@ for (model_name in names(x = all_configs)) {
       train_sensors   <- sample(unique_sensors, size = n_train_sensors)
       train_idx       <- which(sensor_ids %in% train_sensors)
       test_idx        <- which(!sensor_ids %in% train_sensors)
-      if (length(x = train_idx) == 0 || length(x = test_idx) == 0) {
+      if (length(x = train_idx) < min_train_xgb || length(x = test_idx) < min_test_xgb) {
         train_idx <- sample(x    = seq_len(n_final), 
                             size = floor(x = 0.8 * n_final))
         test_idx  <- setdiff(x = seq_len(n_final), 
@@ -500,10 +514,7 @@ for (model_name in names(x = all_configs)) {
   # Adaptive training strategy for small samples
   use_watchlist <- TRUE
   if (length(x = y_train) < 100 || length(x = y_test) < 30) {
-    pipeline_message(sprintf("Small sample detected:\n\t\t", 
-                             "-> train = %d\n\t\t", 
-                             "-> test = %d\n\t\t", 
-                             "=> Disabling early stopping and watchlist", 
+    pipeline_message(sprintf("Small sample detected (Train=%d, Test=%d): disabling early stopping", 
                              length(x = y_train), length(x = y_test)), 
                      process = "warning")
     
@@ -584,26 +595,11 @@ for (model_name in names(x = all_configs)) {
     }
   }
   
-  # Acceptable limits for training
-  min_train_xgb <- 150
-  min_test_xgb  <- 50
-  if (model_config$period == "D" && 
-      model_config$target == "ratio_speed_to_osm") {
-    min_train_xgb <- 10
-    min_test_xgb  <- 5
-  }
-  if (grepl(pattern = "truck", x = model_config$target)) {
-    min_train_xgb <- 10
-    min_test_xgb  <- 5
-  }
   if (length(x = y_train) < min_train_xgb || 
       length(x = y_test) < min_test_xgb) {
-    pipeline_message(sprintf("Sample too small for XGBoost:\n\t\t", 
-                             "-> train = %d\n\t\t", 
-                             "-> test = %d\n\t\t", 
-                             "=> Model skipped!", 
-                             length(x = y_train), length(x = y_test)), 
-      process = "warning")
+        pipeline_message(sprintf("Sample too small for XGBoost (Train=%d, Test=%d): skipping model %s", 
+                                 length(x = y_train), length(x = y_test), model_name), 
+                         process = "warning")
     next
   }
   
@@ -848,10 +844,8 @@ pipeline_message("Training models and features successfully saved ", level = 1,
 # Final summary
 # ------------------------------------------------------------------------------
 
-pipeline_message(sprintf("Results summary: \n", 
-                         paste0(capture.output(results_summary), 
-                                collapse = "\n\t\t")), 
-                 level = 1, progress = "start", process = "plot")
+pipeline_message("Results summary completed", level = 1, progress = "end", process = "valid")
+print(results_summary)
 
 # ------------------------------------------------------------------------------
 # Feature importance summary
