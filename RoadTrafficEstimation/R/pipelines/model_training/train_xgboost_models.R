@@ -1188,20 +1188,25 @@ if (all(c("flow_D", "truck_pct_D", "speed_D") %in% names(x = models_list)) &&
         if (!has_flow_ratio) next
 
         # Predict ratios from the feature matrix (same d_matrix, same roads)
-        ratio_flow  <- predict(
-                         object  = models_list[[flow_model_key]]$model, 
-                         newdata = d_matrix)
+        ratio_flow  <- predict_with_alignment(
+                         model_entry = models_list[[flow_model_key]], 
+                         feature_matrix_base = d_matrix_unaligned,
+                         feature_info = feature_info)
         ratio_truck <- if (has_truck_ratio) {
-          predict(object  = models_list[[truck_model_key]]$model, 
-                           newdata = d_matrix)
+          predict_with_alignment(
+            model_entry = models_list[[truck_model_key]], 
+            feature_matrix_base = d_matrix_unaligned,
+            feature_info = feature_info)
         } else {
-          rep(x = 1, times = nrow(d_matrix))  # Fallback: same as D
+          rep(x = 1, times = nrow(d_matrix_unaligned))  # Fallback: same as D
         }
         ratio_speed <- if (has_speed_ratio) {
-          predict(object  = models_list[[speed_model_key]]$model, 
-                           newdata = d_matrix)
+          predict_with_alignment(
+            model_entry = models_list[[speed_model_key]], 
+            feature_matrix_base = d_matrix_unaligned,
+            feature_info = feature_info)
         } else {
-          rep(x = 1, times = nrow(d_matrix))  # Fallback: same as D
+          rep(x = 1, times = nrow(d_matrix_unaligned))  # Fallback: same as D
         }
 
         # Predicted values for period P = base_D × ratio_P

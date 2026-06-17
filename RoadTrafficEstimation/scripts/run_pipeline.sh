@@ -89,16 +89,16 @@ if hostname | grep -qi "hpc\|cluster"; then
   source ./.Renviron
   set +a
   module purge || true
-  # module load gcc/gcc-11 || { echo "❌ gcc module failed"; exit 1; }
-  module load R/R-4.4.2 || { echo "❌ R module failed"; exit 1; }
   module load gdal/gdal-3.7.2.gcc11 || { echo "❌ gdal module failed"; exit 1; }
-  # module unload gcc/gcc-12 || { echo "❌ gcc unload failed"; exit 1; }
-  # module load gcc/gcc-11 || { echo "❌ gcc module failed"; exit 1; }
+  module load R/R-4.4.2 || { echo "❌ R module failed"; exit 1; }
+  module unload gcc/gcc-11 || true
   
   # Fix for RedHat/CentOS GCC annobin plugin error during package compilation
-  export CFLAGS="-O2 -g -fPIC"
-  export CXXFLAGS="-O2 -g -fPIC"
-  export CXX11FLAGS="-O2 -g -fPIC"
+  export CFLAGS="-O2 -g -fPIC -std=gnu11"
+  export CXXFLAGS="-O2 -g -fPIC -std=gnu++17"
+  # export CFLAGS="-O2 -g -fPIC"
+  # export CXXFLAGS="-O2 -g -fPIC"
+  # export CXX11FLAGS="-O2 -g -fPIC"
 
   # Limit memory fragmentation for large spatial processing
   # preventing glibc from creating too many memory arenas
