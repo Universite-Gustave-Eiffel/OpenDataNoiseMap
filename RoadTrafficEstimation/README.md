@@ -16,7 +16,7 @@ Phase 1: Data Preparation (Orange)
 ├─ 04_avatar_download.R            (Fetch sensor data from AVATAR API)
 ├─ 05_avatar_aggregation.R         (Hourly aggregation + period ratios)
 └─ 06_training_dataset_merge.R     (Merge Avatar + pre-engineered France layer)
-                                   Output: 05_training_dataset.gpkg
+                                   Output: 05_training_dataset_{mode}.gpkg (mode string appended)
 
                                    ↓
 
@@ -101,7 +101,7 @@ RoadTrafficEstimation/
     ├── 03_avatar_raw_traffic.rds            # Raw sensor data from AVATAR API
     ├── 03_osm_network_with_avatar_ids.gpkg  # OSM network with sensor IDs
     ├── 04_avatar_aggregated_with_ratios.rds # Aggregated Avatar data + period ratios
-    ├── 05_training_dataset.gpkg             # Training dataset (Avatar + engineered features)
+    ├── 05_training_dataset_{mode}.gpkg             # Training dataset (Avatar + engineered features; mode suffix included)
     ├── 06_xgboost_trained_models.rds        # Trained XGBoost models (81 total)
     ├── 06_xgboost_feature_info.rds          # Feature info for all models
     ├── 07_predictions_nantes.gpkg           # Nantes area predictions
@@ -266,17 +266,17 @@ bash scripts/run_avatar_download.sh
                 04_diagnostic_*.pdf)
 06_training_dataset_merge.R
   ↓ Loads: 02_osm_network_france_engineered.gpkg (filters to Avatar roads)
-  ↓ Produces: 05_training_dataset.gpkg
+  ↓ Produces: 05_training_dataset_{mode}.gpkg  (mode-specific filename)
 ```
 
 ### Phase 2: Model Training
 
 ```
-05_training_dataset.gpkg
+05_training_dataset_{mode}.gpkg
   ↓ (from Phase 1)
 train_xgboost_models.R
-  ↓ Produces: 06_xgboost_trained_models.rds (81 models)
-             06_xgboost_feature_info.rds
+  ↓ Produces: 06_xgboost_trained_models_{mode}.rds (81 models)
+             06_xgboost_feature_info_{mode}.rds
 ```
 
 ### Phase 3: Prediction
@@ -357,11 +357,11 @@ Rscript R/data_preparation/06_training_dataset_merge.R
 
 ### Model Training Failures
 
-Ensure Phase 1 outputs exist (especially `05_training_dataset.gpkg`):
+Ensure Phase 1 outputs exist (especially `05_training_dataset_{mode}.gpkg`):
 
 ```bash
 # Check file exists:
-ls -lh outputs/ | grep "05_training_dataset"
+ls -lh outputs/ | grep "05_training_dataset"  # filenames now include mode
 
 # Re-run training:
 ./scripts/run_local.sh --phase training

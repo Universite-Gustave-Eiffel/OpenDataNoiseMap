@@ -1,0 +1,82 @@
+# ==============================================================================
+# SETUP CONFIGURATION
+# ==============================================================================
+
+pipeline_message("Setup configuration", level = 0, 
+                 progress = "start", process = "install")
+
+# ------------------------------------------------------------------------------
+# Set library path and required packages
+# ------------------------------------------------------------------------------
+
+# Set lib paths
+Sys.getenv("LD_LIBRARY_PATH")
+
+# Required packages
+pkgs_needed <- c(
+  "Rcpp", "dplyr", "tidyr", "sf", "lwgeom", "httr", "jsonlite", "lubridate", 
+  "randomForest", "data.table", "stringr", "sfnetworks", "igraph", "tidygraph", 
+  "progress", "ggplot2", "gridExtra", "data.table", "xgboost", "Matrix", 
+  "unix", "tools")
+
+# Check for missing packages and install if necessary
+installed <- rownames(installed.packages(lib.loc = .libPaths()))
+missing <- setdiff(pkgs_needed, installed)
+
+if (length(missing) > 0) {
+  if (RUN_CONTEXT == "local") {
+    pipeline_message(sprintf("Installing missing packages: %s", 
+                             paste(missing, collapse = ", ")), 
+                     level = 1, progress = "start", process = "install")
+    install.packages(missing)
+  }
+  if (RUN_CONTEXT == "slurm") {
+      pipeline_message(sprintf("Missing packages on HPC: %s\nStop execution", 
+                               paste(missing, collapse = ", ")), 
+                       process = "stop")
+  }
+} else {
+  # All required packages are already installed
+  pipeline_message("Loading packages", level = 1, 
+                   progress = "start", process = "load")
+}
+
+pipeline_message(sprintf("Active lib paths: %s", 
+                         paste(.libPaths(), collapse = " | ")), process = "info")
+
+# Load libraries
+for (p in pkgs_needed) {
+  suppressPackageStartupMessages(
+    library(p, character.only = TRUE)
+  )
+}
+
+pipeline_message("Packages loaded successfully", level = 1, 
+                 progress = "end", process = "valid")
+
+# ------------------------------------------------------------------------------
+# Memory limit
+# ------------------------------------------------------------------------------
+rlimit_as(5e11)  # increases to ~46GB
+
+# ------------------------------------------------------------------------------
+# Directories
+# ------------------------------------------------------------------------------
+
+pipeline_message("Creating required directories", level = 1, 
+                 progress = "start", process = "install")
+
+# Create directories based on configuration
+setup_directories(CFG)
+
+pipeline_message("Required directories created", level = 1, 
+                 progress = "end", process = "valid")
+
+# ------------------------------------------------------------------------------
+# Options
+# ------------------------------------------------------------------------------
+op <- options(digits.secs = 1, 
+              digits = 2)
+
+pipeline_message("Setup stage completed", level = 0, 
+                 progress = "end", process = "valid")

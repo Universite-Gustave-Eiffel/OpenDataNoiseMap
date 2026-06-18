@@ -26,24 +26,61 @@ Analysis: Emission analysis  (run_emission_analysis.R, run_flow_comparison.R, et
 
 - **CRS**: Always EPSG:2154 (Lambert-93). All spatial operations use `sf::st_transform(crs = 2154)`.
 - **Config**: All paths and parameters live in the global `CONFIG` list (built in `config_pipeline.R`). Access via `CONFIG$OSM_ROADS_FRANCE_ENGINEERED_FILEPATH`, etc. Never hardcode paths.
-- **File naming**: Exports follow `{phase_number}_{description}.{gpkg|rds}` (e.g., `05_training_dataset.gpkg`, `06_xgboost_trained_models.rds`, `07_predictions_nantes.gpkg`).
+- **File naming**: Exports follow `{phase_number}_{description}.{gpkg|rds}` with an additional `_mode` suffix matching the pipeline mode (e.g. `05_training_dataset_paris.gpkg`, `06_xgboost_trained_models_pemb.rds`, `07_predictions_nantes.gpkg`). This avoids name collisions when running in different modes.
 - **Spatial format**: All spatial outputs use GeoPackage (`.gpkg`), never Shapefile. Models/config use `.rds`.
-- **QGIS datetime fields**: All GPKG exports call `add_period_datetime_columns()` (from `utils_prediction.R`) before `st_write()`. This adds `datetimestart` / `datetimeend` POSIXct columns when a `period` column is present. The function returns data unchanged if no `period` column exists — safe to call on any data. Year-based convention: D/E/N → 1970, h*_wd → 1971-01-01, h*_we → 1972-01-01, h* → 1973-01-01.
+- **QGIS datetime fields**: All GPKG exports call `add_period_datetime_columns()` (from `utils_prediction.R`) before `st_write()`. This adds `datetimestart` / `datetimeend` character columns in YYYY-MM-DD HH:MM:SS format when a `period` column is present. The function returns data unchanged if no `period` column exists — safe to call on any data. Year-based convention: D/E/N → 1970, h*_wd → 1971-01-01, h*_we → 1972-01-01, h* → 1973-01-01.
 - **Logging**: Use `pipeline_message(text, level, progress, process)` from `R/utils_io.R` — not `cat()` or bare `message()`. Levels: 0=section header, 1=timed step, 2=timed sub-step. Process icons: `"calc"`, `"load"`, `"save"`, `"info"`, `"valid"`, `"stop"`.
 - **Memory safety**: Use `check_memory_available(operation_name, min_gb, warn_gb)` from `R/utils_io.R` before heavy operations (reading large GPKG, rbindlist, pivot). Reads `/proc/meminfo` on Linux. Use `gc(verbose = FALSE)` + `rm()` after large objects are no longer needed.
 - **Test mode**: `TEST_CONFIG.R` overrides `CONFIG` paths to write to `data/output/TEST_OUTPUTS/`. Activated via `--region test`. Always override all relevant `CONFIG$*` paths when adding new outputs.
 
 ### Running the Pipeline
 
+Use the unified launcher under `RoadTrafficEstimation/scripts` which sets up local vs HPC contexts and writes an R log under `logs/`.
+
+Local (preferred):
+
 ```bash
 cd RoadTrafficEstimation
-bash scripts/run_local.sh --phase all --mode all                    # Full run
-bash scripts/run_local.sh --phase prediction --mode pemb            # PEMB only
-bash scripts/run_local.sh --phase prediction --mode nantes --region test  # Test mode
-bash scripts/run_local.sh --phase training --test                   # With unit tests
+bash scripts/run_pipeline.sh --phase all --mode all            # Full run (local)
+bash scripts/run_pipeline.sh --phase prediction --mode pemb     # PEMB only
+bash scripts/run_pipeline.sh --phase prediction --mode nantes --region test  # Test region
 ```
 
-Direct R: `Rscript run_pipeline.R --phase <preparation|training|prediction|all> --mode <nantes|paris|pemb|sensors|all> [--region test] [--test]`
+Direct R entrypoint (advanced):
+
+```bash
+Rscript --vanilla main.R --phase <preparation|training|prediction|all> --mode <nantes|paris|pemb|sensors|all> [--region test] [--test]
+```
+
+Notes:
+- The launcher activates `renv` when running locally (see `renv/activate.R`) — ensure `renv` is installed or run `renv::restore()` from an R session.
+- On HPC the launcher loads system modules and reads `./.Renviron` (so set `AVATAR_API_TOKEN` there when needed).
+- Logs are written to `RoadTrafficEstimation/logs/pipeline_*.Rout` by the wrapper.
+
+### Developer workflows: tests, env, and quick checks
+
+- Run the project's test suite (fast configuration + small-region checks):
+
+```bash
+cd RoadTrafficEstimation
+bash scripts/run_tests.sh
+```
+
+- To validate config keys quickly without running full pipeline use `scripts/run_tests.sh` which runs lightweight R checks against `TEST_CONFIG.R` and writes to `data/output/TEST_OUTPUTS/`.
+- Recreate a reproducible local environment with renv from project root in R:
+
+```r
+install.packages("renv")
+renv::restore()
+```
+
+- If you need to run a single pipeline phase interactively, call `main.R` with `--phase` and `--mode` as above.
+
+### Runtime dependencies and integration points
+
+- Java runtime required for CNOSSOS emission bridge located in `NoiseModellingEmission/` (the R helper `compute_emission_cnossos()` calls the Java batch `CnossosEmissionBatch.java` and accompanying jars).
+- External data: AVATAR API (token via `AVATAR_API_TOKEN`), OSM PBFs under `data/osm/pbf/`, INSEE shapefiles under `data/insee/`.
+- Persistent engineered network: `data/02_osm_network_france_engineered.gpkg` is the canonical pivot for training and prediction.
 
 ### Period Definitions
 

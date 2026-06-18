@@ -11,19 +11,16 @@
 *.qmd
 
 # ==== Output directories ====
-RoadTrafficEstimation/data/output/
-RoadTrafficEstimation/data/osm/
-RoadTrafficEstimation/data/insee/
-data/output/
+RoadTrafficEstimation/data/
 
 # ==== Logs ====
-*.log
+RoadTrafficEstimation/logs/
 
 # ==== R artifacts ====
+.Rproj
 .Rhistory
 .RData
 .Rproj.user
-Rplots.pdf
 
 # ==== Figures (generated) ====
 RoadTrafficEstimation/figures/
